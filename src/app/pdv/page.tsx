@@ -35,6 +35,7 @@ import {
   Select,
   Alert,
   CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import {
   Add,
@@ -59,6 +60,7 @@ import {
   PersonAdd,
   Print,
   Download,
+  ContentCopy,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
@@ -210,6 +212,30 @@ function PDVPageContent() {
     }
   }, [pedidoEditId, pedidoParaEditar, modoEdicao, clientes, produtos, clienteCompleto]);
 
+  // useEffect para atalhos de teclado
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Enter - Adicionar produto se estiver selecionado
+      if (e.key === 'Enter' && produtoSelecionado && !dialogFinalizar && !dialogNovoCliente) {
+        e.preventDefault();
+        handleAdicionarProduto();
+      }
+      
+      // Esc - Limpar seleção
+      if (e.key === 'Escape' && produtoSelecionado) {
+        setProdutoSelecionado(null);
+        setQuantidade(1);
+        setValorUnitario(0);
+        setDescontoItem(0);
+        setCorSelecionada(null);
+        toast('Seleção cancelada', { icon: '❌' });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, quantidade]);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -230,6 +256,12 @@ function PDVPageContent() {
       valor_unitario: valorUnitario > 0 ? valorUnitario : produtoSelecionado.valor_base,
       desconto_valor: descontoItem,
     });
+
+    // Toast de sucesso
+    toast.success(
+      `${produtoSelecionado.nome} adicionado! (${quantidade}x)`,
+      { duration: 2000 }
+    );
 
     // Limpar campos
     setProdutoSelecionado(null);
@@ -256,6 +288,26 @@ function PDVPageContent() {
     }
 
     setPedidoAtual({ desconto_valor: valorDesconto });
+  };
+
+  // Duplicar linha do carrinho
+  const handleDuplicarLinha = (index: number) => {
+    const item = pedidoAtual.itens[index];
+    adicionarItem({ ...item });
+    toast.success('Item duplicado!', { duration: 2000 });
+  };
+
+  // Limpar carrinho com confirmação
+  const handleLimparCarrinho = () => {
+    if (pedidoAtual.itens.length === 0) {
+      toast.error('Carrinho já está vazio');
+      return;
+    }
+    
+    if (window.confirm(`Deseja realmente limpar o carrinho?\n${pedidoAtual.itens.length} itens serão removidos.`)) {
+      limparCarrinho();
+      toast.success('Carrinho limpo!');
+    }
   };
 
   const handleFinalizarPedido = () => {
@@ -514,16 +566,20 @@ function PDVPageContent() {
               <Grid item xs={12} md={12}>
                 <Autocomplete
                   options={produtos?.produtos || []}
-                  getOptionLabel={(option) => `${option.codigo ? `[${option.codigo}] ` : ''}${option.nome}`}
-                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  getOptionLabel={(option) => `${option.nome}${option.codigo ? ` - ${option.codigo}` : ''}`}
                   value={produtoSelecionado}
-                  onChange={(_, newValue) => handleSelecionarProduto(newValue)}
+                  onChange={(_, newValue) => {
+                    if (newValue) {
+                      handleSelecionarProduto(newValue);
+                    }
+                  }}
                   onInputChange={(_, value) => setSearchProduto(value)}
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      label="Buscar Produto"
+                      label="Buscar produto"
                       placeholder="Digite o nome ou código..."
+                      autoFocus
                       InputProps={{
                         ...params.InputProps,
                         startAdornment: (
@@ -687,9 +743,22 @@ function PDVPageContent() {
 
             {/* Lista de Itens */}
             <Box sx={{ bgcolor: 'background.default', borderRadius: 2, p: 2, minHeight: 300 }}>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Itens do Pedido ({pedidoAtual.itens.length})
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Itens do Pedido ({pedidoAtual.itens.length})
+                </Typography>
+                {pedidoAtual.itens.length > 0 && (
+                  <Button
+                    size="small"
+                    color="error"
+                    variant="outlined"
+                    startIcon={<Delete />}
+                    onClick={handleLimparCarrinho}
+                  >
+                    Limpar Tudo
+                  </Button>
+                )}
+              </Box>
 
               <AnimatePresence>
                 {pedidoAtual.itens.length === 0 ? (
@@ -808,9 +877,24 @@ function PDVPageContent() {
                               <Typography fontWeight="bold">{formatCurrency(item.valor_total)}</Typography>
                             </TableCell>
                             <TableCell align="center">
-                              <IconButton size="small" color="error" onClick={() => removerItem(index)}>
-                                <Delete fontSize="small" />
-                              </IconButton>
+                              <Tooltip title="Duplicar">
+                                <IconButton 
+                                  size="small" 
+                                  color="primary" 
+                                  onClick={() => handleDuplicarLinha(index)}
+                                >
+                                  <ContentCopy fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Remover">
+                                <IconButton 
+                                  size="small" 
+                                  color="error" 
+                                  onClick={() => removerItem(index)}
+                                >
+                                  <Delete fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1070,12 +1154,16 @@ function PDVPageContent() {
             <Box sx={{ bgcolor: 'background.default', borderRadius: 2, p: 2, mb: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography>Subtotal:</Typography>
-                <Typography fontWeight="bold">{formatCurrency(pedidoAtual.subtotal)}</Typography>
+                <Typography fontWeight="bold" sx={{ color: 'success.main' }}>
+                  {formatCurrency(pedidoAtual.subtotal)}
+                </Typography>
               </Box>
               {pedidoAtual.desconto_valor > 0 && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography>Desconto:</Typography>
-                  <Typography color="error">- {formatCurrency(pedidoAtual.desconto_valor)}</Typography>
+                  <Typography fontWeight="bold" sx={{ color: 'error.main' }}>
+                    - {formatCurrency(pedidoAtual.desconto_valor)}
+                  </Typography>
                 </Box>
               )}
               <Divider sx={{ my: 1 }} />
@@ -1083,7 +1171,7 @@ function PDVPageContent() {
                 <Typography variant="h6" fontWeight="bold">
                   Total:
                 </Typography>
-                <Typography variant="h6" fontWeight="bold" color="primary">
+                <Typography variant="h6" fontWeight="bold" sx={{ color: 'primary.main' }}>
                   {formatCurrency(pedidoAtual.total)}
                 </Typography>
               </Box>
