@@ -33,6 +33,9 @@ import {
   Divider,
   Alert,
   Autocomplete,
+  Menu,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   Search,
@@ -56,6 +59,7 @@ import {
   Schedule,
   ShoppingBag,
   Timer,
+  MoreVert,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
@@ -66,9 +70,13 @@ import { trpc } from '@/lib/trpc/client';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
+import { useQueryClient } from '@tanstack/react-query';
 
 function PedidosPageContent() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
+  
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [status, setStatus] = useState('');
@@ -93,6 +101,8 @@ function PedidosPageContent() {
     open: boolean;
     pedido: any;
   }>({ open: false, pedido: null });
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [pedidoSelecionado, setPedidoSelecionado] = useState<any>(null);
 
   const searchParams = useSearchParams();
   const pedidoIdUrl = searchParams?.get('id');
@@ -106,6 +116,17 @@ function PedidosPageContent() {
     tipoAtendimento: tipoAtendimento || undefined,
     clienteId: clienteSelecionado?.id,
   });
+
+  // Query para total geral de vendas (sem filtros) - usar limite alto
+  const { data: dadosGerais } = trpc.pedidos.list.useQuery(
+    {
+      limit: 10000,
+      offset: 0,
+    },
+    {
+      staleTime: 5 * 60 * 1000, // Cache de 5 minutos
+    }
+  );
   
   // Query para buscar pedido específico da URL
   const { data: pedidoUrl, isLoading: loadingPedidoUrl } = trpc.pedidos.getById.useQuery(
@@ -144,15 +165,21 @@ function PedidosPageContent() {
 
   const pedidos = data?.pedidos || [];
   const total = data?.total || 0;
+  const pedidosGerais = dadosGerais?.pedidos || [];
+  const totalGeral = dadosGerais?.total || 0;
 
   type Pedido = typeof pedidos[number];
 
-  // Calcular estatísticas
+  // Calcular estatísticas usando os dados corretos
   const estatisticas = {
-    totalPedidos: total,
+    totalPedidos: total, // Total de pedidos filtrados
     pedidosPendentes: pedidos.filter((p: any) => p.status === 'PENDENTE').length,
-    totalVendas: pedidos.reduce((acc: number, p: any) => acc + (p.total || 0), 0),
-    finalizadosHoje: pedidos.filter((p: any) => {
+    // Total de vendas: soma de TODOS os pedidos (dados gerais)
+    totalVendas: pedidosGerais.length > 0 
+      ? pedidosGerais.reduce((acc: number, p: any) => acc + (p.total || 0), 0)
+      : pedidos.reduce((acc: number, p: any) => acc + (p.total || 0), 0), // Fallback para filtrados
+    // Pedidos finalizados hoje de TODOS os pedidos
+    finalizadosHoje: (pedidosGerais.length > 0 ? pedidosGerais : pedidos).filter((p: any) => {
       if (!p.data) return false;
       const hoje = new Date().toISOString().split('T')[0];
       const dataPedido = p.data.split('T')[0];
@@ -202,6 +229,26 @@ function PedidosPageContent() {
     };
 
     return <Chip label={config.label} color={config.color} size="small" sx={{ fontWeight: 600 }} />;
+  };
+
+  // Função para atualizar a lista de pedidos sem reload
+  const atualizarListaPedidos = async () => {
+    await utils.pedidos.list.invalidate();
+  };
+
+  // Função para obter cor do chip de tipo de atendimento
+  const getTipoChipColor = (tipo: string | null) => {
+    const tipoUpper = tipo?.toUpperCase() || '';
+    
+    const colorMap: Record<string, 'success' | 'primary' | 'warning' | 'error' | 'info' | 'default'> = {
+      'ENTRADA': 'success',
+      'SAIDA': 'error',
+      'SAÍDA': 'error',
+      'ORÇAMENTO': 'warning',
+      'S/MOVIMENTO': 'default',
+    };
+
+    return colorMap[tipoUpper] || 'default';
   };
   
   const handleFecharDialogDetalhes = () => {
@@ -295,7 +342,8 @@ function PedidosPageContent() {
       setDialogEditar(false);
       setPedidoEditando(null);
       
-      setTimeout(() => window.location.reload(), 500);
+      // Atualizar lista sem reload
+      await atualizarListaPedidos();
     } catch (error) {
       toast.error('Erro ao atualizar pedido. Tente novamente.', { id: toastId });
     }
@@ -314,7 +362,7 @@ function PedidosPageContent() {
         try {
           await cancelarMutation.mutateAsync({ id: pedido.id });
           toast.success(`Pedido #${pedido.numero} cancelado com sucesso!`, { id: toastId });
-          setTimeout(() => window.location.reload(), 500);
+          await atualizarListaPedidos();
         } catch (error) {
           toast.error('Erro ao cancelar pedido. Tente novamente.', { id: toastId });
         }
@@ -335,7 +383,7 @@ function PedidosPageContent() {
         try {
           await finalizarMutation.mutateAsync({ id: pedido.id });
           toast.success(`Pedido #${pedido.numero} finalizado com sucesso!`, { id: toastId });
-          setTimeout(() => window.location.reload(), 500);
+          await atualizarListaPedidos();
         } catch (error) {
           toast.error('Erro ao finalizar pedido. Tente novamente.', { id: toastId });
         }
@@ -356,7 +404,7 @@ function PedidosPageContent() {
         try {
           await duplicarMutation.mutateAsync({ id: pedido.id });
           toast.success('Pedido duplicado com sucesso!', { id: toastId });
-          setTimeout(() => window.location.reload(), 500);
+          await atualizarListaPedidos();
         } catch (error) {
           toast.error('Erro ao duplicar pedido. Tente novamente.', { id: toastId });
         }
@@ -377,7 +425,7 @@ function PedidosPageContent() {
         try {
           await deletarMutation.mutateAsync({ id: pedido.id });
           toast.success(`Pedido #${pedido.numero} excluído com sucesso!`, { id: toastId });
-          setTimeout(() => window.location.reload(), 500);
+          await atualizarListaPedidos();
         } catch (error) {
           toast.error('Erro ao excluir pedido. Tente novamente.', { id: toastId });
         }
@@ -395,6 +443,21 @@ function PedidosPageContent() {
     setPage(0);
   };
 
+  const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, pedido: any) => {
+    setMenuAnchor(event.currentTarget);
+    setPedidoSelecionado(pedido);
+  };
+
+  const handleCloseMenu = () => {
+    setMenuAnchor(null);
+    setPedidoSelecionado(null);
+  };
+
+  const handleMenuAction = (action: () => void) => {
+    handleCloseMenu();
+    action();
+  };
+
   return (
     <AppLayout>
       <PageHeader
@@ -405,6 +468,217 @@ function PedidosPageContent() {
           { label: 'Pedidos' },
         ]}
       />
+
+      {/* Cards de Estatísticas */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0 }}
+          >
+            <Card
+              sx={{
+                p: 3,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: -50,
+                  right: -50,
+                  width: 150,
+                  height: 150,
+                  borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Receipt sx={{ fontSize: 32 }} />
+              </Box>
+              <Box sx={{ flex: 1, zIndex: 1 }}>
+                <Typography variant="h4" fontWeight="bold">
+                  {estatisticas.totalPedidos}
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Total de Pedidos
+                </Typography>
+              </Box>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <Card
+              sx={{
+                p: 3,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                color: 'white',
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: -50,
+                  right: -50,
+                  width: 150,
+                  height: 150,
+                  borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Schedule sx={{ fontSize: 32 }} />
+              </Box>
+              <Box sx={{ flex: 1, zIndex: 1 }}>
+                <Typography variant="h4" fontWeight="bold">
+                  {estatisticas.pedidosPendentes}
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Pedidos Pendentes
+                </Typography>
+              </Box>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            <Card
+              sx={{
+                p: 3,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                color: 'white',
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: -50,
+                  right: -50,
+                  width: 150,
+                  height: 150,
+                  borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <TrendingUp sx={{ fontSize: 32 }} />
+              </Box>
+              <Box sx={{ flex: 1, zIndex: 1 }}>
+                <Typography variant="h4" fontWeight="bold">
+                  {formatCurrency(estatisticas.totalVendas)}
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Total em Vendas
+                </Typography>
+              </Box>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+          >
+            <Card
+              sx={{
+                p: 3,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                color: 'white',
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: -50,
+                  right: -50,
+                  width: 150,
+                  height: 150,
+                  borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <CheckCircle sx={{ fontSize: 32 }} />
+              </Box>
+              <Box sx={{ flex: 1, zIndex: 1 }}>
+                <Typography variant="h4" fontWeight="bold">
+                  {estatisticas.finalizadosHoje}
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Finalizados Hoje
+                </Typography>
+              </Box>
+            </Card>
+          </motion.div>
+        </Grid>
+      </Grid>
 
       <Card>
         {/* Filtros Avançados */}
@@ -615,8 +889,12 @@ function PedidosPageContent() {
                         <Chip
                           label={pedido.tipo_atendimento_nome || 'Sem Tipo'}
                           size="small"
-                          color={pedido.tipo_atendimento_nome ? 'default' : 'warning'}
-                          variant="outlined"
+                          color={getTipoChipColor(pedido.tipo_atendimento_nome)}
+                          variant="filled"
+                          sx={{ 
+                            fontWeight: 600,
+                            color: 'white',
+                          }}
                         />
                       </TableCell>
                       <TableCell align="right">
@@ -633,78 +911,25 @@ function PedidosPageContent() {
                       </TableCell>
                       <TableCell align="center">{getStatusChip(pedido.status)}</TableCell>
                       <TableCell align="right">
-                        <Tooltip title="Visualizar Detalhes">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleVisualizarPedido(pedido)}
-                          >
-                            <Visibility fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Editar">
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleEditarPedido(pedido)}
-                            disabled={pedido.status === 'CANCELADO'}
-                          >
-                            <Edit fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Imprimir">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              // Abre detalhes primeiro para carregar dados completos
-                              handleVisualizarPedido(pedido);
-                            }}
-                          >
-                            <Print fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Duplicar">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDuplicarPedido(pedido)}
-                            disabled={duplicarMutation.isPending}
-                          >
-                            <ContentCopy fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        {pedido.status === 'PENDENTE' && (
-                          <>
-                            <Tooltip title="Finalizar">
-                              <IconButton
-                                size="small"
-                                color="success"
-                                onClick={() => handleFinalizarPedido(pedido)}
-                                disabled={finalizarMutation.isPending}
-                              >
-                                <CheckCircle fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Cancelar">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleCancelarPedido(pedido)}
-                                disabled={cancelarMutation.isPending}
-                              >
-                                <Cancel fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </>
-                        )}
-                        <Tooltip title="Excluir Permanentemente">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleExcluirPedido(pedido)}
-                            disabled={deletarMutation.isPending}
-                          >
-                            <Delete fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                          <Tooltip title="Visualizar">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleVisualizarPedido(pedido)}
+                              sx={{ color: 'primary.main' }}
+                            >
+                              <Visibility fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Mais ações">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => handleOpenMenu(e, pedido)}
+                            >
+                              <MoreVert fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -726,6 +951,72 @@ function PedidosPageContent() {
           </>
         )}
       </Card>
+
+      {/* Menu Dropdown de Ações */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={handleCloseMenu}
+        PaperProps={{
+          sx: {
+            minWidth: 220,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+          },
+        }}
+      >
+        <MenuItem onClick={() => handleMenuAction(() => handleEditarPedido(pedidoSelecionado))} disabled={pedidoSelecionado?.status === 'CANCELADO'}>
+          <ListItemIcon>
+            <Edit fontSize="small" color={pedidoSelecionado?.status === 'CANCELADO' ? 'disabled' : 'primary'} />
+          </ListItemIcon>
+          <ListItemText primary="Editar Pedido" />
+        </MenuItem>
+
+        <MenuItem onClick={() => handleMenuAction(() => setPrintDialog({ open: true, pedido: pedidoSelecionado }))}>
+          <ListItemIcon>
+            <Print fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Imprimir / PDF" />
+        </MenuItem>
+
+        <MenuItem onClick={() => handleMenuAction(() => handleDuplicarPedido(pedidoSelecionado))}>
+          <ListItemIcon>
+            <ContentCopy fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Duplicar Pedido" />
+        </MenuItem>
+
+        <Divider />
+
+        {pedidoSelecionado?.status === 'PENDENTE' && (
+          <>
+            <MenuItem onClick={() => handleMenuAction(() => handleFinalizarPedido(pedidoSelecionado))}>
+              <ListItemIcon>
+                <CheckCircle fontSize="small" sx={{ color: 'success.main' }} />
+              </ListItemIcon>
+              <ListItemText primary="Finalizar Pedido" />
+            </MenuItem>
+
+            <MenuItem onClick={() => handleMenuAction(() => handleCancelarPedido(pedidoSelecionado))}>
+              <ListItemIcon>
+                <Cancel fontSize="small" sx={{ color: 'warning.main' }} />
+              </ListItemIcon>
+              <ListItemText primary="Cancelar Pedido" />
+            </MenuItem>
+
+            <Divider />
+          </>
+        )}
+
+        <MenuItem onClick={() => handleMenuAction(() => handleExcluirPedido(pedidoSelecionado))}>
+          <ListItemIcon>
+            <Delete fontSize="small" sx={{ color: 'error.main' }} />
+          </ListItemIcon>
+          <ListItemText 
+            primary="Excluir Pedido" 
+            primaryTypographyProps={{ sx: { color: 'error.main' } }}
+          />
+        </MenuItem>
+      </Menu>
       
       {/* Dialog de Detalhes do Pedido */}
       <Dialog 
