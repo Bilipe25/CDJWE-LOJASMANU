@@ -80,6 +80,7 @@ function PDVPageContent() {
   const [quantidade, setQuantidade] = useState(1);
   const [valorUnitario, setValorUnitario] = useState(0);
   const [descontoItem, setDescontoItem] = useState(0);
+  const [tipoDescontoItem, setTipoDescontoItem] = useState<'valor' | 'percentual'>('valor');
   const [corSelecionada, setCorSelecionada] = useState<any>(null);
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
   const [searchProduto, setSearchProduto] = useState('');
@@ -88,6 +89,13 @@ function PDVPageContent() {
   const [editandoItem, setEditandoItem] = useState<number | null>(null);
   const [descontoGeral, setDescontoGeral] = useState(0);
   const [tipoDescontoGeral, setTipoDescontoGeral] = useState<'valor' | 'percentual'>('valor');
+  
+  // Dialog e campos para cadastro rápido de produto
+  const [dialogNovoProduto, setDialogNovoProduto] = useState(false);
+  const [novoProdutoNome, setNovoProdutoNome] = useState('');
+  const [novoProdutoCodigo, setNovoProdutoCodigo] = useState('');
+  const [novoProdutoValor, setNovoProdutoValor] = useState(0);
+  const [novoProdutoUnidade, setNovoProdutoUnidade] = useState('UN');
   
   // Novos campos da venda
   const [enderecoSelecionado, setEnderecoSelecionado] = useState<any>(null);
@@ -132,6 +140,7 @@ function PDVPageContent() {
   
   // Mutations
   const criarClienteMutation = trpc.clientes.create.useMutation();
+  const criarProdutoMutation = trpc.produtos.create.useMutation();
   const criarPedidoMutation = trpc.pedidos.create.useMutation();
   const atualizarPedidoMutation = trpc.pedidos.update.useMutation();
   const adicionarItemMutation = trpc.pedidos.addItem.useMutation();
@@ -216,25 +225,33 @@ function PDVPageContent() {
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // Enter - Adicionar produto se estiver selecionado
-      if (e.key === 'Enter' && produtoSelecionado && !dialogFinalizar && !dialogNovoCliente) {
+      if (e.key === 'Enter' && produtoSelecionado && !dialogFinalizar && !dialogNovoCliente && !dialogNovoProduto) {
         e.preventDefault();
         handleAdicionarProduto();
       }
       
       // Esc - Limpar seleção
-      if (e.key === 'Escape' && produtoSelecionado) {
+      if (e.key === 'Escape' && produtoSelecionado && !dialogNovoProduto && !dialogNovoCliente) {
         setProdutoSelecionado(null);
         setQuantidade(1);
         setValorUnitario(0);
         setDescontoItem(0);
+        setTipoDescontoItem('valor');
         setCorSelecionada(null);
         toast('Seleção cancelada', { icon: '❌' });
+      }
+      
+      // Ctrl+P - Abrir dialog de novo produto
+      if (e.ctrlKey && e.key === 'p' && !dialogFinalizar && !dialogNovoCliente && !dialogNovoProduto) {
+        e.preventDefault();
+        setDialogNovoProduto(true);
+        toast('Atalho: Cadastrar novo produto', { icon: '➕' });
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, quantidade]);
+  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, dialogNovoProduto, quantidade]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -246,6 +263,19 @@ function PDVPageContent() {
   const handleAdicionarProduto = () => {
     if (!produtoSelecionado || quantidade <= 0) return;
 
+    // Calcular desconto baseado no tipo
+    const valorUnitarioFinal = valorUnitario > 0 ? valorUnitario : produtoSelecionado.valor_base;
+    const valorTotalItem = valorUnitarioFinal * quantidade;
+    let descontoValor = 0;
+    
+    if (tipoDescontoItem === 'percentual') {
+      // Calcular desconto em valor baseado na porcentagem
+      descontoValor = (valorTotalItem * descontoItem) / 100;
+    } else {
+      // Desconto já é em valor
+      descontoValor = descontoItem;
+    }
+
     adicionarItem({
       produto_id: produtoSelecionado.id,
       produto_nome: produtoSelecionado.nome,
@@ -253,8 +283,8 @@ function PDVPageContent() {
       cor_id: corSelecionada?.id,
       cor_descricao: corSelecionada?.descricao,
       quantidade,
-      valor_unitario: valorUnitario > 0 ? valorUnitario : produtoSelecionado.valor_base,
-      desconto_valor: descontoItem,
+      valor_unitario: valorUnitarioFinal,
+      desconto_valor: descontoValor,
     });
 
     // Toast de sucesso
@@ -268,6 +298,7 @@ function PDVPageContent() {
     setQuantidade(1);
     setValorUnitario(0);
     setDescontoItem(0);
+    setTipoDescontoItem('valor');
     setCorSelecionada(null);
   };
 
@@ -425,10 +456,10 @@ function PDVPageContent() {
   
   const handleCriarCliente = async () => {
     if (!novoClienteNome.trim()) {
-      toast.error('Nome é obrigatório!');
+      toast.error('Nome do cliente é obrigatório');
       return;
     }
-    
+
     const toastId = toast.loading('Criando cliente...');
     
     try {
@@ -436,17 +467,11 @@ function PDVPageContent() {
         nome: novoClienteNome,
         cpf: novoClienteCPF || undefined,
         telefone: novoClienteTelefone || undefined,
-        endereco: novoClienteEndereco ? {
-          logradouro: novoClienteEndereco,
-          principal: true,
-        } : undefined,
       });
-      
+
       setClienteSelecionado(novoCliente);
-      setTelefoneContato((novoCliente as any).telefone || '');
+      setSearchCliente(novoCliente.nome);
       setDialogNovoCliente(false);
-      
-      // Limpar campos
       setNovoClienteNome('');
       setNovoClienteCPF('');
       setNovoClienteTelefone('');
@@ -455,6 +480,43 @@ function PDVPageContent() {
       toast.success(`Cliente ${novoClienteNome} criado com sucesso!`, { id: toastId });
     } catch (error) {
       toast.error('Erro ao criar cliente. Tente novamente.', { id: toastId });
+    }
+  };
+
+  const handleCriarProduto = async () => {
+    if (!novoProdutoNome.trim()) {
+      toast.error('Nome do produto é obrigatório');
+      return;
+    }
+    if (novoProdutoValor <= 0) {
+      toast.error('Valor do produto deve ser maior que zero');
+      return;
+    }
+
+    const toastId = toast.loading('Cadastrando produto...');
+    
+    try {
+      const novoProduto = await criarProdutoMutation.mutateAsync({
+        nome: novoProdutoNome,
+        codigo: novoProdutoCodigo || undefined,
+        valor_base: novoProdutoValor,
+        unidade: novoProdutoUnidade || 'UN',
+      });
+
+      // Adicionar o produto direto ao carrinho
+      handleSelecionarProduto(novoProduto);
+      setProdutoSelecionado(novoProduto);
+      setSearchProduto(novoProduto.nome);
+      
+      setDialogNovoProduto(false);
+      setNovoProdutoNome('');
+      setNovoProdutoCodigo('');
+      setNovoProdutoValor(0);
+      setNovoProdutoUnidade('UN');
+      
+      toast.success(`Produto ${novoProdutoNome} cadastrado com sucesso!`, { id: toastId });
+    } catch (error) {
+      toast.error('Erro ao cadastrar produto. Tente novamente.', { id: toastId });
     }
   };
   
@@ -563,7 +625,7 @@ function PDVPageContent() {
 
             {/* Seleção de Produto */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} md={12}>
+              <Grid item xs={12} md={10}>
                 <Autocomplete
                   options={produtos?.produtos || []}
                   getOptionLabel={(option) => `${option.nome}${option.codigo ? ` - ${option.codigo}` : ''}`}
@@ -608,6 +670,21 @@ function PDVPageContent() {
                   }}
                 />
               </Grid>
+              
+              <Grid item xs={12} md={2}>
+                <Tooltip title="Cadastrar novo produto (Ctrl+P)">
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="large"
+                    startIcon={<Add />}
+                    onClick={() => setDialogNovoProduto(true)}
+                    sx={{ height: 56 }}
+                  >
+                    Novo
+                  </Button>
+                </Tooltip>
+              </Grid>
 
               {produtoSelecionado && (
                 <>
@@ -650,15 +727,34 @@ function PDVPageContent() {
                   <Grid item xs={6} md={3}>
                     <TextField
                       fullWidth
+                      select
+                      size="small"
+                      label="Tipo"
+                      value={tipoDescontoItem}
+                      onChange={(e: any) => {
+                        setTipoDescontoItem(e.target.value);
+                        setDescontoItem(0);
+                      }}
+                      sx={{ mb: 1 }}
+                    >
+                      <MenuItem value="valor">R$</MenuItem>
+                      <MenuItem value="percentual">%</MenuItem>
+                    </TextField>
+                    <TextField
+                      fullWidth
                       type="number"
-                      label="Desconto (R$)"
+                      label={`Desconto (${tipoDescontoItem === 'percentual' ? '%' : 'R$'})`}
                       value={descontoItem}
                       onChange={(e) => setDescontoItem(Math.max(0, parseFloat(e.target.value) || 0))}
                       InputProps={{ 
-                        inputProps: { min: 0, step: 0.01 },
+                        inputProps: { 
+                          min: 0, 
+                          step: tipoDescontoItem === 'percentual' ? 1 : 0.01,
+                          max: tipoDescontoItem === 'percentual' ? 100 : undefined,
+                        },
                         startAdornment: (
                           <InputAdornment position="start">
-                            <Percent fontSize="small" />
+                            {tipoDescontoItem === 'percentual' ? <Percent fontSize="small" /> : <AttachMoney fontSize="small" />}
                           </InputAdornment>
                         ),
                       }}
@@ -732,10 +828,22 @@ function PDVPageContent() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="body2" sx={{ opacity: 0.9 }}>
                     {formatCurrency(valorUnitario)} × {quantidade} unid.
-                    {descontoItem > 0 && ` - ${formatCurrency(descontoItem)}`}
+                    {descontoItem > 0 && (() => {
+                      const valorTotalPrevia = valorUnitario * quantidade;
+                      const descontoCalculado = tipoDescontoItem === 'percentual' 
+                        ? (valorTotalPrevia * descontoItem) / 100 
+                        : descontoItem;
+                      return ` - ${formatCurrency(descontoCalculado)}`;
+                    })()}
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
-                    = {formatCurrency((valorUnitario * quantidade) - descontoItem)}
+                    = {formatCurrency((() => {
+                      const valorTotalPrevia = valorUnitario * quantidade;
+                      const descontoCalculado = tipoDescontoItem === 'percentual' 
+                        ? (valorTotalPrevia * descontoItem) / 100 
+                        : descontoItem;
+                      return valorTotalPrevia - descontoCalculado;
+                    })())}
                   </Typography>
                 </Box>
               </Card>
@@ -1511,6 +1619,120 @@ function PDVPageContent() {
             startIcon={criarClienteMutation.isPending ? <CircularProgress size={20} /> : <Check />}
           >
             {criarClienteMutation.isPending ? 'Criando...' : 'Criar Cliente'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Cadastrar Novo Produto */}
+      <Dialog open={dialogNovoProduto} onClose={() => setDialogNovoProduto(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Category color="primary" />
+          Cadastrar Novo Produto (Ctrl+P)
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Cadastro rápido de produto. Você pode completar os dados depois na página de Produtos.
+            </Alert>
+            
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Nome do Produto *"
+                  value={novoProdutoNome}
+                  onChange={(e) => setNovoProdutoNome(e.target.value)}
+                  placeholder="Ex: Camiseta Polo"
+                  autoFocus
+                  required
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Category fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Código / SKU"
+                  value={novoProdutoCodigo}
+                  onChange={(e) => setNovoProdutoCodigo(e.target.value)}
+                  placeholder="Ex: POLO-001"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        #
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Unidade"
+                  value={novoProdutoUnidade}
+                  onChange={(e) => setNovoProdutoUnidade(e.target.value)}
+                >
+                  <MenuItem value="UN">Unidade</MenuItem>
+                  <MenuItem value="PC">Peça</MenuItem>
+                  <MenuItem value="KG">Quilograma</MenuItem>
+                  <MenuItem value="M">Metro</MenuItem>
+                  <MenuItem value="CX">Caixa</MenuItem>
+                  <MenuItem value="PAR">Par</MenuItem>
+                </TextField>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Valor Base *"
+                  value={novoProdutoValor}
+                  onChange={(e) => setNovoProdutoValor(Math.max(0, parseFloat(e.target.value) || 0))}
+                  placeholder="0,00"
+                  required
+                  InputProps={{
+                    inputProps: { min: 0, step: 0.01 },
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <AttachMoney fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button 
+            onClick={() => {
+              setDialogNovoProduto(false);
+              setNovoProdutoNome('');
+              setNovoProdutoCodigo('');
+              setNovoProdutoValor(0);
+              setNovoProdutoUnidade('UN');
+            }}
+            variant="outlined"
+            size="large"
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleCriarProduto}
+            variant="contained"
+            size="large"
+            disabled={!novoProdutoNome.trim() || novoProdutoValor <= 0}
+            startIcon={<Check />}
+          >
+            Cadastrar e Adicionar
           </Button>
         </DialogActions>
       </Dialog>
