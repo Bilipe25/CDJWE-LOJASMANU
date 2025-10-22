@@ -203,7 +203,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" fontWeight="600" sx={{ flexGrow: 1 }}>
+          <Typography 
+            variant="h6" 
+            fontWeight="600" 
+            sx={{ 
+              flexGrow: 1,
+              fontSize: { xs: '1rem', sm: '1.25rem' },
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+          >
             {menuItems.find((item) => item.path === pathname)?.title || 'Dashboard'}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

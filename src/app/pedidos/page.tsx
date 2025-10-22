@@ -690,7 +690,7 @@ function PedidosPageContent() {
           </Box>
           
           <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} sm={6} md={3}>
               <TextField
                 fullWidth
                 label="Buscar pedido"
@@ -710,7 +710,7 @@ function PedidosPageContent() {
               />
             </Grid>
             
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} sm={6} md={2}>
               <FormControl fullWidth>
                 <InputLabel>Status</InputLabel>
                 <Select
@@ -730,7 +730,7 @@ function PedidosPageContent() {
               </FormControl>
             </Grid>
             
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} sm={6} md={2}>
               <FormControl fullWidth>
                 <InputLabel>Tipo</InputLabel>
                 <Select
@@ -750,7 +750,7 @@ function PedidosPageContent() {
               </FormControl>
             </Grid>
             
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} sm={6} md={2}>
               <TextField
                 fullWidth
                 type="date"
@@ -771,7 +771,7 @@ function PedidosPageContent() {
               />
             </Grid>
             
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} sm={6} md={2}>
               <TextField
                 fullWidth
                 type="date"
@@ -846,10 +846,10 @@ function PedidosPageContent() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Número</TableCell>
-                    <TableCell>Data</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Data</TableCell>
                     <TableCell>Cliente</TableCell>
-                    <TableCell>Tipo</TableCell>
-                    <TableCell align="right">Itens</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Tipo</TableCell>
+                    <TableCell align="right" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Itens</TableCell>
                     <TableCell align="right">Total</TableCell>
                     <TableCell align="center">Status</TableCell>
                     <TableCell align="right">Ações</TableCell>
@@ -874,7 +874,7 @@ function PedidosPageContent() {
                           sx={{ fontFamily: 'monospace', fontWeight: 600 }}
                         />
                       </TableCell>
-                      <TableCell>{formatDate(pedido.data)}</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{formatDate(pedido.data)}</TableCell>
                       <TableCell>
                         <Box>
                           <Box sx={{ fontWeight: 600 }}>{pedido.cliente_nome || 'Cliente não informado'}</Box>
@@ -885,7 +885,7 @@ function PedidosPageContent() {
                           )}
                         </Box>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                         <Chip
                           label={pedido.tipo_atendimento_nome || 'Sem Tipo'}
                           size="small"
@@ -897,7 +897,7 @@ function PedidosPageContent() {
                           }}
                         />
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell align="right" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
                         <Chip
                           label={`${pedido.total_itens || 0} itens`}
                           size="small"

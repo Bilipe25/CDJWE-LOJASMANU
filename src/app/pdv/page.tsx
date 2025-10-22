@@ -629,7 +629,7 @@ function PDVPageContent() {
       />
 
       {/* Badge de Ajuda com Atalhos */}
-      <Box sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000 }}>
+      <Box sx={{ position: 'fixed', bottom: { xs: 16, sm: 24 }, right: { xs: 16, sm: 24 }, zIndex: 1000 }}>
         <Tooltip title="Ver atalhos de teclado">
           <IconButton
             color="primary"
@@ -637,8 +637,8 @@ function PDVPageContent() {
             sx={{
               bgcolor: 'primary.main',
               color: 'white',
-              width: 56,
-              height: 56,
+              width: { xs: 48, sm: 56 },
+              height: { xs: 48, sm: 56 },
               boxShadow: 3,
               '&:hover': {
                 bgcolor: 'primary.dark',
@@ -665,7 +665,7 @@ function PDVPageContent() {
 
       <Grid container spacing={3}>
         {/* Área de Produtos */}
-        <Grid item xs={12} lg={7}>
+        <Grid item xs={12} lg={7} sx={{ order: { xs: 2, lg: 1 } }}>
           <Card sx={{ p: 3, height: '100%' }}>
             <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <ShoppingCart /> Adicionar Produtos
@@ -730,7 +730,7 @@ function PDVPageContent() {
                 />
               </Grid>
               
-              <Grid item xs={12} md={2}>
+              <Grid item xs={12} sm={6} md={2}>
                 <Tooltip title="Cadastrar novo produto (Ctrl+P)">
                   <Button
                     fullWidth
@@ -747,7 +747,7 @@ function PDVPageContent() {
 
               {produtoSelecionado && (
                 <>
-                  <Grid item xs={6} md={3}>
+                  <Grid item xs={12} sm={6} md={3}>
                     <TextField
                       fullWidth
                       type="number"
@@ -765,7 +765,7 @@ function PDVPageContent() {
                     />
                   </Grid>
 
-                  <Grid item xs={6} md={3}>
+                  <Grid item xs={12} sm={6} md={3}>
                     <TextField
                       fullWidth
                       type="number"
@@ -783,7 +783,7 @@ function PDVPageContent() {
                     />
                   </Grid>
 
-                  <Grid item xs={6} md={3}>
+                  <Grid item xs={12} sm={6} md={3}>
                     <TextField
                       fullWidth
                       select
@@ -820,7 +820,7 @@ function PDVPageContent() {
                     />
                   </Grid>
 
-                  <Grid item xs={6} md={3}>
+                  <Grid item xs={12} sm={6} md={3}>
                     <Autocomplete
                       options={cores || []}
                       getOptionLabel={(option: any) => option.descricao || ''}
@@ -943,14 +943,14 @@ function PDVPageContent() {
                     <Typography>Nenhum item adicionado</Typography>
                   </Box>
                 ) : (
-                  <TableContainer>
+                  <TableContainer sx={{ overflowX: 'auto' }}>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
                           <TableCell>Produto</TableCell>
                           <TableCell align="center">Qtd</TableCell>
-                          <TableCell align="right">Valor Unit.</TableCell>
-                          <TableCell align="right">Desconto</TableCell>
+                          <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Valor Unit.</TableCell>
+                          <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>Desconto</TableCell>
                           <TableCell align="right">Total</TableCell>
                           <TableCell align="center">Ações</TableCell>
                         </TableRow>
@@ -1005,7 +1005,7 @@ function PDVPageContent() {
                                 </IconButton>
                               </Box>
                             </TableCell>
-                            <TableCell align="right">
+                            <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                               {editandoItem === index ? (
                                 <TextField
                                   size="small"
@@ -1027,7 +1027,7 @@ function PDVPageContent() {
                                 </Box>
                               )}
                             </TableCell>
-                            <TableCell align="right">
+                            <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                               <TextField
                                 size="small"
                                 type="number"
@@ -1075,8 +1075,8 @@ function PDVPageContent() {
         </Grid>
 
         {/* Resumo e Finalização */}
-        <Grid item xs={12} lg={5}>
-          <Card sx={{ p: 3, position: 'sticky', top: 100 }}>
+        <Grid item xs={12} lg={5} sx={{ order: { xs: 1, lg: 2 } }}>
+          <Card sx={{ p: 3, position: { lg: 'sticky' }, top: 100 }}>
             <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Receipt /> Resumo do Pedido
             </Typography>

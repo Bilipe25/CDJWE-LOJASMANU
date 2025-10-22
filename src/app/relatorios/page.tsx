@@ -505,7 +505,7 @@ export default function RelatoriosPage() {
         <>
           {/* Filtros de Período */}
       <Card sx={{ p: 3, mb: 3 }}>
-        <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={2} alignItems="center">
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -523,7 +523,7 @@ export default function RelatoriosPage() {
                 Período: {formatDateBR(dataInicio)} até {formatDateBR(dataFim)}
               </Typography>
             </Box>
-            <ButtonGroup variant="outlined" sx={{ mb: 2 }}>
+            <ButtonGroup variant="outlined" sx={{ mb: 2, flexWrap: 'wrap' }}>
               <Button 
                 onClick={() => handleFiltroRapido('hoje')}
                 variant={filtroAtivo === 'hoje' ? 'contained' : 'outlined'}
@@ -577,7 +577,7 @@ export default function RelatoriosPage() {
             />
           </Grid>
           <Grid item xs={12} md={6}>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
               <Button 
                 variant="outlined" 
                 startIcon={<Print />}
@@ -661,12 +661,12 @@ export default function RelatoriosPage() {
                 <Typography>Nenhum dado encontrado no período selecionado</Typography>
               </Box>
             ) : (
-              <Box sx={{ height: 350 }}>
+              <Box sx={{ height: { xs: 250, sm: 300, md: 350 } }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={vendasPeriodo || []}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="data" tickFormatter={formatDateShort} stroke="#64748b" />
-                    <YAxis stroke="#64748b" />
+                    <XAxis dataKey="data" tickFormatter={formatDateShort} stroke="#64748b" style={{ fontSize: '11px' }} />
+                    <YAxis stroke="#64748b" style={{ fontSize: '11px' }} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: '#fff',
@@ -703,7 +703,7 @@ export default function RelatoriosPage() {
                 <Typography>Sem dados de categoria</Typography>
               </Box>
             ) : (
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: { xs: 250, sm: 300 } }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -753,9 +753,9 @@ export default function RelatoriosPage() {
                     <TableRow>
                       <TableCell width={50}>#</TableCell>
                       <TableCell>Produto</TableCell>
-                      <TableCell>Categoria</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Categoria</TableCell>
                       <TableCell align="right">Qtd. Vendida</TableCell>
-                      <TableCell align="right">Total Vendas</TableCell>
+                      <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>Total Vendas</TableCell>
                       <TableCell align="right">Valor Total</TableCell>
                     </TableRow>
                   </TableHead>
@@ -782,11 +782,11 @@ export default function RelatoriosPage() {
                         <TableCell>
                           <Typography fontWeight={600}>{produto.produto_nome}</Typography>
                         </TableCell>
-                        <TableCell>{produto.categoria_nome || '-'}</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{produto.categoria_nome || '-'}</TableCell>
                         <TableCell align="right">
                           <Typography fontWeight={600}>{produto.quantidade_vendida}</Typography>
                         </TableCell>
-                        <TableCell align="right">{produto.total_vendas}</TableCell>
+                        <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>{produto.total_vendas}</TableCell>
                         <TableCell align="right">
                           <Typography fontWeight="bold" color="success.main">
                             {formatCurrency(produto.valor_total)}

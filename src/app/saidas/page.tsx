@@ -598,7 +598,7 @@ export default function SaidasPage() {
           </Box>
 
           <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} sm={6} md={3}>
               <TextField
                 fullWidth
                 placeholder="Buscar por número..."
@@ -617,7 +617,7 @@ export default function SaidasPage() {
               />
             </Grid>
             
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} sm={6} md={2}>
               <FormControl fullWidth>
                 <InputLabel>Status</InputLabel>
                 <Select
@@ -637,7 +637,7 @@ export default function SaidasPage() {
               </FormControl>
             </Grid>
             
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} sm={6} md={2}>
               <TextField
                 fullWidth
                 type="date"
@@ -658,7 +658,7 @@ export default function SaidasPage() {
               />
             </Grid>
             
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} sm={6} md={2}>
               <TextField
                 fullWidth
                 type="date"
@@ -672,7 +672,7 @@ export default function SaidasPage() {
               />
             </Grid>
             
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} sm={6} md={3}>
               <Autocomplete
                 options={(clientes as any)?.clientes || []}
                 getOptionLabel={(option: any) => option.nome || ''}
@@ -738,7 +738,7 @@ export default function SaidasPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Número</TableCell>
-                    <TableCell>Data</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Data</TableCell>
                     <TableCell>Fornecedor/Destinatário</TableCell>
                     <TableCell align="right">Valor</TableCell>
                     <TableCell align="center">Status</TableCell>
@@ -765,7 +765,7 @@ export default function SaidasPage() {
                           sx={{ fontFamily: 'monospace', fontWeight: 600 }}
                         />
                       </TableCell>
-                      <TableCell>{formatDate(pedido.data)}</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{formatDate(pedido.data)}</TableCell>
                       <TableCell>
                         <Box>
                           <Box sx={{ fontWeight: 600 }}>{pedido.cliente_nome || 'Não especificado'}</Box>

@@ -598,7 +598,7 @@ export default function ProdutosPage() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} sm={6} md={3}>
               <FormControl fullWidth>
                 <InputLabel>Categoria</InputLabel>
                 <Select
@@ -618,8 +618,8 @@ export default function ProdutosPage() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={3}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Tooltip title="Exportar para CSV">
                   <Button
                     variant="outlined"
@@ -675,10 +675,10 @@ export default function ProdutosPage() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Código</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Código</TableCell>
                     <TableCell>Produto</TableCell>
-                    <TableCell>Categoria</TableCell>
-                    <TableCell>Unidade</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Categoria</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Unidade</TableCell>
                     <TableCell align="right">Valor Base</TableCell>
                     <TableCell align="center">Status</TableCell>
                     <TableCell align="right">Ações</TableCell>
@@ -694,7 +694,7 @@ export default function ProdutosPage() {
                       transition={{ delay: index * 0.05 }}
                       hover
                     >
-                      <TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                         <Chip
                           label={produto.codigo || 'S/Cód'}
                           size="small"
@@ -705,13 +705,13 @@ export default function ProdutosPage() {
                       <TableCell>
                         <Box sx={{ fontWeight: 600 }}>{produto.nome}</Box>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Category fontSize="small" color="action" />
                           {categorias?.find((c: any) => c.id === produto.categoria_id)?.nome || '-'}
                         </Box>
                       </TableCell>
-                      <TableCell>{produto.unidade}</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>{produto.unidade}</TableCell>
                       <TableCell align="right">
                         <Box sx={{ fontWeight: 600, color: 'primary.main' }}>
                           {formatCurrency(produto.valor_base)}

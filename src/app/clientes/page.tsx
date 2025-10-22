@@ -446,10 +446,10 @@ export default function ClientesPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Cliente</TableCell>
-                    <TableCell>CPF</TableCell>
-                    <TableCell>Telefone</TableCell>
-                    <TableCell>Endereço</TableCell>
-                    <TableCell align="right">Total Compras</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>CPF</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Telefone</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Endereço</TableCell>
+                    <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Total Compras</TableCell>
                     <TableCell align="center">Status</TableCell>
                     <TableCell align="right">Ações</TableCell>
                   </TableRow>
@@ -477,14 +477,14 @@ export default function ClientesPage() {
                           </Box>
                         </Box>
                       </TableCell>
-                      <TableCell>{cliente.cpf || '-'}</TableCell>
-                      <TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{cliente.cpf || '-'}</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Phone fontSize="small" color="action" />
                           {cliente.telefone || '-'}
                         </Box>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <LocationOn fontSize="small" color="action" />
                           <Box sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -492,7 +492,7 @@ export default function ClientesPage() {
                           </Box>
                         </Box>
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                         <Box sx={{ fontWeight: 600, color: 'success.main' }}>
                           {formatCurrency(cliente.valor_total_compras)}
                         </Box>

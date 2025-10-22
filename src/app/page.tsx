@@ -1,6 +1,6 @@
 'use client';
 
-import { Grid, Card, CardContent, Box, Typography, CircularProgress, Chip, Table, TableBody, TableCell, TableHead, TableRow, Avatar } from '@mui/material';
+import { Grid, Card, CardContent, Box, Typography, CircularProgress, Chip, Table, TableBody, TableCell, TableHead, TableRow, Avatar, TableContainer } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import {
   TrendingUp,
@@ -120,12 +120,12 @@ export default function HomePage() {
                 Performance de vendas dos últimos 7 dias
               </Typography>
 
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: { xs: 200, sm: 250, md: 300 } }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="name" stroke="#64748b" />
-                    <YAxis stroke="#64748b" />
+                    <XAxis dataKey="name" stroke="#64748b" style={{ fontSize: '12px' }} />
+                    <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: '#fff',
@@ -167,7 +167,7 @@ export default function HomePage() {
                   }}
                   onClick={() => router.push('/pdv')}
                 >
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: { xs: 1.5, sm: 2 }, px: { xs: 2, sm: 3 } }}>
                     <ShoppingCart />
                     <Box>
                       <Typography variant="body1" fontWeight="bold">
@@ -193,7 +193,7 @@ export default function HomePage() {
                   }}
                   onClick={() => router.push('/clientes')}
                 >
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: { xs: 1.5, sm: 2 }, px: { xs: 2, sm: 3 } }}>
                     <People />
                     <Box>
                       <Typography variant="body1" fontWeight="bold">
@@ -219,7 +219,7 @@ export default function HomePage() {
                   }}
                   onClick={() => router.push('/produtos')}
                 >
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: { xs: 1.5, sm: 2 }, px: { xs: 2, sm: 3 } }}>
                     <Receipt />
                     <Box>
                       <Typography variant="body1" fontWeight="bold">
@@ -252,13 +252,14 @@ export default function HomePage() {
                   <CircularProgress />
                 </Box>
               ) : dashboard?.ultimosPedidos && dashboard.ultimosPedidos.length > 0 ? (
+                <TableContainer sx={{ overflowX: 'auto' }}>
                 <Table>
                   <TableHead>
                     <TableRow>
                       <TableCell>Pedido</TableCell>
                       <TableCell>Cliente</TableCell>
-                      <TableCell>Data</TableCell>
-                      <TableCell>Status</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Data</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Status</TableCell>
                       <TableCell align="right">Total</TableCell>
                     </TableRow>
                   </TableHead>
@@ -279,10 +280,10 @@ export default function HomePage() {
                           />
                         </TableCell>
                         <TableCell>{pedido.cliente_nome || 'Sem cliente'}</TableCell>
-                        <TableCell>
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                           {formatDateBR(pedido.data)}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                           <Chip
                             label={pedido.status}
                             size="small"
@@ -300,6 +301,7 @@ export default function HomePage() {
                     ))}
                   </TableBody>
                 </Table>
+                </TableContainer>
               ) : (
                 <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
                   Nenhum pedido encontrado
