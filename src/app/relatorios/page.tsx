@@ -22,6 +22,8 @@ import {
   Tabs,
   Tab,
   Paper,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Assessment,
@@ -39,6 +41,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { format, subDays, startOfMonth, startOfWeek } from 'date-fns';
 
 export default function RelatoriosPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const hoje = dateToString(new Date());
   const trintaDiasAtras = dateToString(subDays(new Date(), 29)); // 29 dias atrás + hoje = 30 dias
 
@@ -494,9 +498,9 @@ export default function RelatoriosPage() {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={tabAtiva} onChange={(e, newValue) => setTabAtiva(newValue)}>
-          <Tab label="Relatório por Período" />
-          <Tab label="Relatório Anual" />
+        <Tabs value={tabAtiva} onChange={(e, newValue) => setTabAtiva(newValue)} sx={{ '& .MuiTab-root': { fontSize: { xs: '0.8rem', sm: '0.875rem' } } }}>
+          <Tab label={isMobile ? "Período" : "Relatório por Período"} />
+          <Tab label={isMobile ? "Anual" : "Relatório Anual"} />
         </Tabs>
       </Box>
 
@@ -504,7 +508,7 @@ export default function RelatoriosPage() {
       {tabAtiva === 0 && (
         <>
           {/* Filtros de Período */}
-      <Card sx={{ p: 3, mb: 3 }}>
+      <Card sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
           <Grid container spacing={2} alignItems="center">
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
@@ -523,7 +527,7 @@ export default function RelatoriosPage() {
                 Período: {formatDateBR(dataInicio)} até {formatDateBR(dataFim)}
               </Typography>
             </Box>
-            <ButtonGroup variant="outlined" sx={{ mb: 2, flexWrap: 'wrap' }}>
+            <ButtonGroup variant="outlined" sx={{ mb: 2, flexWrap: 'wrap' }} size={isMobile ? "small" : "medium"}>
               <Button 
                 onClick={() => handleFiltroRapido('hoje')}
                 variant={filtroAtivo === 'hoje' ? 'contained' : 'outlined'}
@@ -534,23 +538,23 @@ export default function RelatoriosPage() {
                 onClick={() => handleFiltroRapido('7dias')}
                 variant={filtroAtivo === '7dias' ? 'contained' : 'outlined'}
               >
-                7 dias
+                {isMobile ? '7d' : '7 dias'}
               </Button>
               <Button 
                 onClick={() => handleFiltroRapido('30dias')}
                 variant={filtroAtivo === '30dias' ? 'contained' : 'outlined'}
               >
-                30 dias
+                {isMobile ? '30d' : '30 dias'}
               </Button>
               <Button 
                 onClick={() => handleFiltroRapido('mes')}
                 variant={filtroAtivo === 'mes' ? 'contained' : 'outlined'}
               >
-                Este mês
+                {isMobile ? 'Mês' : 'Este mês'}
               </Button>
             </ButtonGroup>
           </Grid>
-          <Grid item xs={12} md={3}>
+          <Grid item xs={6} md={3}>
             <TextField
               fullWidth
               type="date"
@@ -563,7 +567,7 @@ export default function RelatoriosPage() {
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
-          <Grid item xs={12} md={3}>
+          <Grid item xs={6} md={3}>
             <TextField
               fullWidth
               type="date"
@@ -600,41 +604,41 @@ export default function RelatoriosPage() {
 
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Total de Vendas"
             value={formatCurrency(totalVendas)}
-            icon={<TrendingUp sx={{ fontSize: 28 }} />}
+            icon={<TrendingUp sx={{ fontSize: { xs: 32, sm: 28 } }} />}
             color="#10b981"
             loading={loadingVendas}
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Total de Pedidos"
             value={totalPedidos}
-            icon={<Assessment sx={{ fontSize: 28 }} />}
+            icon={<Assessment sx={{ fontSize: { xs: 32, sm: 28 } }} />}
             color="#0ea5e9"
             loading={loadingVendas}
           />
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Itens Vendidos"
             value={totalItens}
-            icon={<Star sx={{ fontSize: 28 }} />}
+            icon={<Star sx={{ fontSize: { xs: 32, sm: 28 } }} />}
             color="#8b5cf6"
             loading={loadingVendas}
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Ticket Médio"
             value={formatCurrency(ticketMedio)}
-            icon={<Star sx={{ fontSize: 28 }} />}
+            icon={<Star sx={{ fontSize: { xs: 32, sm: 28 } }} />}
             color="#f59e0b"
             loading={loadingVendas}
           />
@@ -709,18 +713,24 @@ export default function RelatoriosPage() {
                     <Pie
                       data={dadosPizza}
                       cx="50%"
-                      cy="50%"
+                      cy={isMobile ? "40%" : "50%"}
                       labelLine={false}
-                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                      outerRadius={80}
+                      label={!isMobile ? ({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)` : false}
+                      outerRadius={isMobile ? 60 : 80}
                       fill="#8884d8"
                       dataKey="value"
                     >
-                      {dadosPizza.map((_: any, index: number) => (
+                      {dadosPizza.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(value: number) => formatCurrency(value as number)} />
+                    <Legend 
+                      layout={isMobile ? "horizontal" : "vertical"}
+                      align={isMobile ? "center" : "right"}
+                      verticalAlign={isMobile ? "bottom" : "middle"}
+                      wrapperStyle={{ fontSize: isMobile ? '12px' : '14px' }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </Box>
@@ -807,17 +817,19 @@ export default function RelatoriosPage() {
       {/* Conteúdo Tab 1 - Relatório Anual */}
       {tabAtiva === 1 && (
         <>
-          <Card sx={{ p: 3, mb: 3 }}>
+          <Card sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
               <Box>
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: 'primary.main' }}>
-                  RELATÓRIO MENSAL DE VENDAS DA LOJAS MANÚ
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: 'primary.main', fontSize: { xs: '1.1rem', sm: '1.5rem' } }}>
+                  {isMobile ? `REL. MENSAL - ${anoSelecionado}` : 'RELATÓRIO MENSAL DE VENDAS DA LOJAS MANÚ'}
                 </Typography>
-                <Typography variant="h6" color="text.secondary">
-                  ANO: {anoSelecionado}
-                </Typography>
+                {!isMobile && (
+                  <Typography variant="h6" color="text.secondary">
+                    ANO: {anoSelecionado}
+                  </Typography>
+                )}
               </Box>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' }, width: { xs: '100%', sm: 'auto' } }}>
                 <TextField
                   type="number"
                   label="Ano"
@@ -830,12 +842,13 @@ export default function RelatoriosPage() {
                   variant="contained"
                   startIcon={<PictureAsPdf />}
                   onClick={handleExportarPDFAnual}
+                  fullWidth={isMobile}
                   sx={{ 
                     bgcolor: '#d32f2f',
                     '&:hover': { bgcolor: '#b71c1c' }
                   }}
                 >
-                  Exportar PDF
+                  {isMobile ? 'PDF' : 'Exportar PDF'}
                 </Button>
               </Box>
             </Box>
@@ -847,7 +860,19 @@ export default function RelatoriosPage() {
             ) : (
               <>
                 {/* Tabela Mensal */}
-                <TableContainer sx={{ mb: 4, border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
+                <TableContainer sx={{ 
+                  mb: 4, 
+                  border: '1px solid #e0e0e0', 
+                  borderRadius: 1, 
+                  overflowX: 'auto',
+                  '&::-webkit-scrollbar': {
+                    height: 8,
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    backgroundColor: 'primary.main',
+                    borderRadius: 4,
+                  }
+                }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
@@ -867,8 +892,9 @@ export default function RelatoriosPage() {
                               fontWeight: 700, 
                               border: '1px solid #ddd',
                               color: 'white',
-                              fontSize: '0.75rem',
-                              minWidth: 70
+                              fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                              minWidth: { xs: 60, sm: 70 },
+                              px: { xs: 0.5, sm: 1 }
                             }}
                           >
                             {mes}
@@ -967,7 +993,7 @@ export default function RelatoriosPage() {
                   </Typography>
                   <Grid container spacing={2}>
                     {Object.entries(dadosAnuais.totais).map(([forma, total]: [string, any]) => (
-                      <Grid item xs={12} sm={6} md={3} key={forma}>
+                      <Grid item xs={6} sm={6} md={3} key={forma}>
                         <Card sx={{ p: 2, bgcolor: 'white', boxShadow: 1, '&:hover': { boxShadow: 3 } }}>
                           <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontWeight: 500 }}>
                             {forma}
@@ -978,7 +1004,7 @@ export default function RelatoriosPage() {
                         </Card>
                       </Grid>
                     ))}
-                    <Grid item xs={12} sm={6} md={3}>
+                    <Grid item xs={6} sm={6} md={3}>
                       <Card sx={{ p: 2, bgcolor: 'primary.main', color: 'white', boxShadow: 2, '&:hover': { boxShadow: 4 } }}>
                         <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, opacity: 0.9 }}>
                           TOTAL VENDAS
@@ -988,7 +1014,7 @@ export default function RelatoriosPage() {
                         </Typography>
                       </Card>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
+                    <Grid item xs={6} sm={6} md={3}>
                       <Card sx={{ p: 2, bgcolor: 'error.main', color: 'white', boxShadow: 2, '&:hover': { boxShadow: 4 } }}>
                         <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, opacity: 0.9 }}>
                           SAÍDAS FINANCEIRAS
@@ -1009,18 +1035,18 @@ export default function RelatoriosPage() {
                       TOTAL VENDAS - Evolução Mensal
                     </Typography>
                   </Box>
-                  <Box sx={{ height: 350, bgcolor: '#fafafa', borderRadius: 1, p: 2 }}>
+                  <Box sx={{ height: { xs: 250, sm: 300, md: 350 }, bgcolor: '#fafafa', borderRadius: 1, p: 2 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={dadosAnuais.grafico}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis 
                           dataKey="name" 
                           stroke="#64748b"
-                          style={{ fontSize: '0.875rem', fontWeight: 600 }}
+                          style={{ fontSize: isMobile ? '0.7rem' : '0.875rem', fontWeight: 600 }}
                         />
                         <YAxis 
                           stroke="#64748b"
-                          style={{ fontSize: '0.75rem' }}
+                          style={{ fontSize: isMobile ? '0.65rem' : '0.75rem' }}
                         />
                         <Tooltip
                           contentStyle={{

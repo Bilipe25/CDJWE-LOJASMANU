@@ -1,6 +1,6 @@
 'use client';
 
-import { Grid, Card, CardContent, Box, Typography, CircularProgress, Chip, Table, TableBody, TableCell, TableHead, TableRow, Avatar, TableContainer } from '@mui/material';
+import { Grid, Card, CardContent, Box, Typography, CircularProgress, Chip, Table, TableBody, TableCell, TableHead, TableRow, Avatar, TableContainer, Fab, useMediaQuery, useTheme } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import {
   TrendingUp,
@@ -20,6 +20,8 @@ import { formatDateBR } from '@/lib/utils/dateUtils';
 
 export default function HomePage() {
   const router = useRouter();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { data: dashboard, isLoading } = trpc.relatorios.dashboard.useQuery({});
 
   const formatCurrency = (value: number) => {
@@ -58,48 +60,52 @@ export default function HomePage() {
     <AppLayout>
       <PageHeader
         title="Dashboard"
-        subtitle={`Bem-vindo! Hoje é ${format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })} | Vendas = apenas pedidos do tipo ENTRADA`}
+        subtitle={
+          isMobile 
+            ? "Bem-vindo! | Vendas: ENTRADA" 
+            : `Bem-vindo! Hoje é ${format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })} | Vendas = apenas pedidos do tipo ENTRADA`
+        }
       />
 
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Vendas Hoje"
             value={formatCurrency(dashboard?.vendasHoje || 0)}
-            icon={<AttachMoney sx={{ fontSize: 28 }} />}
+            icon={<AttachMoney sx={{ fontSize: { xs: 32, sm: 28 } }} />}
             color="#10b981"
             loading={isLoading}
             trend={{ value: 12.5, isPositive: true }}
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Vendas do Mês"
             value={formatCurrency(dashboard?.vendasMes || 0)}
-            icon={<TrendingUp sx={{ fontSize: 28 }} />}
+            icon={<TrendingUp sx={{ fontSize: { xs: 32, sm: 28 } }} />}
             color="#0ea5e9"
             loading={isLoading}
             trend={{ value: 8.2, isPositive: true }}
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Pedidos Pendentes"
             value={dashboard?.pedidosPendentes || 0}
-            icon={<Receipt sx={{ fontSize: 28 }} />}
+            icon={<Receipt sx={{ fontSize: { xs: 32, sm: 28 } }} />}
             color="#f59e0b"
             loading={isLoading}
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Total de Clientes"
             value={dashboard?.totalClientes || 0}
-            icon={<People sx={{ fontSize: 28 }} />}
+            icon={<People sx={{ fontSize: { xs: 32, sm: 28 } }} />}
             color="#8b5cf6"
             loading={isLoading}
             trend={{ value: 3.1, isPositive: true }}
@@ -153,85 +159,88 @@ export default function HomePage() {
                 Acesse rapidamente as principais funções
               </Typography>
 
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Card
-                  sx={{
-                    bgcolor: 'primary.main',
-                    color: 'white',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: 4,
-                    },
-                  }}
-                  onClick={() => router.push('/pdv')}
-                >
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: { xs: 1.5, sm: 2 }, px: { xs: 2, sm: 3 } }}>
-                    <ShoppingCart />
-                    <Box>
-                      <Typography variant="body1" fontWeight="bold">
-                        Novo Pedido
+              <Grid container spacing={2}>
+                <Grid item xs={4} sm={4} md={4}>
+                  <Card
+                    sx={{
+                      bgcolor: 'primary.main',
+                      color: 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      height: '100%',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: 4,
+                      },
+                    }}
+                    onClick={() => router.push('/pdv')}
+                  >
+                    <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: { xs: 0.5, sm: 1 }, py: { xs: 1.5, sm: 2 }, px: { xs: 1, sm: 2 }, textAlign: 'center' }}>
+                      <ShoppingCart sx={{ fontSize: { xs: 32, sm: 40 } }} />
+                      <Typography variant="body2" fontWeight="bold" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
+                        {isMobile ? 'Pedido' : 'Novo Pedido'}
                       </Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                        Iniciar uma nova venda
+                      <Typography variant="caption" sx={{ opacity: 0.9, fontSize: { xs: '0.65rem', sm: '0.75rem' }, display: { xs: 'none', sm: 'block' } }}>
+                        Iniciar venda
                       </Typography>
-                    </Box>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </Grid>
 
-                <Card
-                  sx={{
-                    bgcolor: 'success.main',
-                    color: 'white',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: 4,
-                    },
-                  }}
-                  onClick={() => router.push('/clientes')}
-                >
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: { xs: 1.5, sm: 2 }, px: { xs: 2, sm: 3 } }}>
-                    <People />
-                    <Box>
-                      <Typography variant="body1" fontWeight="bold">
-                        Cadastrar Cliente
+                <Grid item xs={4} sm={4} md={4}>
+                  <Card
+                    sx={{
+                      bgcolor: 'success.main',
+                      color: 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      height: '100%',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: 4,
+                      },
+                    }}
+                    onClick={() => router.push('/clientes')}
+                  >
+                    <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: { xs: 0.5, sm: 1 }, py: { xs: 1.5, sm: 2 }, px: { xs: 1, sm: 2 }, textAlign: 'center' }}>
+                      <People sx={{ fontSize: { xs: 32, sm: 40 } }} />
+                      <Typography variant="body2" fontWeight="bold" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
+                        {isMobile ? 'Cliente' : 'Cadastrar Cliente'}
                       </Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                        Adicionar novo cliente
+                      <Typography variant="caption" sx={{ opacity: 0.9, fontSize: { xs: '0.65rem', sm: '0.75rem' }, display: { xs: 'none', sm: 'block' } }}>
+                        Novo cliente
                       </Typography>
-                    </Box>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </Grid>
 
-                <Card
-                  sx={{
-                    bgcolor: 'warning.main',
-                    color: 'white',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: 4,
-                    },
-                  }}
-                  onClick={() => router.push('/produtos')}
-                >
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: { xs: 1.5, sm: 2 }, px: { xs: 2, sm: 3 } }}>
-                    <Receipt />
-                    <Box>
-                      <Typography variant="body1" fontWeight="bold">
-                        Cadastrar Produto
+                <Grid item xs={4} sm={4} md={4}>
+                  <Card
+                    sx={{
+                      bgcolor: 'warning.main',
+                      color: 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      height: '100%',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: 4,
+                      },
+                    }}
+                    onClick={() => router.push('/produtos')}
+                  >
+                    <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: { xs: 0.5, sm: 1 }, py: { xs: 1.5, sm: 2 }, px: { xs: 1, sm: 2 }, textAlign: 'center' }}>
+                      <Receipt sx={{ fontSize: { xs: 32, sm: 40 } }} />
+                      <Typography variant="body2" fontWeight="bold" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
+                        {isMobile ? 'Produto' : 'Cadastrar Produto'}
                       </Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                        Adicionar novo produto
+                      <Typography variant="caption" sx={{ opacity: 0.9, fontSize: { xs: '0.65rem', sm: '0.75rem' }, display: { xs: 'none', sm: 'block' } }}>
+                        Novo produto
                       </Typography>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
         </Grid>
@@ -268,7 +277,14 @@ export default function HomePage() {
                       <TableRow 
                         key={pedido.id}
                         hover
-                        sx={{ cursor: 'pointer' }}
+                        sx={{ 
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          '&:hover': {
+                            bgcolor: 'action.hover',
+                            transform: 'scale(1.01)',
+                          }
+                        }}
                         onClick={() => router.push(`/pedidos?id=${pedido.id}`)}
                       >
                         <TableCell>
@@ -342,19 +358,22 @@ export default function HomePage() {
                       }}
                       onClick={() => router.push('/produtos')}
                     >
-                      <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
+                      <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: { xs: 1.5, sm: 2 }, px: { xs: 2, sm: 3 } }}>
                         <Avatar 
                           sx={{ 
                             bgcolor: index === 0 ? 'warning.main' : 
                                      index === 1 ? 'grey.400' : 
                                      index === 2 ? 'orange.300' : 'primary.main',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
+                            width: { xs: 32, sm: 40 },
+                            height: { xs: 32, sm: 40 },
+                            fontSize: { xs: '0.9rem', sm: '1rem' }
                           }}
                         >
                           {index + 1}
                         </Avatar>
                         <Box sx={{ flex: 1 }}>
-                          <Typography variant="body1" fontWeight="600">
+                          <Typography variant="body1" fontWeight="600" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
                             {produto.produto_nome}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
@@ -362,10 +381,10 @@ export default function HomePage() {
                           </Typography>
                         </Box>
                         <Box sx={{ textAlign: 'right' }}>
-                          <Typography variant="h6" fontWeight="bold" color="primary.main">
+                          <Typography variant="h6" fontWeight="bold" color="primary.main" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
                             {produto.quantidade_vendida}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
                             vendidos
                           </Typography>
                         </Box>
@@ -382,6 +401,24 @@ export default function HomePage() {
           </Card>
         </Grid>
       </Grid>
+
+      {/* FAB - Novo Pedido (Mobile Only) */}
+      {isMobile && (
+        <Fab
+          color="primary"
+          aria-label="novo pedido"
+          onClick={() => router.push('/pdv')}
+          sx={{
+            position: 'fixed',
+            bottom: { xs: 16, sm: 24 },
+            right: { xs: 16, sm: 24 },
+            width: 56,
+            height: 56,
+          }}
+        >
+          <ShoppingCart />
+        </Fab>
+      )}
     </AppLayout>
   );
 }

@@ -32,6 +32,8 @@ import {
   Divider,
   Alert,
   Autocomplete,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Search,
@@ -64,6 +66,8 @@ import { format } from 'date-fns';
 import { dateToString } from '@/lib/utils/dateUtils';
 
 export default function SaidasPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [status, setStatus] = useState('');
@@ -439,12 +443,12 @@ export default function SaidasPage() {
       
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: 'white',
-              p: 3,
+              p: { xs: 2, sm: 3 },
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -470,18 +474,18 @@ export default function SaidasPage() {
                   justifyContent: 'center',
                 }}
               >
-                <CallMade sx={{ fontSize: 28 }} />
+                <CallMade sx={{ fontSize: { xs: 32, sm: 28 } }} />
               </Box>
             </Box>
           </Card>
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
               color: 'white',
-              p: 3,
+              p: { xs: 2, sm: 3 },
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -507,18 +511,18 @@ export default function SaidasPage() {
                   justifyContent: 'center',
                 }}
               >
-                <AttachMoney sx={{ fontSize: 28 }} />
+                <AttachMoney sx={{ fontSize: { xs: 32, sm: 28 } }} />
               </Box>
             </Box>
           </Card>
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
               color: 'white',
-              p: 3,
+              p: { xs: 2, sm: 3 },
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -544,18 +548,18 @@ export default function SaidasPage() {
                   justifyContent: 'center',
                 }}
               >
-                <TrendingUp sx={{ fontSize: 28 }} />
+                <TrendingUp sx={{ fontSize: { xs: 32, sm: 28 } }} />
               </Box>
             </Box>
           </Card>
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
               color: 'white',
-              p: 3,
+              p: { xs: 2, sm: 3 },
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -581,7 +585,7 @@ export default function SaidasPage() {
                   justifyContent: 'center',
                 }}
               >
-                <CheckCircle sx={{ fontSize: 28 }} />
+                <CheckCircle sx={{ fontSize: { xs: 32, sm: 28 } }} />
               </Box>
             </Box>
           </Card>
@@ -589,7 +593,7 @@ export default function SaidasPage() {
       </Grid>
 
       <Box sx={{ mb: 3 }}>
-        <Card sx={{ p: 3 }}>
+        <Card sx={{ p: { xs: 2, sm: 3 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
             <FilterList color="primary" />
             <Typography variant="h6" fontWeight="bold">
@@ -637,7 +641,7 @@ export default function SaidasPage() {
               </FormControl>
             </Grid>
             
-            <Grid item xs={12} sm={6} md={2}>
+            <Grid item xs={6} sm={6} md={2}>
               <TextField
                 fullWidth
                 type="date"
@@ -658,7 +662,7 @@ export default function SaidasPage() {
               />
             </Grid>
             
-            <Grid item xs={12} sm={6} md={2}>
+            <Grid item xs={6} sm={6} md={2}>
               <TextField
                 fullWidth
                 type="date"
@@ -754,6 +758,15 @@ export default function SaidasPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.05 }}
                       hover
+                      onClick={() => handleVisualizarPedido(pedido)}
+                      sx={{
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                          transform: 'scale(1.01)',
+                        }
+                      }}
                     >
                       <TableCell>
                         <Chip
@@ -783,19 +796,27 @@ export default function SaidasPage() {
                       </TableCell>
                       <TableCell align="center">{getStatusChip(pedido.status)}</TableCell>
                       <TableCell align="right">
-                        <Tooltip title="Visualizar Detalhes">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleVisualizarPedido(pedido)}
-                          >
-                            <Visibility fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                          <Tooltip title="Visualizar Detalhes">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleVisualizarPedido(pedido);
+                              }}
+                            >
+                              <Visibility fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                         <Tooltip title="Editar">
                           <IconButton
                             size="small"
                             color="primary"
-                            onClick={() => handleEditarPedido(pedido)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditarPedido(pedido);
+                            }}
                             disabled={pedido.status === 'CANCELADO'}
                           >
                             <Edit fontSize="small" />
@@ -804,7 +825,10 @@ export default function SaidasPage() {
                         <Tooltip title="Imprimir">
                           <IconButton
                             size="small"
-                            onClick={() => setPrintDialog({ open: true, pedido })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPrintDialog({ open: true, pedido });
+                            }}
                           >
                             <Print fontSize="small" />
                           </IconButton>
@@ -911,6 +935,7 @@ export default function SaidasPage() {
         onClose={() => setDialogDetalhes(false)} 
         maxWidth="md" 
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1063,6 +1088,7 @@ export default function SaidasPage() {
         onClose={() => setDialogEditar(false)} 
         maxWidth="sm" 
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1275,6 +1301,7 @@ export default function SaidasPage() {
         onClose={() => setDialogNovaSaida(false)} 
         maxWidth="md" 
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

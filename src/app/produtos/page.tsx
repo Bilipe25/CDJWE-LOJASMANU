@@ -31,6 +31,8 @@ import {
   Tabs,
   Tab,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Search,
@@ -56,6 +58,8 @@ import { trpc } from '@/lib/trpc/client';
 import { motion } from 'framer-motion';
 
 export default function ProdutosPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [tabAtiva, setTabAtiva] = useState(0);
   
   // Estados de Produtos
@@ -505,20 +509,20 @@ export default function ProdutosPage() {
       
       {/* Tabs */}
       <Card sx={{ mb: 3 }}>
-        <Tabs value={tabAtiva} onChange={(e, newValue) => setTabAtiva(newValue)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tab icon={<Inventory />} label="Produtos" iconPosition="start" />
-          <Tab icon={<Palette />} label="Cores" iconPosition="start" />
-          <Tab icon={<Label />} label="Categorias" iconPosition="start" />
+        <Tabs value={tabAtiva} onChange={(e, newValue) => setTabAtiva(newValue)} sx={{ borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { fontSize: { xs: '0.75rem', sm: '0.875rem' }, minHeight: { xs: 48, sm: 56 } } }}>
+          <Tab icon={<Inventory sx={{ fontSize: { xs: 20, sm: 24 } }} />} label={isMobile ? "Produtos" : "Produtos"} iconPosition="start" />
+          <Tab icon={<Palette sx={{ fontSize: { xs: 20, sm: 24 } }} />} label={isMobile ? "Cores" : "Cores"} iconPosition="start" />
+          <Tab icon={<Label sx={{ fontSize: { xs: 20, sm: 24 } }} />} label={isMobile ? "Categorias" : "Categorias"} iconPosition="start" />
         </Tabs>
       </Card>
       
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ p: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'primary.light', color: 'primary.main' }}>
-                <Inventory />
+                <Inventory sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>{stats?.total || 0}</Box>
@@ -527,11 +531,11 @@ export default function ProdutosPage() {
             </Box>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ p: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'success.light', color: 'success.main' }}>
-                <CheckCircle />
+                <CheckCircle sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>
@@ -542,11 +546,11 @@ export default function ProdutosPage() {
             </Box>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ p: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'warning.light', color: 'warning.main' }}>
-                <Category />
+                <Category sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>
@@ -557,11 +561,11 @@ export default function ProdutosPage() {
             </Box>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ p: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'info.light', color: 'info.main' }}>
-                <TrendingUp />
+                <TrendingUp sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>
@@ -578,7 +582,7 @@ export default function ProdutosPage() {
       {tabAtiva === 0 && (
         <Card>
           {/* Filtros */}
-          <Box sx={{ p: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid', borderColor: 'divider' }}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} md={6}>
               <TextField
@@ -693,6 +697,15 @@ export default function ProdutosPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.05 }}
                       hover
+                      onClick={() => handleVisualizarProduto(produto)}
+                      sx={{
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                          transform: 'scale(1.01)',
+                        }
+                      }}
                     >
                       <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                         <Chip
@@ -726,18 +739,26 @@ export default function ProdutosPage() {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <Tooltip title="Visualizar">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleVisualizarProduto(produto)}
-                          >
-                            <Visibility fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                          <Tooltip title="Visualizar">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleVisualizarProduto(produto);
+                              }}
+                            >
+                              <Visibility fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                         <Tooltip title="Editar">
                           <IconButton
                             size="small"
-                            onClick={() => handleEditarProduto(produto)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditarProduto(produto);
+                            }}
                           >
                             <Edit fontSize="small" />
                           </IconButton>
@@ -746,7 +767,10 @@ export default function ProdutosPage() {
                           <IconButton
                             size="small"
                             color="info"
-                            onClick={() => handleDuplicarProduto(produto)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicarProduto(produto);
+                            }}
                           >
                             <ContentCopy fontSize="small" />
                           </IconButton>
@@ -755,7 +779,10 @@ export default function ProdutosPage() {
                           <IconButton
                             size="small"
                             color="error"
-                            onClick={() => handleDeletarProduto(produto)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletarProduto(produto);
+                            }}
                           >
                             <Delete fontSize="small" />
                           </IconButton>
@@ -775,8 +802,16 @@ export default function ProdutosPage() {
               rowsPerPage={rowsPerPage}
               onRowsPerPageChange={handleChangeRowsPerPage}
               rowsPerPageOptions={[5, 10, 25, 50]}
-              labelRowsPerPage="Linhas por página:"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              labelRowsPerPage={isMobile ? "Por pág:" : "Linhas por página:"}
+              labelDisplayedRows={({ from, to, count }) => isMobile ? `${from}-${to}/${count}` : `${from}-${to} de ${count}`}
+              sx={{
+                '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                },
+                '.MuiTablePagination-select': {
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                }
+              }}
             />
           </>
         )}

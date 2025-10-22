@@ -36,6 +36,8 @@ import {
   Alert,
   CircularProgress,
   Tooltip,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add,
@@ -74,6 +76,8 @@ import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
 function PDVPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const pedidoEditId = searchParams.get('edit');
   const [modoEdicao, setModoEdicao] = useState(false);
   const [pedidoOriginalId, setPedidoOriginalId] = useState<string | null>(null);
@@ -116,6 +120,13 @@ function PDVPageContent() {
   // Refs para focar nos campos
   const produtoInputRef = useRef<HTMLInputElement>(null);
   const clienteInputRef = useRef<HTMLInputElement>(null);
+
+  // Abrir accordion cliente automaticamente em mobile
+  useEffect(() => {
+    if (isMobile && !accordionExpandido) {
+      setAccordionExpandido('cliente');
+    }
+  }, [isMobile]);
 
   const { data: produtos } = trpc.produtos.list.useQuery({
     limit: 100,
@@ -855,9 +866,13 @@ function PDVPageContent() {
                   startIcon={<Add />}
                   onClick={handleAdicionarProduto}
                   disabled={!produtoSelecionado || quantidade <= 0 || valorUnitario <= 0}
-                  sx={{ height: 56 }}
+                  sx={{ 
+                    height: { xs: 48, sm: 56 },
+                    fontWeight: 'bold',
+                    fontSize: { xs: '0.9rem', sm: '1rem' }
+                  }}
                 >
-                  Adicionar ao Pedido
+                  {isMobile ? 'Adicionar' : 'Adicionar ao Pedido'}
                 </Button>
               </Grid>
             </Grid>
@@ -867,11 +882,11 @@ function PDVPageContent() {
                 component={motion.div}
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                sx={{ p: 2, bgcolor: 'primary.main', color: 'white', mb: 3 }}
+                sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'primary.main', color: 'white', mb: 3 }}
               >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: { xs: 0.5, sm: 1 } }}>
                   <Box>
-                    <Typography variant="body2" fontWeight="bold" sx={{ opacity: 0.9 }}>
+                    <Typography variant="body2" fontWeight="bold" sx={{ opacity: 0.9, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
                       {produtoSelecionado.nome}
                     </Typography>
                     {corSelecionada && (
@@ -879,13 +894,13 @@ function PDVPageContent() {
                         label={corSelecionada.descricao} 
                         size="small" 
                         icon={<Palette />}
-                        sx={{ mt: 0.5, bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
+                        sx={{ mt: 0.5, bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: { xs: 20, sm: 24 } }}
                       />
                     )}
                   </Box>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 0.5, sm: 0 } }}>
+                  <Typography variant="body2" sx={{ opacity: 0.9, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                     {formatCurrency(valorUnitario)} × {quantidade} unid.
                     {descontoItem > 0 && (() => {
                       const valorTotalPrevia = valorUnitario * quantidade;
@@ -895,7 +910,7 @@ function PDVPageContent() {
                       return ` - ${formatCurrency(descontoCalculado)}`;
                     })()}
                   </Typography>
-                  <Typography variant="h6" fontWeight="bold">
+                  <Typography variant="h6" fontWeight="bold" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
                     = {formatCurrency((() => {
                       const valorTotalPrevia = valorUnitario * quantidade;
                       const descontoCalculado = tipoDescontoItem === 'percentual' 
@@ -1044,24 +1059,40 @@ function PDVPageContent() {
                               <Typography fontWeight="bold">{formatCurrency(item.valor_total)}</Typography>
                             </TableCell>
                             <TableCell align="center">
-                              <Tooltip title="Duplicar">
-                                <IconButton 
-                                  size="small" 
-                                  color="primary" 
-                                  onClick={() => handleDuplicarLinha(index)}
-                                >
-                                  <ContentCopy fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Remover">
-                                <IconButton 
-                                  size="small" 
-                                  color="error" 
-                                  onClick={() => removerItem(index)}
-                                >
-                                  <Delete fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                              <Box sx={{ 
+                                display: 'flex', 
+                                flexDirection: { xs: 'column', sm: 'row' },
+                                gap: { xs: 0.5, sm: 0.5 },
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                              }}>
+                                <Tooltip title="Duplicar">
+                                  <IconButton 
+                                    size={isMobile ? "medium" : "small"}
+                                    sx={{ 
+                                      color: 'success.main',
+                                      minWidth: { xs: 44, sm: 'auto' },
+                                      minHeight: { xs: 44, sm: 'auto' }
+                                    }}
+                                    onClick={() => handleDuplicarLinha(index)}
+                                  >
+                                    <ContentCopy fontSize={isMobile ? "medium" : "small"} />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Remover">
+                                  <IconButton 
+                                    size={isMobile ? "medium" : "small"}
+                                    color="error"
+                                    sx={{
+                                      minWidth: { xs: 44, sm: 'auto' },
+                                      minHeight: { xs: 44, sm: 'auto' }
+                                    }}
+                                    onClick={() => removerItem(index)}
+                                  >
+                                    <Delete fontSize={isMobile ? "medium" : "small"} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1406,7 +1437,7 @@ function PDVPageContent() {
       </Grid>
 
       {/* Dialog de Finalização */}
-      <Dialog open={dialogFinalizar} onClose={() => setDialogFinalizar(false)} maxWidth="md" fullWidth>
+      <Dialog open={dialogFinalizar} onClose={() => setDialogFinalizar(false)} maxWidth="md" fullWidth fullScreen={isMobile}>
         <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Receipt />
@@ -1588,7 +1619,7 @@ function PDVPageContent() {
       </Dialog>
 
       {/* Dialog de Criar Novo Cliente */}
-      <Dialog open={dialogNovoCliente} onClose={() => setDialogNovoCliente(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogNovoCliente} onClose={() => setDialogNovoCliente(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <PersonAdd color="primary" />
           Cadastrar Novo Cliente
@@ -1684,7 +1715,7 @@ function PDVPageContent() {
       </Dialog>
 
       {/* Dialog de Cadastrar Novo Produto */}
-      <Dialog open={dialogNovoProduto} onClose={() => setDialogNovoProduto(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogNovoProduto} onClose={() => setDialogNovoProduto(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Category color="primary" />
           Cadastrar Novo Produto (Ctrl+P)
@@ -1798,7 +1829,7 @@ function PDVPageContent() {
       </Dialog>
 
       {/* Dialog de Atalhos */}
-      <Dialog open={dialogAtalhos} onClose={() => setDialogAtalhos(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogAtalhos} onClose={() => setDialogAtalhos(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'primary.main', color: 'white' }}>
           <Keyboard />
           Atalhos de Teclado

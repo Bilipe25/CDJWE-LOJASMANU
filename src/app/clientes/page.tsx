@@ -28,6 +28,8 @@ import {
   FormControlLabel,
   Switch,
   Divider,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Search,
@@ -56,6 +58,8 @@ import { useRouter } from 'next/navigation';
 
 export default function ClientesPage() {
   const router = useRouter();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [search, setSearch] = useState('');
@@ -335,11 +339,11 @@ export default function ClientesPage() {
       
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ p: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'primary.light', color: 'primary.main' }}>
-                <Person />
+                <Person sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>{stats?.total || 0}</Box>
@@ -348,11 +352,11 @@ export default function ClientesPage() {
             </Box>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ p: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'success.light', color: 'success.main' }}>
-                <CheckCircle />
+                <CheckCircle sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>
@@ -363,11 +367,11 @@ export default function ClientesPage() {
             </Box>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ p: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'warning.light', color: 'warning.main' }}>
-                <ShoppingCart />
+                <ShoppingCart sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>
@@ -378,11 +382,11 @@ export default function ClientesPage() {
             </Box>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ p: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'info.light', color: 'info.main' }}>
-                <TrendingUp />
+                <TrendingUp sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>
@@ -397,7 +401,7 @@ export default function ClientesPage() {
 
       <Card>
         {/* Barra de Pesquisa */}
-        <Box sx={{ p: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid', borderColor: 'divider' }}>
           <TextField
             fullWidth
             placeholder="Buscar por nome, CPF ou telefone..."
@@ -463,6 +467,15 @@ export default function ClientesPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.05 }}
                       hover
+                      onClick={() => handleVisualizarCliente(cliente)}
+                      sx={{
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                          transform: 'scale(1.01)',
+                        }
+                      }}
                     >
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -510,23 +523,34 @@ export default function ClientesPage() {
                           <IconButton
                             size="small"
                             color="info"
-                            onClick={() => handleHistoricoPedidos(cliente)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleHistoricoPedidos(cliente);
+                            }}
                           >
                             <History fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Visualizar">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleVisualizarCliente(cliente)}
-                          >
-                            <Visibility fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                          <Tooltip title="Visualizar">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleVisualizarCliente(cliente);
+                              }}
+                            >
+                              <Visibility fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                         <Tooltip title="Editar">
                           <IconButton
                             size="small"
-                            onClick={() => handleEditarCliente(cliente)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditarCliente(cliente);
+                            }}
                           >
                             <Edit fontSize="small" />
                           </IconButton>
@@ -535,7 +559,10 @@ export default function ClientesPage() {
                           <IconButton
                             size="small"
                             color="error"
-                            onClick={() => handleDeletarCliente(cliente)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletarCliente(cliente);
+                            }}
                           >
                             <Delete fontSize="small" />
                           </IconButton>
@@ -555,15 +582,23 @@ export default function ClientesPage() {
               rowsPerPage={rowsPerPage}
               onRowsPerPageChange={handleChangeRowsPerPage}
               rowsPerPageOptions={[5, 10, 25, 50]}
-              labelRowsPerPage="Linhas por página:"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              labelRowsPerPage={isMobile ? "Por pág:" : "Linhas por página:"}
+              labelDisplayedRows={({ from, to, count }) => isMobile ? `${from}-${to}/${count}` : `${from}-${to} de ${count}`}
+              sx={{
+                '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                },
+                '.MuiTablePagination-select': {
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                }
+              }}
             />
           </>
         )}
       </Card>
       
       {/* Dialog Novo Cliente */}
-      <Dialog open={dialogNovo} onClose={() => setDialogNovo(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogNovo} onClose={() => setDialogNovo(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Novo Cliente</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
@@ -613,7 +648,7 @@ export default function ClientesPage() {
       </Dialog>
       
       {/* Dialog Editar Cliente */}
-      <Dialog open={dialogEditar} onClose={() => setDialogEditar(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogEditar} onClose={() => setDialogEditar(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Editar Cliente</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
@@ -739,7 +774,7 @@ export default function ClientesPage() {
       </Dialog>
       
       {/* Dialog Detalhes do Cliente */}
-      <Dialog open={dialogDetalhes} onClose={() => setDialogDetalhes(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogDetalhes} onClose={() => setDialogDetalhes(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Detalhes do Cliente</DialogTitle>
         <DialogContent>
           {clienteDetalhes && (
@@ -814,7 +849,7 @@ export default function ClientesPage() {
       </Dialog>
       
       {/* Dialog Histórico de Pedidos */}
-      <Dialog open={dialogHistorico} onClose={() => setDialogHistorico(false)} maxWidth="md" fullWidth>
+      <Dialog open={dialogHistorico} onClose={() => setDialogHistorico(false)} maxWidth="md" fullWidth fullScreen={isMobile}>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <History />

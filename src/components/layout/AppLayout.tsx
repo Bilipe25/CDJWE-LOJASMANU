@@ -179,7 +179,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default', overflowX: 'hidden', maxWidth: '100vw' }}>
       {/* AppBar */}
       <AppBar
         position="fixed"
@@ -301,6 +301,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           p: { xs: 2, sm: 3 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
           mt: 8,
+          overflowX: 'hidden',
+          maxWidth: '100%',
         }}
       >
         <motion.div

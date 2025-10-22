@@ -36,6 +36,11 @@ import {
   Menu,
   ListItemIcon,
   ListItemText,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Search,
@@ -60,6 +65,7 @@ import {
   ShoppingBag,
   Timer,
   MoreVert,
+  ExpandMore,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
@@ -76,8 +82,11 @@ function PedidosPageContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const utils = trpc.useUtils();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
   const [page, setPage] = useState(0);
+  const [filtrosExpanded, setFiltrosExpanded] = useState(!isMobile);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
@@ -470,8 +479,8 @@ function PedidosPageContent() {
       />
 
       {/* Cards de Estatísticas */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={6} sm={6} md={3}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -479,10 +488,10 @@ function PedidosPageContent() {
           >
             <Card
               sx={{
-                p: 3,
+                p: { xs: 2, sm: 3 },
                 display: 'flex',
                 alignItems: 'center',
-                gap: 2,
+                gap: { xs: 1.5, sm: 2 },
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: 'white',
                 position: 'relative',
@@ -501,7 +510,7 @@ function PedidosPageContent() {
             >
               <Box
                 sx={{
-                  p: 2,
+                  p: { xs: 1.5, sm: 2 },
                   borderRadius: 2,
                   bgcolor: 'rgba(255,255,255,0.2)',
                   display: 'flex',
@@ -509,10 +518,10 @@ function PedidosPageContent() {
                   justifyContent: 'center',
                 }}
               >
-                <Receipt sx={{ fontSize: 32 }} />
+                <Receipt sx={{ fontSize: { xs: 28, sm: 32 } }} />
               </Box>
               <Box sx={{ flex: 1, zIndex: 1 }}>
-                <Typography variant="h4" fontWeight="bold">
+                <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
                   {estatisticas.totalPedidos}
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
@@ -523,7 +532,7 @@ function PedidosPageContent() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -531,10 +540,10 @@ function PedidosPageContent() {
           >
             <Card
               sx={{
-                p: 3,
+                p: { xs: 2, sm: 3 },
                 display: 'flex',
                 alignItems: 'center',
-                gap: 2,
+                gap: { xs: 1.5, sm: 2 },
                 background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
                 color: 'white',
                 position: 'relative',
@@ -553,7 +562,7 @@ function PedidosPageContent() {
             >
               <Box
                 sx={{
-                  p: 2,
+                  p: { xs: 1.5, sm: 2 },
                   borderRadius: 2,
                   bgcolor: 'rgba(255,255,255,0.2)',
                   display: 'flex',
@@ -561,21 +570,21 @@ function PedidosPageContent() {
                   justifyContent: 'center',
                 }}
               >
-                <Schedule sx={{ fontSize: 32 }} />
+                <ShoppingBag sx={{ fontSize: { xs: 28, sm: 32 } }} />
               </Box>
               <Box sx={{ flex: 1, zIndex: 1 }}>
-                <Typography variant="h4" fontWeight="bold">
-                  {estatisticas.pedidosPendentes}
+                <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
+                  {estatisticas.totalPedidos}
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Pedidos Pendentes
+                  Total de Pedidos
                 </Typography>
               </Box>
             </Card>
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -583,10 +592,10 @@ function PedidosPageContent() {
           >
             <Card
               sx={{
-                p: 3,
+                p: { xs: 2, sm: 3 },
                 display: 'flex',
                 alignItems: 'center',
-                gap: 2,
+                gap: { xs: 1.5, sm: 2 },
                 background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
                 color: 'white',
                 position: 'relative',
@@ -605,7 +614,7 @@ function PedidosPageContent() {
             >
               <Box
                 sx={{
-                  p: 2,
+                  p: { xs: 1.5, sm: 2 },
                   borderRadius: 2,
                   bgcolor: 'rgba(255,255,255,0.2)',
                   display: 'flex',
@@ -613,10 +622,10 @@ function PedidosPageContent() {
                   justifyContent: 'center',
                 }}
               >
-                <TrendingUp sx={{ fontSize: 32 }} />
+                <TrendingUp sx={{ fontSize: { xs: 28, sm: 32 } }} />
               </Box>
               <Box sx={{ flex: 1, zIndex: 1 }}>
-                <Typography variant="h4" fontWeight="bold">
+                <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
                   {formatCurrency(estatisticas.totalVendas)}
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
@@ -627,7 +636,7 @@ function PedidosPageContent() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -635,10 +644,10 @@ function PedidosPageContent() {
           >
             <Card
               sx={{
-                p: 3,
+                p: { xs: 2, sm: 3 },
                 display: 'flex',
                 alignItems: 'center',
-                gap: 2,
+                gap: { xs: 1.5, sm: 2 },
                 background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
                 color: 'white',
                 position: 'relative',
@@ -657,7 +666,7 @@ function PedidosPageContent() {
             >
               <Box
                 sx={{
-                  p: 2,
+                  p: { xs: 1.5, sm: 2 },
                   borderRadius: 2,
                   bgcolor: 'rgba(255,255,255,0.2)',
                   display: 'flex',
@@ -665,10 +674,10 @@ function PedidosPageContent() {
                   justifyContent: 'center',
                 }}
               >
-                <CheckCircle sx={{ fontSize: 32 }} />
+                <CheckCircle sx={{ fontSize: { xs: 28, sm: 32 } }} />
               </Box>
               <Box sx={{ flex: 1, zIndex: 1 }}>
-                <Typography variant="h4" fontWeight="bold">
+                <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
                   {estatisticas.finalizadosHoje}
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
@@ -680,15 +689,50 @@ function PedidosPageContent() {
         </Grid>
       </Grid>
 
-      <Card>
+      <Card sx={{ overflow: 'hidden', maxWidth: '100%' }}>
         {/* Filtros Avançados */}
-        <Box sx={{ p: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        <Accordion 
+          expanded={filtrosExpanded} 
+          onChange={() => setFiltrosExpanded(!filtrosExpanded)}
+          sx={{ 
+            boxShadow: 'none',
+            '&:before': { display: 'none' },
+            borderBottom: '1px solid',
+            borderColor: 'divider'
+          }}
+        >
+          <AccordionSummary 
+            expandIcon={<ExpandMore />}
+            sx={{ 
+              px: 3,
+              '& .MuiAccordionSummary-content': { 
+                alignItems: 'center',
+                gap: 1,
+                my: 2
+              }
+            }}
+          >
             <FilterList color="primary" />
             <Typography variant="h6" fontWeight="bold">Filtros</Typography>
-            <Button size="small" onClick={limparFiltros} sx={{ ml: 'auto' }}>Limpar Filtros</Button>
-          </Box>
+            {!filtrosExpanded && (
+              <Box sx={{ ml: 2, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                {(search || status || tipoAtendimento || dataInicio || dataFim || clienteSelecionado) && (
+                  <>
+                    {search && <Chip label={`Busca: ${search}`} size="small" />}
+                    {status && <Chip label={`Status: ${status}`} size="small" color="primary" />}
+                    {tipoAtendimento && <Chip label={`Tipo: ${tipoAtendimento}`} size="small" color="secondary" />}
+                    {clienteSelecionado && <Chip label={`Cliente: ${clienteSelecionado.nome}`} size="small" color="success" />}
+                    {(dataInicio || dataFim) && <Chip label="Período" size="small" color="info" />}
+                  </>
+                )}
+              </Box>
+            )}
+            <Button size="small" onClick={(e) => { e.stopPropagation(); limparFiltros(); }} sx={{ ml: 'auto' }}>
+              Limpar Filtros
+            </Button>
+          </AccordionSummary>
           
+          <AccordionDetails sx={{ px: 3, pb: 3 }}>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6} md={3}>
               <TextField
@@ -814,7 +858,8 @@ function PedidosPageContent() {
               />
             </Grid>
           </Grid>
-        </Box>
+          </AccordionDetails>
+        </Accordion>
 
         {/* Loading do pedido da URL */}
         {loadingPedidoUrl && pedidoIdUrl && (
@@ -864,6 +909,13 @@ function PedidosPageContent() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.05 }}
                       hover
+                      onClick={() => handleVisualizarPedido(pedido)}
+                      sx={{ 
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                        }
+                      }}
                     >
                       <TableCell>
                         <Chip
@@ -912,19 +964,27 @@ function PedidosPageContent() {
                       <TableCell align="center">{getStatusChip(pedido.status)}</TableCell>
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                          <Tooltip title="Visualizar">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleVisualizarPedido(pedido)}
-                              sx={{ color: 'primary.main' }}
-                            >
-                              <Visibility fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                            <Tooltip title="Visualizar">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleVisualizarPedido(pedido);
+                                }}
+                                sx={{ color: 'primary.main' }}
+                              >
+                                <Visibility fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                           <Tooltip title="Mais ações">
                             <IconButton
                               size="small"
-                              onClick={(e) => handleOpenMenu(e, pedido)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenMenu(e, pedido);
+                              }}
                             >
                               <MoreVert fontSize="small" />
                             </IconButton>
@@ -945,8 +1005,16 @@ function PedidosPageContent() {
               rowsPerPage={rowsPerPage}
               onRowsPerPageChange={handleChangeRowsPerPage}
               rowsPerPageOptions={[5, 10, 25, 50]}
-              labelRowsPerPage="Linhas por página:"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              labelRowsPerPage={isMobile ? "Por pág:" : "Linhas por página:"}
+              labelDisplayedRows={({ from, to, count }) => isMobile ? `${from}-${to}/${count}` : `${from}-${to} de ${count}`}
+              sx={{
+                '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                },
+                '.MuiTablePagination-select': {
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                }
+              }}
             />
           </>
         )}
@@ -1024,6 +1092,7 @@ function PedidosPageContent() {
         onClose={handleFecharDialogDetalhes} 
         maxWidth="md" 
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
