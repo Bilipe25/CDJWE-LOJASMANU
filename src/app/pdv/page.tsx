@@ -583,6 +583,7 @@ function PDVPageContent() {
       numero: pedidoAtual.numero,
       data: pedidoAtual.data,
       cliente_nome: clienteSelecionado?.nome,
+      cliente_cpf: clienteSelecionado?.cpf,
       cliente_telefone: telefoneContato,
       endereco: enderecoCompleto,
       tipo_atendimento: (tiposAtendimento as any)?.find((t: any) => t.id === tipoAtendimentoId)?.nome,

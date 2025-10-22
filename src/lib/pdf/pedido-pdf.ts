@@ -17,6 +17,7 @@ interface DadosPedido {
   numero?: number;
   data: string;
   cliente_nome?: string;
+  cliente_cpf?: string;
   cliente_telefone?: string;
   endereco?: string;
   tipo_atendimento?: string;
@@ -161,7 +162,7 @@ export const gerarPedidoPDF = async (
             ],
             [
               { text: 'CPF:', fontSize: 9, bold: true, fillColor: '#f0f0f0', margin: [3, 3, 3, 3] },
-              { text: '', fontSize: 9, margin: [3, 3, 3, 3], colSpan: 3 },
+              { text: pedido.cliente_cpf || '', fontSize: 9, margin: [3, 3, 3, 3], colSpan: 3 },
               {},
               {},
             ],

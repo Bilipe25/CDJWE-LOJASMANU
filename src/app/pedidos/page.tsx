@@ -285,6 +285,7 @@ function PedidosPageContent() {
       numero: pedido.numero,
       data: pedido.data,
       cliente_nome: pedido.cliente?.nome,
+      cliente_cpf: pedido.cliente?.cpf,
       cliente_telefone: pedido.telefone_contato || pedido.cliente?.telefone,
       endereco: enderecoCompleto,
       tipo_atendimento: pedido.tipo_atendimento?.nome,
