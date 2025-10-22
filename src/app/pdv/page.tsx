@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { dateToString } from '@/lib/utils/dateUtils';
@@ -61,6 +61,8 @@ import {
   Print,
   Download,
   ContentCopy,
+  HelpOutline,
+  Keyboard,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
@@ -109,6 +111,11 @@ function PDVPageContent() {
   const [novoClienteTelefone, setNovoClienteTelefone] = useState('');
   const [novoClienteEndereco, setNovoClienteEndereco] = useState('');
   const [accordionExpandido, setAccordionExpandido] = useState<string | false>('cliente');
+  const [dialogAtalhos, setDialogAtalhos] = useState(false);
+  
+  // Refs para focar nos campos
+  const produtoInputRef = useRef<HTMLInputElement>(null);
+  const clienteInputRef = useRef<HTMLInputElement>(null);
 
   const { data: produtos } = trpc.produtos.list.useQuery({
     limit: 100,
@@ -224,14 +231,43 @@ function PDVPageContent() {
   // useEffect para atalhos de teclado
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      // Não executar atalhos se estiver em um dialog
+      const emDialog = dialogFinalizar || dialogNovoCliente || dialogNovoProduto || dialogAtalhos;
+      
+      // F2 - Focar no campo de busca de produtos
+      if (e.key === 'F2' && !emDialog) {
+        e.preventDefault();
+        produtoInputRef.current?.focus();
+        toast('Campo de produtos focado (F2)', { icon: '🔍' });
+      }
+      
+      // F3 - Focar no campo de busca de clientes
+      if (e.key === 'F3' && !emDialog) {
+        e.preventDefault();
+        clienteInputRef.current?.focus();
+        setAccordionExpandido('cliente');
+        toast('Campo de clientes focado (F3)', { icon: '👤' });
+      }
+      
+      // F12 - Finalizar pedido (se válido)
+      if (e.key === 'F12' && !emDialog) {
+        e.preventDefault();
+        if (pedidoAtual.itens.length > 0) {
+          handleFinalizarPedido();
+          toast('Finalizando pedido (F12)', { icon: '✅' });
+        } else {
+          toast.error('Adicione itens antes de finalizar');
+        }
+      }
+      
       // Enter - Adicionar produto se estiver selecionado
-      if (e.key === 'Enter' && produtoSelecionado && !dialogFinalizar && !dialogNovoCliente && !dialogNovoProduto) {
+      if (e.key === 'Enter' && produtoSelecionado && !emDialog) {
         e.preventDefault();
         handleAdicionarProduto();
       }
       
       // Esc - Limpar seleção
-      if (e.key === 'Escape' && produtoSelecionado && !dialogNovoProduto && !dialogNovoCliente) {
+      if (e.key === 'Escape' && produtoSelecionado && !emDialog) {
         setProdutoSelecionado(null);
         setQuantidade(1);
         setValorUnitario(0);
@@ -242,7 +278,7 @@ function PDVPageContent() {
       }
       
       // Ctrl+P - Abrir dialog de novo produto
-      if (e.ctrlKey && e.key === 'p' && !dialogFinalizar && !dialogNovoCliente && !dialogNovoProduto) {
+      if (e.ctrlKey && e.key === 'p' && !emDialog) {
         e.preventDefault();
         setDialogNovoProduto(true);
         toast('Atalho: Cadastrar novo produto', { icon: '➕' });
@@ -251,7 +287,7 @@ function PDVPageContent() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, dialogNovoProduto, quantidade]);
+  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, dialogNovoProduto, dialogAtalhos, quantidade, pedidoAtual.itens.length]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -592,7 +628,29 @@ function PDVPageContent() {
         ]}
       />
 
-      {/* Indicador de Modo Edição */}
+      {/* Badge de Ajuda com Atalhos */}
+      <Box sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000 }}>
+        <Tooltip title="Ver atalhos de teclado">
+          <IconButton
+            color="primary"
+            onClick={() => setDialogAtalhos(true)}
+            sx={{
+              bgcolor: 'primary.main',
+              color: 'white',
+              width: 56,
+              height: 56,
+              boxShadow: 3,
+              '&:hover': {
+                bgcolor: 'primary.dark',
+                boxShadow: 6,
+              },
+            }}
+          >
+            <Keyboard fontSize="large" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+
       {modoEdicao && (
         <Alert 
           severity="warning" 
@@ -639,7 +697,8 @@ function PDVPageContent() {
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      label="Buscar produto"
+                      inputRef={produtoInputRef}
+                      label="Buscar produto (F2)"
                       placeholder="Digite o nome ou código..."
                       autoFocus
                       InputProps={{
@@ -1057,7 +1116,8 @@ function PDVPageContent() {
                         renderInput={(params) => (
                           <TextField
                             {...params}
-                            label="Buscar Cliente"
+                            inputRef={clienteInputRef}
+                            label="Buscar Cliente (F3)"
                             placeholder="Digite o nome..."
                             size="small"
                           />
@@ -1733,6 +1793,139 @@ function PDVPageContent() {
             startIcon={<Check />}
           >
             Cadastrar e Adicionar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Atalhos */}
+      <Dialog open={dialogAtalhos} onClose={() => setDialogAtalhos(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'primary.main', color: 'white' }}>
+          <Keyboard />
+          Atalhos de Teclado
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 3 }}>
+              Use estes atalhos para aumentar sua produtividade no PDV:
+            </Typography>
+            
+            <Grid container spacing={2}>
+              {/* F2 */}
+              <Grid item xs={4}>
+                <Chip 
+                  label="F2" 
+                  color="primary" 
+                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                />
+              </Grid>
+              <Grid item xs={8}>
+                <Typography variant="body2">
+                  <strong>Buscar Produtos</strong><br />
+                  <Typography variant="caption" color="text.secondary">
+                    Foca no campo de busca de produtos
+                  </Typography>
+                </Typography>
+              </Grid>
+
+              {/* F3 */}
+              <Grid item xs={4}>
+                <Chip 
+                  label="F3" 
+                  color="primary" 
+                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                />
+              </Grid>
+              <Grid item xs={8}>
+                <Typography variant="body2">
+                  <strong>Buscar Clientes</strong><br />
+                  <Typography variant="caption" color="text.secondary">
+                    Foca no campo de busca de clientes
+                  </Typography>
+                </Typography>
+              </Grid>
+
+              {/* F12 */}
+              <Grid item xs={4}>
+                <Chip 
+                  label="F12" 
+                  color="success" 
+                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                />
+              </Grid>
+              <Grid item xs={8}>
+                <Typography variant="body2">
+                  <strong>Finalizar Pedido</strong><br />
+                  <Typography variant="caption" color="text.secondary">
+                    Abre a tela de finalização
+                  </Typography>
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Divider sx={{ my: 1 }} />
+              </Grid>
+
+              {/* Enter */}
+              <Grid item xs={4}>
+                <Chip 
+                  label="Enter" 
+                  color="default" 
+                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                />
+              </Grid>
+              <Grid item xs={8}>
+                <Typography variant="body2">
+                  <strong>Adicionar Produto</strong><br />
+                  <Typography variant="caption" color="text.secondary">
+                    Adiciona produto selecionado ao carrinho
+                  </Typography>
+                </Typography>
+              </Grid>
+
+              {/* Esc */}
+              <Grid item xs={4}>
+                <Chip 
+                  label="Esc" 
+                  color="default" 
+                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                />
+              </Grid>
+              <Grid item xs={8}>
+                <Typography variant="body2">
+                  <strong>Cancelar</strong><br />
+                  <Typography variant="caption" color="text.secondary">
+                    Limpa a seleção atual
+                  </Typography>
+                </Typography>
+              </Grid>
+
+              {/* Ctrl+P */}
+              <Grid item xs={4}>
+                <Chip 
+                  label="Ctrl+P" 
+                  color="secondary" 
+                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                />
+              </Grid>
+              <Grid item xs={8}>
+                <Typography variant="body2">
+                  <strong>Novo Produto</strong><br />
+                  <Typography variant="caption" color="text.secondary">
+                    Abre cadastro rápido de produto
+                  </Typography>
+                </Typography>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button 
+            onClick={() => setDialogAtalhos(false)} 
+            variant="contained"
+            size="large"
+            fullWidth
+          >
+            Entendi
           </Button>
         </DialogActions>
       </Dialog>
