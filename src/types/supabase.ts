@@ -193,29 +193,44 @@ export type Database = {
       }
       enderecos: {
         Row: {
+          bairro: string | null
           cep: string | null
+          cidade: string | null
           cliente_id: string
+          complemento: string | null
           created_at: string | null
+          estado: string | null
           id: string
           logradouro: string
+          numero: string | null
           principal: boolean | null
           updated_at: string | null
         }
         Insert: {
+          bairro?: string | null
           cep?: string | null
+          cidade?: string | null
           cliente_id: string
+          complemento?: string | null
           created_at?: string | null
+          estado?: string | null
           id?: string
           logradouro: string
+          numero?: string | null
           principal?: boolean | null
           updated_at?: string | null
         }
         Update: {
+          bairro?: string | null
           cep?: string | null
+          cidade?: string | null
           cliente_id?: string
+          complemento?: string | null
           created_at?: string | null
+          estado?: string | null
           id?: string
           logradouro?: string
+          numero?: string | null
           principal?: boolean | null
           updated_at?: string | null
         }

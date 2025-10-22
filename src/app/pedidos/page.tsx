@@ -77,6 +77,7 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
 import { useQueryClient } from '@tanstack/react-query';
+import { createClient } from '@/lib/supabase/client';
 
 function PedidosPageContent() {
   const router = useRouter();
@@ -270,16 +271,39 @@ function PedidosPageContent() {
   };
   
   const handleImprimirPedido = async (pedido: any, acao: 'print' | 'download' = 'print') => {
-    // Montar endereço completo do cliente (campos flat da view)
-    const enderecoCompleto = [
-      pedido.endereco_logradouro,
-      pedido.endereco_numero,
-      pedido.endereco_complemento,
-      pedido.endereco_bairro,
-      pedido.endereco_cidade,
-      pedido.endereco_estado,
-      pedido.endereco_cep ? `CEP: ${pedido.endereco_cep}` : '',
-    ].filter(Boolean).join(', ');
+    // Buscar endereço do cliente direto do Supabase
+    let enderecoCompleto = '';
+    
+    if (pedido.cliente_id) {
+      try {
+        const supabase = createClient();
+        
+        // Buscar endereços do cliente direto
+        const { data: enderecos, error } = await supabase
+          .from('enderecos')
+          .select('*')
+          .eq('cliente_id', pedido.cliente_id)
+          .order('principal', { ascending: false });
+        
+        if (!error && enderecos && enderecos.length > 0) {
+          // Pegar o primeiro (que é o principal por causa do order)
+          const enderecoPrincipal = enderecos[0];
+          
+          // Montar endereço completo com todos os campos
+          enderecoCompleto = [
+            enderecoPrincipal.logradouro,
+            enderecoPrincipal.numero,
+            enderecoPrincipal.complemento,
+            enderecoPrincipal.bairro,
+            enderecoPrincipal.cidade,
+            enderecoPrincipal.estado,
+            enderecoPrincipal.cep ? `CEP: ${enderecoPrincipal.cep}` : '',
+          ].filter(Boolean).join(', ');
+        }
+      } catch (error) {
+        console.error('Erro ao buscar endereço do cliente:', error);
+      }
+    }
 
     const dadosPedido = {
       numero: pedido.numero,
