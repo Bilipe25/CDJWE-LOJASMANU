@@ -270,26 +270,26 @@ function PedidosPageContent() {
   };
   
   const handleImprimirPedido = async (pedido: any, acao: 'print' | 'download' = 'print') => {
-    // Montar endereço completo do cliente
-    const enderecoCompleto = pedido.endereco ? [
-      pedido.endereco.logradouro,
-      pedido.endereco.numero,
-      pedido.endereco.complemento,
-      pedido.endereco.bairro,
-      pedido.endereco.cidade,
-      pedido.endereco.estado,
-      pedido.endereco.cep ? `CEP: ${pedido.endereco.cep}` : '',
-    ].filter(Boolean).join(', ') : '';
+    // Montar endereço completo do cliente (campos flat da view)
+    const enderecoCompleto = [
+      pedido.endereco_logradouro,
+      pedido.endereco_numero,
+      pedido.endereco_complemento,
+      pedido.endereco_bairro,
+      pedido.endereco_cidade,
+      pedido.endereco_estado,
+      pedido.endereco_cep ? `CEP: ${pedido.endereco_cep}` : '',
+    ].filter(Boolean).join(', ');
 
     const dadosPedido = {
       numero: pedido.numero,
       data: pedido.data,
-      cliente_nome: pedido.cliente?.nome,
-      cliente_cpf: pedido.cliente?.cpf,
-      cliente_telefone: pedido.telefone_contato || pedido.cliente?.telefone,
+      cliente_nome: pedido.cliente_nome,
+      cliente_cpf: pedido.cliente_cpf,
+      cliente_telefone: pedido.telefone_contato || pedido.cliente_telefone,
       endereco: enderecoCompleto,
-      tipo_atendimento: pedido.tipo_atendimento?.nome,
-      forma_pagamento: pedido.forma_pagamento?.nome,
+      tipo_atendimento: pedido.tipo_atendimento_nome,
+      forma_pagamento: pedido.forma_pagamento_nome,
       observacoes: pedido.observacoes,
       itens: pedido.itens || [],
       subtotal: pedido.subtotal || 0,
