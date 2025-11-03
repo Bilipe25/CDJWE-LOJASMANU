@@ -154,11 +154,20 @@ export const relatoriosRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      console.log('🔍 Buscando relatório anual para o ano:', input.ano);
+      
       const { data, error } = await ctx.supabase.rpc('relatorio_vendas_anual', {
         ano: input.ano,
       });
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('❌ Erro ao buscar relatório anual:', error);
+        throw new Error(error.message);
+      }
+      
+      console.log('✅ Dados retornados do relatório anual:', data);
+      console.log('📊 Total de registros:', data?.length || 0);
+      
       return data;
     }),
 });

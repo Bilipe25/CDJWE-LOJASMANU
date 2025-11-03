@@ -532,8 +532,8 @@ export type Database = {
         Returns: {
           forma_pagamento_nome: string
           mes: number
-          total_despesas: number
           total_vendas: number
+          total_despesas: number
         }[]
       }
       relatorio_vendas_periodo: {

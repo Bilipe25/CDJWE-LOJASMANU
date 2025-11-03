@@ -78,6 +78,7 @@ import { format } from 'date-fns';
 import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { usePedidosFiltros } from '@/hooks/usePedidosFiltros';
 
 function PedidosPageContent() {
   const router = useRouter();
@@ -86,15 +87,28 @@ function PedidosPageContent() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
-  const [page, setPage] = useState(0);
-  const [filtrosExpanded, setFiltrosExpanded] = useState(!isMobile);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [status, setStatus] = useState('');
-  const [search, setSearch] = useState('');
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
-  const [tipoAtendimento, setTipoAtendimento] = useState('');
-  const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+  // Hook customizado para gerenciar filtros com persistência
+  const { 
+    filtros, 
+    atualizarFiltro, 
+    limparFiltros: limparFiltrosHook, 
+    getUrlComFiltros,
+    temFiltrosAtivos,
+    contarFiltrosAtivos 
+  } = usePedidosFiltros();
+  
+  // Destructuring dos filtros para facilitar o uso
+  const {
+    page,
+    rowsPerPage,
+    status,
+    search,
+    dataInicio,
+    dataFim,
+    tipoAtendimento,
+    clienteSelecionado,
+    filtrosExpanded
+  } = filtros;
   const [pedidoDetalhes, setPedidoDetalhes] = useState<any>(null);
   const [dialogDetalhes, setDialogDetalhes] = useState(false);
   const [dialogEditar, setDialogEditar] = useState(false);
@@ -116,6 +130,17 @@ function PedidosPageContent() {
 
   const searchParams = useSearchParams();
   const pedidoIdUrl = searchParams?.get('id');
+  
+  // Mostrar toast quando retornar da edição com filtros
+  useEffect(() => {
+    const voltouDeEdicao = searchParams.get('voltou_edicao') === 'true';
+    if (voltouDeEdicao && temFiltrosAtivos) {
+      toast.success('Filtros restaurados!', {
+        duration: 2000,
+        icon: '🔍',
+      });
+    }
+  }, [searchParams, temFiltrosAtivos]);
 
   const { data, isLoading } = trpc.pedidos.list.useQuery({
     limit: rowsPerPage,
@@ -198,12 +223,12 @@ function PedidosPageContent() {
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
+    atualizarFiltro('page', newPage);
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+    atualizarFiltro('rowsPerPage', parseInt(event.target.value, 10));
+    atualizarFiltro('page', 0);
   };
 
   const formatCurrency = (value: number | null) => {
@@ -352,6 +377,9 @@ function PedidosPageContent() {
   
   const handleEditarPedido = (pedido: any) => {
     // Redirecionar para PDV com o ID do pedido para edição
+    // Salvar URL de retorno com filtros no sessionStorage
+    const urlRetorno = getUrlComFiltros('/pedidos');
+    sessionStorage.setItem('pedidos_url_retorno', urlRetorno);
     router.push(`/pdv?edit=${pedido.id}`);
   };
   
@@ -468,13 +496,7 @@ function PedidosPageContent() {
   };
   
   const limparFiltros = () => {
-    setStatus('');
-    setSearch('');
-    setDataInicio('');
-    setDataFim('');
-    setTipoAtendimento('');
-    setClienteSelecionado(null);
-    setPage(0);
+    limparFiltrosHook();
   };
 
   const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, pedido: any) => {
@@ -718,7 +740,7 @@ function PedidosPageContent() {
         {/* Filtros Avançados */}
         <Accordion 
           expanded={filtrosExpanded} 
-          onChange={() => setFiltrosExpanded(!filtrosExpanded)}
+          onChange={() => atualizarFiltro('filtrosExpanded', !filtrosExpanded)}
           sx={{ 
             boxShadow: 'none',
             '&:before': { display: 'none' },
@@ -738,23 +760,41 @@ function PedidosPageContent() {
             }}
           >
             <FilterList color="primary" />
-            <Typography variant="h6" fontWeight="bold">Filtros</Typography>
+            <Typography variant="h6" fontWeight="bold">
+              Filtros {temFiltrosAtivos && (
+                <Chip 
+                  label={contarFiltrosAtivos} 
+                  size="small" 
+                  color="primary" 
+                  sx={{ ml: 1 }} 
+                />
+              )}
+            </Typography>
             {!filtrosExpanded && (
               <Box sx={{ ml: 2, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                {(search || status || tipoAtendimento || dataInicio || dataFim || clienteSelecionado) && (
+                {temFiltrosAtivos && (
                   <>
-                    {search && <Chip label={`Busca: ${search}`} size="small" />}
+                    {search && <Chip label={`Busca: ${search.substring(0, 15)}${search.length > 15 ? '...' : ''}`} size="small" />}
                     {status && <Chip label={`Status: ${status}`} size="small" color="primary" />}
                     {tipoAtendimento && <Chip label={`Tipo: ${tipoAtendimento}`} size="small" color="secondary" />}
-                    {clienteSelecionado && <Chip label={`Cliente: ${clienteSelecionado.nome}`} size="small" color="success" />}
+                    {clienteSelecionado && <Chip label={`Cliente: ${clienteSelecionado.nome.substring(0, 15)}${clienteSelecionado.nome.length > 15 ? '...' : ''}`} size="small" color="success" />}
                     {(dataInicio || dataFim) && <Chip label="Período" size="small" color="info" />}
                   </>
                 )}
               </Box>
             )}
-            <Button size="small" onClick={(e) => { e.stopPropagation(); limparFiltros(); }} sx={{ ml: 'auto' }}>
-              Limpar Filtros
-            </Button>
+            <Tooltip title="Limpar todos os filtros">
+              <Button 
+                size="small" 
+                onClick={(e) => { e.stopPropagation(); limparFiltros(); }} 
+                sx={{ ml: 'auto' }}
+                disabled={!temFiltrosAtivos}
+                variant={temFiltrosAtivos ? "contained" : "outlined"}
+                color={temFiltrosAtivos ? "error" : "inherit"}
+              >
+                {isMobile ? "Limpar" : "Limpar Filtros"}
+              </Button>
+            </Tooltip>
           </AccordionSummary>
           
           <AccordionDetails sx={{ px: 3, pb: 3 }}>
@@ -766,8 +806,7 @@ function PedidosPageContent() {
                 placeholder="Número, cliente..."
                 value={search}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(0);
+                  atualizarFiltro('search', e.target.value);
                 }}
                 InputProps={{
                   startAdornment: (
@@ -786,8 +825,7 @@ function PedidosPageContent() {
                   value={status}
                   label="Status"
                   onChange={(e) => {
-                    setStatus(e.target.value);
-                    setPage(0);
+                    atualizarFiltro('status', e.target.value);
                   }}
                 >
                   <MenuItem value="">Todos</MenuItem>
@@ -806,8 +844,7 @@ function PedidosPageContent() {
                   value={tipoAtendimento}
                   label="Tipo"
                   onChange={(e) => {
-                    setTipoAtendimento(e.target.value);
-                    setPage(0);
+                    atualizarFiltro('tipoAtendimento', e.target.value);
                   }}
                 >
                   <MenuItem value="">Todos</MenuItem>
@@ -826,8 +863,7 @@ function PedidosPageContent() {
                 label="Data Início"
                 value={dataInicio}
                 onChange={(e) => {
-                  setDataInicio(e.target.value);
-                  setPage(0);
+                  atualizarFiltro('dataInicio', e.target.value);
                 }}
                 InputLabelProps={{ shrink: true }}
                 InputProps={{
@@ -847,8 +883,7 @@ function PedidosPageContent() {
                 label="Data Fim"
                 value={dataFim}
                 onChange={(e) => {
-                  setDataFim(e.target.value);
-                  setPage(0);
+                  atualizarFiltro('dataFim', e.target.value);
                 }}
                 InputLabelProps={{ shrink: true }}
               />
@@ -861,8 +896,7 @@ function PedidosPageContent() {
                 isOptionEqualToValue={(option, value) => option.id === value.id}
                 value={clienteSelecionado}
                 onChange={(_, newValue) => {
-                  setClienteSelecionado(newValue);
-                  setPage(0);
+                  atualizarFiltro('clienteSelecionado', newValue);
                 }}
                 onInputChange={(_, value) => setSearchCliente(value)}
                 renderInput={(params) => (

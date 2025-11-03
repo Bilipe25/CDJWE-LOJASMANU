@@ -186,14 +186,22 @@ export default function RelatoriosPage() {
         ]
       ];
 
-      // Linhas de formas de pagamento
+      // Linhas de formas de pagamento (Vendas e Despesas juntas)
       Object.entries(dadosAnuais.tabela).forEach(([forma, valores]: [string, any]) => {
+        // Verificar se é uma linha de despesa (como DÍZIMO)
+        const ehDespesa = forma === 'DIZIMO' || forma.toUpperCase().includes('DESPESA');
+        
         tableBody.push([
-          { text: forma, style: 'cellBold' },
+          { 
+            text: forma, 
+            style: 'cellBold',
+            color: ehDespesa ? '#c62828' : '#000000'
+          },
           ...(valores as number[]).map(valor => ({
             text: valor > 0 ? formatCurrency(valor) : '-',
             alignment: 'right' as const,
-            style: 'cell'
+            style: ehDespesa ? 'cellDespesa' : 'cell',
+            fillColor: ehDespesa ? '#ffebee' : '#ffffff'
           }))
         ]);
       });
@@ -432,6 +440,11 @@ export default function RelatoriosPage() {
 
   // Processar dados do relatório anual
   const dadosAnuais = React.useMemo(() => {
+    // DEBUG: Verificar o que está retornando
+    console.log('📊 Dados do relatório anual:', relatorioAnual);
+    console.log('📅 Ano selecionado:', anoSelecionado);
+    console.log('🔄 Tab ativa:', tabAtiva);
+    
     if (!relatorioAnual) return { tabela: {}, grafico: [], totais: {}, despesas: [], totalDespesas: 0 };
 
     const meses = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -449,15 +462,18 @@ export default function RelatoriosPage() {
         tabela[forma] = Array(12).fill(0);
       }
       
-      tabela[forma][mes] = item.total_vendas;
+      // CORREÇÃO: Para DÍZIMO e outras SAÍDAS, o valor está em total_despesas
+      // Para VENDAS normais, o valor está em total_vendas
+      const valorMensal = item.total_vendas > 0 ? item.total_vendas : item.total_despesas;
+      tabela[forma][mes] = valorMensal;
       
-      // Acumular totais mensais de vendas
+      // Acumular totais mensais de vendas (apenas ENTRADA)
       if (!totaisMensais[mes]) {
         totaisMensais[mes] = 0;
       }
       totaisMensais[mes] += item.total_vendas;
       
-      // Acumular despesas mensais
+      // Acumular despesas mensais (apenas SAIDA)
       if (!despesasMensais[mes]) {
         despesasMensais[mes] = 0;
       }
@@ -467,7 +483,7 @@ export default function RelatoriosPage() {
       if (!totaisFormasPagamento[forma]) {
         totaisFormasPagamento[forma] = 0;
       }
-      totaisFormasPagamento[forma] += item.total_vendas;
+      totaisFormasPagamento[forma] += valorMensal;
     });
 
     // Preparar array de despesas mensais
@@ -857,6 +873,12 @@ export default function RelatoriosPage() {
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                 <CircularProgress />
               </Box>
+            ) : !relatorioAnual || (relatorioAnual as any)?.length === 0 ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, color: 'text.secondary' }}>
+                <Typography variant="h6" gutterBottom>Nenhum dado encontrado</Typography>
+                <Typography variant="body2">Não há registros de vendas ou saídas financeiras para o ano {anoSelecionado}</Typography>
+                <Typography variant="caption" sx={{ mt: 2 }}>Verifique o console (F12) para mais detalhes</Typography>
+              </Box>
             ) : (
               <>
                 {/* Tabela Mensal */}
@@ -903,37 +925,47 @@ export default function RelatoriosPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {Object.entries(dadosAnuais.tabela).map(([forma, valores]: [string, any], rowIndex: number) => (
-                        <TableRow 
-                          key={forma}
-                          sx={{ 
-                            bgcolor: rowIndex % 2 === 0 ? 'white' : '#f9fafb',
-                            '&:hover': { bgcolor: '#f0f4ff' }
-                          }}
-                        >
-                          <TableCell sx={{ 
-                            fontWeight: 600, 
-                            border: '1px solid #e0e0e0',
-                            fontSize: '0.813rem'
-                          }}>
-                            {forma}
-                          </TableCell>
-                          {(valores as number[]).map((valor, index) => (
-                            <TableCell 
-                              key={index} 
-                              align="right" 
-                              sx={{ 
-                                border: '1px solid #e0e0e0',
-                                fontSize: '0.75rem',
-                                color: valor > 0 ? 'success.main' : 'text.disabled',
-                                fontWeight: valor > 0 ? 600 : 400
-                              }}
-                            >
-                              {valor > 0 ? formatCurrency(valor) : '-'}
+                      {Object.entries(dadosAnuais.tabela).map(([forma, valores]: [string, any], rowIndex: number) => {
+                        // Verificar se é uma linha de despesa (DÍZIMO ou outras saídas)
+                        const ehDespesa = forma === 'DIZIMO' || forma.toUpperCase().includes('DESPESA');
+                        
+                        return (
+                          <TableRow 
+                            key={forma}
+                            sx={{ 
+                              bgcolor: ehDespesa 
+                                ? (rowIndex % 2 === 0 ? '#ffebee' : '#ffcdd2')
+                                : (rowIndex % 2 === 0 ? 'white' : '#f9fafb'),
+                              '&:hover': { bgcolor: ehDespesa ? '#ef9a9a' : '#f0f4ff' }
+                            }}
+                          >
+                            <TableCell sx={{ 
+                              fontWeight: 600, 
+                              border: '1px solid #e0e0e0',
+                              fontSize: '0.813rem',
+                              color: ehDespesa ? 'error.dark' : 'inherit'
+                            }}>
+                              {forma}
                             </TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
+                            {(valores as number[]).map((valor, index) => (
+                              <TableCell 
+                                key={index} 
+                                align="right" 
+                                sx={{ 
+                                  border: '1px solid #e0e0e0',
+                                  fontSize: '0.75rem',
+                                  color: valor > 0 
+                                    ? (ehDespesa ? 'error.dark' : 'success.main') 
+                                    : 'text.disabled',
+                                  fontWeight: valor > 0 ? 600 : 400
+                                }}
+                              >
+                                {valor > 0 ? formatCurrency(valor) : '-'}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        );
+                      })}
                       <TableRow sx={{ bgcolor: 'primary.light' }}>
                         <TableCell sx={{ 
                           fontWeight: 700, 
@@ -992,18 +1024,36 @@ export default function RelatoriosPage() {
                     TOTAL GERAL DAS TRANSAÇÕES
                   </Typography>
                   <Grid container spacing={2}>
-                    {Object.entries(dadosAnuais.totais).map(([forma, total]: [string, any]) => (
-                      <Grid item xs={6} sm={6} md={3} key={forma}>
-                        <Card sx={{ p: 2, bgcolor: 'white', boxShadow: 1, '&:hover': { boxShadow: 3 } }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontWeight: 500 }}>
-                            {forma}
-                          </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 700, color: 'success.main' }}>
-                            {formatCurrency(total)}
-                          </Typography>
-                        </Card>
-                      </Grid>
-                    ))}
+                    {/* Separar vendas de despesas */}
+                    {Object.entries(dadosAnuais.totais).map(([forma, total]: [string, any]) => {
+                      const ehDespesa = forma === 'DIZIMO' || forma.toUpperCase().includes('DESPESA');
+                      
+                      return (
+                        <Grid item xs={6} sm={6} md={3} key={forma}>
+                          <Card sx={{ 
+                            p: 2, 
+                            bgcolor: ehDespesa ? '#ffebee' : 'white', 
+                            boxShadow: 1, 
+                            '&:hover': { boxShadow: 3 },
+                            border: ehDespesa ? '2px solid #ef5350' : 'none'
+                          }}>
+                            <Typography variant="body2" sx={{ 
+                              mb: 0.5, 
+                              fontWeight: 500,
+                              color: ehDespesa ? 'error.dark' : 'text.secondary'
+                            }}>
+                              {forma}
+                            </Typography>
+                            <Typography variant="h6" sx={{ 
+                              fontWeight: 700, 
+                              color: ehDespesa ? 'error.dark' : 'success.main'
+                            }}>
+                              {formatCurrency(total)}
+                            </Typography>
+                          </Card>
+                        </Grid>
+                      );
+                    })}
                     <Grid item xs={6} sm={6} md={3}>
                       <Card sx={{ p: 2, bgcolor: 'primary.main', color: 'white', boxShadow: 2, '&:hover': { boxShadow: 4 } }}>
                         <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, opacity: 0.9 }}>

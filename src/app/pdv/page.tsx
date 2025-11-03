@@ -463,7 +463,15 @@ function PDVPageContent() {
         
         toast.success('Pedido atualizado com sucesso!', { id: toastId });
         setDialogFinalizar(false);
-        router.push('/pedidos');
+        
+        // Verificar se há URL de retorno com filtros salvos
+        const urlRetorno = sessionStorage.getItem('pedidos_url_retorno');
+        if (urlRetorno) {
+          sessionStorage.removeItem('pedidos_url_retorno');
+          router.push(urlRetorno);
+        } else {
+          router.push('/pedidos');
+        }
       } else {
         // Criar pedido novo
         const pedidoCriado = await criarPedidoMutation.mutateAsync({
