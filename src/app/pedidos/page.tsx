@@ -106,6 +106,7 @@ function PedidosPageContent() {
     dataInicio,
     dataFim,
     tipoAtendimento,
+    formaPagamento,
     clienteSelecionado,
     filtrosExpanded
   } = filtros;
@@ -149,6 +150,7 @@ function PedidosPageContent() {
     dataInicio: dataInicio || undefined,
     dataFim: dataFim || undefined,
     tipoAtendimento: tipoAtendimento || undefined,
+    formaPagamentoId: formaPagamento || undefined,
     clienteId: clienteSelecionado?.id,
   });
 
@@ -777,6 +779,7 @@ function PedidosPageContent() {
                     {search && <Chip label={`Busca: ${search.substring(0, 15)}${search.length > 15 ? '...' : ''}`} size="small" />}
                     {status && <Chip label={`Status: ${status}`} size="small" color="primary" />}
                     {tipoAtendimento && <Chip label={`Tipo: ${tipoAtendimento}`} size="small" color="secondary" />}
+                    {formaPagamento && <Chip label="Forma Pgto." size="small" color="warning" />}
                     {clienteSelecionado && <Chip label={`Cliente: ${clienteSelecionado.nome.substring(0, 15)}${clienteSelecionado.nome.length > 15 ? '...' : ''}`} size="small" color="success" />}
                     {(dataInicio || dataFim) && <Chip label="Período" size="small" color="info" />}
                   </>
@@ -857,6 +860,31 @@ function PedidosPageContent() {
             </Grid>
             
             <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth>
+                <InputLabel>Forma Pgto.</InputLabel>
+                <Select
+                  value={formaPagamento}
+                  label="Forma Pgto."
+                  onChange={(e) => {
+                    atualizarFiltro('formaPagamento', e.target.value);
+                  }}
+                  startAdornment={
+                    <InputAdornment position="start">
+                      <AttachMoney fontSize="small" />
+                    </InputAdornment>
+                  }
+                >
+                  <MenuItem value="">Todas</MenuItem>
+                  {(formasPagamento as any)?.map((forma: any) => (
+                    <MenuItem key={forma.id} value={forma.id}>
+                      {forma.nome}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={6} sm={6} md={2}>
               <TextField
                 fullWidth
                 type="date"
@@ -953,7 +981,8 @@ function PedidosPageContent() {
                     <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Data</TableCell>
                     <TableCell>Cliente</TableCell>
                     <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Tipo</TableCell>
-                    <TableCell align="right" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Itens</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Pagamento</TableCell>
+                    <TableCell align="right" sx={{ display: { xs: 'none', xl: 'table-cell' } }}>Itens</TableCell>
                     <TableCell align="right">Total</TableCell>
                     <TableCell align="center">Status</TableCell>
                     <TableCell align="right">Ações</TableCell>
@@ -1008,7 +1037,26 @@ function PedidosPageContent() {
                           }}
                         />
                       </TableCell>
-                      <TableCell align="right" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                      <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                        <Tooltip title={pedido.forma_pagamento_nome || 'Não informado'} arrow>
+                          <Chip
+                            label={pedido.forma_pagamento_nome || '-'}
+                            size="small"
+                            variant="outlined"
+                            color="default"
+                            icon={<AttachMoney />}
+                            sx={{ 
+                              maxWidth: '120px',
+                              '& .MuiChip-label': {
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }
+                            }}
+                          />
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell align="right" sx={{ display: { xs: 'none', xl: 'table-cell' } }}>
                         <Chip
                           label={`${pedido.total_itens || 0} itens`}
                           size="small"

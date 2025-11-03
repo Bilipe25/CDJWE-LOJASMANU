@@ -14,6 +14,7 @@ export interface FiltrosPedidos {
   dataInicio: string;
   dataFim: string;
   tipoAtendimento: string;
+  formaPagamento: string;
   clienteSelecionado: any | null;
   page: number;
   rowsPerPage: number;
@@ -26,6 +27,7 @@ const filtrosIniciais: FiltrosPedidos = {
   dataInicio: '',
   dataFim: '',
   tipoAtendimento: '',
+  formaPagamento: '',
   clienteSelecionado: null,
   page: 0,
   rowsPerPage: 10,
@@ -48,6 +50,7 @@ export function usePedidosFiltros() {
         const dataInicioUrl = searchParams.get('filtro_dataInicio') || '';
         const dataFimUrl = searchParams.get('filtro_dataFim') || '';
         const tipoAtendimentoUrl = searchParams.get('filtro_tipoAtendimento') || '';
+        const formaPagamentoUrl = searchParams.get('filtro_formaPagamento') || '';
         const pageUrl = parseInt(searchParams.get('filtro_page') || '0');
         const rowsPerPageUrl = parseInt(searchParams.get('filtro_rowsPerPage') || '10');
         
@@ -66,6 +69,7 @@ export function usePedidosFiltros() {
           dataInicio: dataInicioUrl,
           dataFim: dataFimUrl,
           tipoAtendimento: tipoAtendimentoUrl,
+          formaPagamento: formaPagamentoUrl,
           clienteSelecionado: clienteSelecionadoUrl,
           page: pageUrl,
           rowsPerPage: rowsPerPageUrl,
@@ -135,6 +139,7 @@ export function usePedidosFiltros() {
     params.set('filtro_dataInicio', filtros.dataInicio);
     params.set('filtro_dataFim', filtros.dataFim);
     params.set('filtro_tipoAtendimento', filtros.tipoAtendimento);
+    params.set('filtro_formaPagamento', filtros.formaPagamento);
     params.set('filtro_page', filtros.page.toString());
     params.set('filtro_rowsPerPage', filtros.rowsPerPage.toString());
     
@@ -153,6 +158,7 @@ export function usePedidosFiltros() {
       filtros.dataInicio ||
       filtros.dataFim ||
       filtros.tipoAtendimento ||
+      filtros.formaPagamento ||
       filtros.clienteSelecionado
     );
   }, [filtros]);
@@ -164,6 +170,7 @@ export function usePedidosFiltros() {
     if (filtros.search) count++;
     if (filtros.dataInicio || filtros.dataFim) count++;
     if (filtros.tipoAtendimento) count++;
+    if (filtros.formaPagamento) count++;
     if (filtros.clienteSelecionado) count++;
     return count;
   }, [filtros]);

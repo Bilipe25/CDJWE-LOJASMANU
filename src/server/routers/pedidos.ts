@@ -21,6 +21,7 @@ export const pedidosRouter = router({
         dataInicio: z.string().optional().transform(val => val === '' ? undefined : val),
         dataFim: z.string().optional().transform(val => val === '' ? undefined : val),
         tipoAtendimento: z.string().optional().transform(val => val === '' ? undefined : val),
+        formaPagamentoId: z.string().uuid().optional().transform(val => val === '' ? undefined : val),
         clienteId: z.string().uuid().optional(),
       })
     )
@@ -49,6 +50,10 @@ export const pedidosRouter = router({
         } else {
           query = query.eq('tipo_atendimento_tipo', input.tipoAtendimento);
         }
+      }
+
+      if (input.formaPagamentoId) {
+        query = query.eq('forma_pagamento_id', input.formaPagamentoId);
       }
 
       if (input.clienteId) {
