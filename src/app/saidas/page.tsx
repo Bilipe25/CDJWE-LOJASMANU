@@ -38,6 +38,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Checkbox,
 } from '@mui/material';
 import {
   Search,
@@ -59,6 +60,10 @@ import {
   TrendingUp,
   Receipt,
   ExpandMore,
+  FileDownload,
+  TableChart,
+  PictureAsPdf,
+  Category,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
@@ -92,6 +97,8 @@ export default function SaidasPage() {
     dataInicio,
     dataFim,
     clienteSelecionado,
+    formaPagamento,
+    filtrosExpanded
   } = filtros;
   const [pedidoDetalhes, setPedidoDetalhes] = useState<any>(null);
   const [dialogDetalhes, setDialogDetalhes] = useState(false);
@@ -118,6 +125,16 @@ export default function SaidasPage() {
     data: dateToString(new Date()),
     observacao: '',
   });
+  const [dialogExportar, setDialogExportar] = useState(false);
+  const [colunasExportacao, setColunasExportacao] = useState([
+    { id: 'numero', label: 'Número', selecionada: true },
+    { id: 'data', label: 'Data', selecionada: true },
+    { id: 'destinatario', label: 'Destinatário', selecionada: true },
+    { id: 'pagamento', label: 'Forma Pagamento', selecionada: true },
+    { id: 'categoria', label: 'Categoria', selecionada: false },
+    { id: 'valor', label: 'Valor', selecionada: true },
+    { id: 'status', label: 'Status', selecionada: true },
+  ]);
 
   // Query apenas para SAÍDAS
   const { data, isLoading } = trpc.pedidos.list.useQuery({
@@ -128,6 +145,7 @@ export default function SaidasPage() {
     dataFim: dataFim || undefined,
     tipoAtendimento: 'SAIDA', // FILTRO FIXO PARA SAÍDAS
     clienteId: clienteSelecionado?.id,
+    formaPagamentoId: formaPagamento || undefined,
   });
   
   // Query de estatísticas - busca com limit menor mas sem outros filtros
@@ -158,6 +176,7 @@ export default function SaidasPage() {
   
   const { data: formasPagamento } = trpc.dominios.formasPagamento.list.useQuery();
   const { data: tiposAtendimento } = trpc.dominios.tiposAtendimento.list.useQuery();
+  const { data: configuracoes } = trpc.configuracoes.get.useQuery();
 
   const pedidos = data?.pedidos || [];
   const total = data?.total || 0;
@@ -367,6 +386,83 @@ export default function SaidasPage() {
   const limparFiltros = () => {
     limparFiltrosHook();
   };
+
+  // Funções de Exportação
+  const handleExportarPDF = async () => {
+    try {
+      const { exportarSaidasParaPDF } = await import('@/lib/pdf/saidas-export-pdf');
+      
+      const filtrosTexto: string[] = [];
+      if (status) filtrosTexto.push(`Status: ${status}`);
+      if (formaPagamento) {
+        const formaNome = (formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome;
+        if (formaNome) filtrosTexto.push(`Pagamento: ${formaNome}`);
+      }
+      if (clienteSelecionado) filtrosTexto.push(`Destinatário: ${clienteSelecionado.nome}`);
+      if (dataInicio || dataFim) {
+        filtrosTexto.push(`Período: ${dataInicio ? formatDate(dataInicio) : 'Início'} até ${dataFim ? formatDate(dataFim) : 'Fim'}`);
+      }
+
+      await exportarSaidasParaPDF(
+        pedidos as any,
+        colunasExportacao,
+        configuracoes as any || {},
+        filtrosTexto.length > 0 ? filtrosTexto : undefined
+      );
+      
+      toast.success('PDF gerado com sucesso!');
+      setDialogExportar(false);
+    } catch (error) {
+      console.error('Erro ao exportar PDF:', error);
+      toast.error('Erro ao gerar PDF. Tente novamente.');
+    }
+  };
+
+  const handleExportarExcel = async () => {
+    try {
+      const { exportarSaidasParaExcel } = await import('@/lib/excel/saidas-export-excel');
+      
+      const filtrosTexto: string[] = [];
+      if (status) filtrosTexto.push(`Status: ${status}`);
+      if (formaPagamento) {
+        const formaNome = (formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome;
+        if (formaNome) filtrosTexto.push(`Pagamento: ${formaNome}`);
+      }
+      if (clienteSelecionado) filtrosTexto.push(`Destinatário: ${clienteSelecionado.nome}`);
+      if (dataInicio || dataFim) {
+        filtrosTexto.push(`Período: ${dataInicio ? formatDate(dataInicio) : 'Início'} até ${dataFim ? formatDate(dataFim) : 'Fim'}`);
+      }
+
+      exportarSaidasParaExcel(
+        pedidos as any,
+        colunasExportacao,
+        configuracoes as any || {},
+        filtrosTexto.length > 0 ? filtrosTexto : undefined
+      );
+      
+      toast.success('Excel exportado com sucesso!');
+      setDialogExportar(false);
+    } catch (error) {
+      console.error('Erro ao exportar Excel:', error);
+      toast.error('Erro ao exportar Excel. Tente novamente.');
+    }
+  };
+
+  const toggleColuna = (colunaId: string) => {
+    setColunasExportacao(prev =>
+      prev.map(col =>
+        col.id === colunaId ? { ...col, selecionada: !col.selecionada } : col
+      )
+    );
+  };
+
+  const selecionarTodasColunas = () => {
+    setColunasExportacao(prev => prev.map(col => ({ ...col, selecionada: true })));
+  };
+
+  const desmarcarTodasColunas = () => {
+    setColunasExportacao(prev => prev.map(col => ({ ...col, selecionada: false })));
+  };
   
   const handleCriarSaida = () => {
     setDialogNovaSaida(true);
@@ -453,15 +549,58 @@ export default function SaidasPage() {
           variant: 'contained',
         }}
       />
+
+      {/* Botão de Exportação */}
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          variant="contained"
+          startIcon={<FileDownload />}
+          onClick={() => setDialogExportar(true)}
+          disabled={pedidos.length === 0}
+          sx={{
+            background: 'linear-gradient(45deg, #dc2626 30%, #f97316 90%)',
+            color: 'white',
+            boxShadow: '0 3px 5px 2px rgba(220, 38, 38, .3)',
+            '&:hover': {
+              background: 'linear-gradient(45deg, #b91c1c 30%, #ea580c 90%)',
+            },
+          }}
+        >
+          Exportar
+        </Button>
+      </Box>
       
-      {/* Cards de Estatísticas */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      {/* Cards de Estatísticas - Design Sutil */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
           <Card
+            variant="outlined"
             sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              p: { xs: 2, sm: 3 },
+              p: 2.5,
+              height: '100%',
+              position: 'relative',
+              overflow: 'hidden',
+              bgcolor: 'background.paper',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: 3,
+                borderColor: 'error.main',
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                bgcolor: 'error.main',
+              },
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -491,6 +630,7 @@ export default function SaidasPage() {
               </Box>
             </Box>
           </Card>
+          </motion.div>
         </Grid>
         
         <Grid item xs={6} sm={6} md={3}>
@@ -686,8 +826,26 @@ export default function SaidasPage() {
                 </Select>
               </FormControl>
             </Grid>
+
+            <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth>
+                <InputLabel>Forma Pgto.</InputLabel>
+                <Select
+                  value={formaPagamento}
+                  label="Forma Pgto."
+                  onChange={(e) => atualizarFiltro('formaPagamento', e.target.value)}
+                >
+                  <MenuItem value="">Todas</MenuItem>
+                  {(formasPagamento as any)?.map((forma: any) => (
+                    <MenuItem key={forma.id} value={forma.id}>
+                      {forma.nome}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
             
-            <Grid item xs={6} sm={6} md={2}>
+            <Grid item xs={12} sm={6} md={2}>
               <TextField
                 fullWidth
                 type="date"
@@ -768,6 +926,7 @@ export default function SaidasPage() {
                     <TableCell>Número</TableCell>
                     <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Data</TableCell>
                     <TableCell>Fornecedor/Destinatário</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Pagamento</TableCell>
                     <TableCell align="right">Valor</TableCell>
                     <TableCell align="center">Status</TableCell>
                     <TableCell align="right">Ações</TableCell>
@@ -812,6 +971,25 @@ export default function SaidasPage() {
                             </Box>
                           )}
                         </Box>
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                        <Tooltip title={pedido.forma_pagamento_nome || 'Não informado'} arrow>
+                          <Chip
+                            label={pedido.forma_pagamento_nome || '-'}
+                            size="small"
+                            variant="outlined"
+                            color="default"
+                            icon={<AttachMoney />}
+                            sx={{ 
+                              maxWidth: '130px',
+                              '& .MuiChip-label': {
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }
+                            }}
+                          />
+                        </Tooltip>
                       </TableCell>
                       <TableCell align="right">
                         <Box sx={{ fontWeight: 600, color: 'error.main', fontSize: '1rem' }}>
@@ -1315,6 +1493,170 @@ export default function SaidasPage() {
             startIcon={atualizarMutation.isPending ? <CircularProgress size={20} /> : <Check />}
           >
             {atualizarMutation.isPending ? 'Salvando...' : 'Salvar Alterações'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Exportação Profissional */}
+      <Dialog 
+        open={dialogExportar} 
+        onClose={() => setDialogExportar(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #dc2626 0%, #f97316 100%)',
+          color: 'white',
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <FileDownload />
+            Exportar Saídas Financeiras
+          </Box>
+          {isMobile && (
+            <IconButton
+              onClick={() => setDialogExportar(false)}
+              sx={{ color: 'white' }}
+            >
+              <Close />
+            </IconButton>
+          )}
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Selecione as colunas que deseja exportar:
+          </Typography>
+          
+          <Box sx={{ 
+            mb: 2, 
+            p: 2, 
+            bgcolor: 'grey.50', 
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'grey.200',
+          }}>
+            <Box display="flex" gap={1} mb={1.5}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={selecionarTodasColunas}
+                sx={{ flex: 1, fontSize: '0.75rem' }}
+              >
+                Selecionar Todas
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                onClick={desmarcarTodasColunas}
+                sx={{ flex: 1, fontSize: '0.75rem' }}
+              >
+                Desmarcar Todas
+              </Button>
+            </Box>
+            
+            <Box display="flex" flexDirection="column" gap={0.5}>
+              {colunasExportacao.map((coluna) => (
+                <Box
+                  key={coluna.id}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    p: 1,
+                    borderRadius: 1,
+                    bgcolor: coluna.selecionada ? 'error.50' : 'white',
+                    border: '1px solid',
+                    borderColor: coluna.selecionada ? 'error.200' : 'grey.200',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      bgcolor: coluna.selecionada ? 'error.100' : 'grey.100',
+                      transform: 'translateX(4px)',
+                    },
+                  }}
+                  onClick={() => toggleColuna(coluna.id)}
+                >
+                  <Checkbox
+                    checked={coluna.selecionada}
+                    size="small"
+                    sx={{ mr: 1 }}
+                  />
+                  <Typography variant="body2">{coluna.label}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+
+          {/* Resumo */}
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              <strong>{pedidos.length}</strong> saídas serão exportadas com{' '}
+              <strong>{colunasExportacao.filter(c => c.selecionada).length}</strong> colunas.
+            </Typography>
+          </Alert>
+
+          {/* Filtros aplicados */}
+          {temFiltrosAtivos && (
+            <Alert severity="warning" icon={<FilterList />} sx={{ mb: 0 }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Filtros Ativos:
+              </Typography>
+              <Box display="flex" flexWrap="wrap" gap={0.5}>
+                {status && <Chip label={`Status: ${status}`} size="small" />}
+                {formaPagamento && (
+                  <Chip 
+                    label={`Pagamento: ${(formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome || formaPagamento}`} 
+                    size="small" 
+                  />
+                )}
+                {clienteSelecionado && <Chip label={`Destinatário: ${clienteSelecionado.nome}`} size="small" />}
+                {(dataInicio || dataFim) && (
+                  <Chip 
+                    label={`Período: ${dataInicio ? formatDate(dataInicio) : '...'} - ${dataFim ? formatDate(dataFim) : '...'}`} 
+                    size="small" 
+                  />
+                )}
+              </Box>
+            </Alert>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button 
+            onClick={() => setDialogExportar(false)}
+            variant="outlined"
+            color="inherit"
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<TableChart />}
+            onClick={handleExportarExcel}
+            disabled={colunasExportacao.filter(c => c.selecionada).length === 0}
+            sx={{
+              background: 'linear-gradient(45deg, #16a34a 30%, #84cc16 90%)',
+              color: 'white',
+            }}
+          >
+            Excel
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<PictureAsPdf />}
+            onClick={handleExportarPDF}
+            disabled={colunasExportacao.filter(c => c.selecionada).length === 0}
+            sx={{
+              background: 'linear-gradient(45deg, #dc2626 30%, #f97316 90%)',
+              color: 'white',
+            }}
+          >
+            PDF
           </Button>
         </DialogActions>
       </Dialog>

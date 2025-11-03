@@ -13,8 +13,10 @@ export interface FiltrosSaidas {
   dataInicio: string;
   dataFim: string;
   clienteSelecionado: any | null;
+  formaPagamento: string;
   page: number;
   rowsPerPage: number;
+  filtrosExpanded: boolean;
 }
 
 const filtrosIniciais: FiltrosSaidas = {
@@ -23,8 +25,10 @@ const filtrosIniciais: FiltrosSaidas = {
   dataInicio: '',
   dataFim: '',
   clienteSelecionado: null,
+  formaPagamento: '',
   page: 0,
   rowsPerPage: 10,
+  filtrosExpanded: false,
 };
 
 export function useSaidasFiltros() {
@@ -79,7 +83,8 @@ export function useSaidasFiltros() {
       filtros.search ||
       filtros.dataInicio ||
       filtros.dataFim ||
-      filtros.clienteSelecionado
+      filtros.clienteSelecionado ||
+      filtros.formaPagamento
     );
   }, [filtros]);
 
@@ -90,6 +95,7 @@ export function useSaidasFiltros() {
     if (filtros.search) count++;
     if (filtros.dataInicio || filtros.dataFim) count++;
     if (filtros.clienteSelecionado) count++;
+    if (filtros.formaPagamento) count++;
     return count;
   }, [filtros]);
 

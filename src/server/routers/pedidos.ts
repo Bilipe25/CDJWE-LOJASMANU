@@ -50,6 +50,10 @@ export const pedidosRouter = router({
         } else {
           query = query.eq('tipo_atendimento_tipo', input.tipoAtendimento);
         }
+      } else {
+        // Por padrão, não listar registros de SAÍDA na listagem geral de pedidos
+        // (a página de Saídas envia explicitamente tipoAtendimento='SAIDA')
+        query = query.neq('tipo_atendimento_tipo', 'SAIDA');
       }
 
       if (input.formaPagamentoId) {
