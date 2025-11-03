@@ -31,7 +31,7 @@ const filtrosIniciais: FiltrosPedidos = {
   clienteSelecionado: null,
   page: 0,
   rowsPerPage: 10,
-  filtrosExpanded: true,
+  filtrosExpanded: false, // Inicia minimizado por padrão
 };
 
 export function usePedidosFiltros() {

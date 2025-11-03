@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "@types/pdfmake": "^0.2.9",
+    "@types/pdfmake": "^0.2.12",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",

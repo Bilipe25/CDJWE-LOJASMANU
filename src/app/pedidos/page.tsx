@@ -41,6 +41,7 @@ import {
   AccordionDetails,
   useMediaQuery,
   useTheme,
+  Checkbox,
 } from '@mui/material';
 import {
   Search,
@@ -66,6 +67,9 @@ import {
   Timer,
   MoreVert,
   ExpandMore,
+  FileDownload,
+  TableChart,
+  PictureAsPdf,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
@@ -128,6 +132,17 @@ function PedidosPageContent() {
   }>({ open: false, pedido: null });
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<any>(null);
+  const [dialogExportar, setDialogExportar] = useState(false);
+  const [colunasExportacao, setColunasExportacao] = useState([
+    { id: 'numero', label: 'Número', selecionada: true },
+    { id: 'data', label: 'Data', selecionada: true },
+    { id: 'cliente', label: 'Cliente', selecionada: true },
+    { id: 'tipo', label: 'Tipo', selecionada: true },
+    { id: 'pagamento', label: 'Forma Pagamento', selecionada: true },
+    { id: 'itens', label: 'Qtd. Itens', selecionada: false },
+    { id: 'total', label: 'Total', selecionada: true },
+    { id: 'status', label: 'Status', selecionada: true },
+  ]);
 
   const searchParams = useSearchParams();
   const pedidoIdUrl = searchParams?.get('id');
@@ -501,6 +516,85 @@ function PedidosPageContent() {
     limparFiltrosHook();
   };
 
+  // Funções de Exportação
+  const handleExportarPDF = async () => {
+    try {
+      const { exportarPedidosParaPDF } = await import('@/lib/pdf/pedidos-export-pdf');
+      
+      const filtrosTexto: string[] = [];
+      if (status) filtrosTexto.push(`Status: ${status}`);
+      if (tipoAtendimento) filtrosTexto.push(`Tipo: ${tipoAtendimento}`);
+      if (formaPagamento) {
+        const formaNome = (formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome;
+        if (formaNome) filtrosTexto.push(`Pagamento: ${formaNome}`);
+      }
+      if (clienteSelecionado) filtrosTexto.push(`Cliente: ${clienteSelecionado.nome}`);
+      if (dataInicio || dataFim) {
+        filtrosTexto.push(`Período: ${dataInicio ? formatDate(dataInicio) : 'Início'} até ${dataFim ? formatDate(dataFim) : 'Fim'}`);
+      }
+
+      await exportarPedidosParaPDF(
+        pedidos as any,
+        colunasExportacao,
+        configuracoes as any || {},
+        filtrosTexto.length > 0 ? filtrosTexto : undefined
+      );
+      
+      toast.success('PDF gerado com sucesso!');
+      setDialogExportar(false);
+    } catch (error) {
+      console.error('Erro ao exportar PDF:', error);
+      toast.error('Erro ao gerar PDF. Tente novamente.');
+    }
+  };
+
+  const handleExportarExcel = async () => {
+    try {
+      const { exportarPedidosParaExcel } = await import('@/lib/excel/pedidos-export-excel');
+      
+      const filtrosTexto: string[] = [];
+      if (status) filtrosTexto.push(`Status: ${status}`);
+      if (tipoAtendimento) filtrosTexto.push(`Tipo: ${tipoAtendimento}`);
+      if (formaPagamento) {
+        const formaNome = (formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome;
+        if (formaNome) filtrosTexto.push(`Pagamento: ${formaNome}`);
+      }
+      if (clienteSelecionado) filtrosTexto.push(`Cliente: ${clienteSelecionado.nome}`);
+      if (dataInicio || dataFim) {
+        filtrosTexto.push(`Período: ${dataInicio ? formatDate(dataInicio) : 'Início'} até ${dataFim ? formatDate(dataFim) : 'Fim'}`);
+      }
+
+      exportarPedidosParaExcel(
+        pedidos as any,
+        colunasExportacao,
+        configuracoes as any || {},
+        filtrosTexto.length > 0 ? filtrosTexto : undefined
+      );
+      
+      toast.success('Excel exportado com sucesso!');
+      setDialogExportar(false);
+    } catch (error) {
+      console.error('Erro ao exportar Excel:', error);
+      toast.error('Erro ao exportar Excel. Tente novamente.');
+    }
+  };
+
+  const toggleColuna = (colunaId: string) => {
+    setColunasExportacao(prev =>
+      prev.map(col =>
+        col.id === colunaId ? { ...col, selecionada: !col.selecionada } : col
+      )
+    );
+  };
+
+  const selecionarTodasColunas = () => {
+    setColunasExportacao(prev => prev.map(col => ({ ...col, selecionada: true })));
+  };
+
+  const desmarcarTodasColunas = () => {
+    setColunasExportacao(prev => prev.map(col => ({ ...col, selecionada: false })));
+  };
+
   const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, pedido: any) => {
     setMenuAnchor(event.currentTarget);
     setPedidoSelecionado(pedido);
@@ -525,214 +619,172 @@ function PedidosPageContent() {
           { label: 'Dashboard', href: '/' },
           { label: 'Pedidos' },
         ]}
+        action={{
+          label: 'Exportar',
+          onClick: () => setDialogExportar(true),
+          icon: <FileDownload />,
+          variant: 'contained',
+        }}
       />
 
-      {/* Cards de Estatísticas */}
+      {/* Cards de Estatísticas - Design Sutil */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={6} md={3}>
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0 }}
+            transition={{ duration: 0.2 }}
           >
             <Card
+              variant="outlined"
               sx={{
-                p: { xs: 2, sm: 3 },
-                display: 'flex',
-                alignItems: 'center',
-                gap: { xs: 1.5, sm: 2 },
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                position: 'relative',
-                overflow: 'hidden',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: -50,
-                  right: -50,
-                  width: 150,
-                  height: 150,
-                  borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.1)',
+                p: 2,
+                borderRadius: 2,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  boxShadow: 2,
+                  transform: 'translateY(-2px)',
                 },
               }}
             >
-              <Box
-                sx={{
-                  p: { xs: 1.5, sm: 2 },
-                  borderRadius: 2,
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Receipt sx={{ fontSize: { xs: 28, sm: 32 } }} />
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 1.5,
+                    bgcolor: 'primary.50',
+                    display: 'flex',
+                  }}
+                >
+                  <Receipt sx={{ fontSize: 20, color: 'primary.main' }} />
+                </Box>
               </Box>
-              <Box sx={{ flex: 1, zIndex: 1 }}>
-                <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
-                  {estatisticas.totalPedidos}
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Total de Pedidos
-                </Typography>
-              </Box>
+              <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
+                {total}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
+                Pedidos
+              </Typography>
             </Card>
           </motion.div>
         </Grid>
 
         <Grid item xs={6} sm={6} md={3}>
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
+            transition={{ duration: 0.2, delay: 0.05 }}
           >
             <Card
+              variant="outlined"
               sx={{
-                p: { xs: 2, sm: 3 },
-                display: 'flex',
-                alignItems: 'center',
-                gap: { xs: 1.5, sm: 2 },
-                background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                color: 'white',
-                position: 'relative',
-                overflow: 'hidden',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: -50,
-                  right: -50,
-                  width: 150,
-                  height: 150,
-                  borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.1)',
+                p: 2,
+                borderRadius: 2,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  boxShadow: 2,
+                  transform: 'translateY(-2px)',
                 },
               }}
             >
-              <Box
-                sx={{
-                  p: { xs: 1.5, sm: 2 },
-                  borderRadius: 2,
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <ShoppingBag sx={{ fontSize: { xs: 28, sm: 32 } }} />
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 1.5,
+                    bgcolor: 'warning.50',
+                    display: 'flex',
+                  }}
+                >
+                  <Timer sx={{ fontSize: 20, color: 'warning.main' }} />
+                </Box>
               </Box>
-              <Box sx={{ flex: 1, zIndex: 1 }}>
-                <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
-                  {estatisticas.totalPedidos}
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Total de Pedidos
-                </Typography>
-              </Box>
+              <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
+                {estatisticas.pedidosPendentes}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
+                Pendentes
+              </Typography>
             </Card>
           </motion.div>
         </Grid>
 
         <Grid item xs={6} sm={6} md={3}>
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
+            transition={{ duration: 0.2, delay: 0.1 }}
           >
             <Card
+              variant="outlined"
               sx={{
-                p: { xs: 2, sm: 3 },
-                display: 'flex',
-                alignItems: 'center',
-                gap: { xs: 1.5, sm: 2 },
-                background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                color: 'white',
-                position: 'relative',
-                overflow: 'hidden',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: -50,
-                  right: -50,
-                  width: 150,
-                  height: 150,
-                  borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.1)',
+                p: 2,
+                borderRadius: 2,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  boxShadow: 2,
+                  transform: 'translateY(-2px)',
                 },
               }}
             >
-              <Box
-                sx={{
-                  p: { xs: 1.5, sm: 2 },
-                  borderRadius: 2,
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <TrendingUp sx={{ fontSize: { xs: 28, sm: 32 } }} />
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 1.5,
+                    bgcolor: 'success.50',
+                    display: 'flex',
+                  }}
+                >
+                  <TrendingUp sx={{ fontSize: 20, color: 'success.main' }} />
+                </Box>
               </Box>
-              <Box sx={{ flex: 1, zIndex: 1 }}>
-                <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
-                  {formatCurrency(estatisticas.totalVendas)}
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Total em Vendas
-                </Typography>
-              </Box>
+              <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5, fontSize: '1.25rem' }}>
+                {formatCurrency(estatisticas.totalVendas)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
+                Total Vendas
+              </Typography>
             </Card>
           </motion.div>
         </Grid>
 
         <Grid item xs={6} sm={6} md={3}>
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
+            transition={{ duration: 0.2, delay: 0.15 }}
           >
             <Card
+              variant="outlined"
               sx={{
-                p: { xs: 2, sm: 3 },
-                display: 'flex',
-                alignItems: 'center',
-                gap: { xs: 1.5, sm: 2 },
-                background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-                color: 'white',
-                position: 'relative',
-                overflow: 'hidden',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: -50,
-                  right: -50,
-                  width: 150,
-                  height: 150,
-                  borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.1)',
+                p: 2,
+                borderRadius: 2,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  boxShadow: 2,
+                  transform: 'translateY(-2px)',
                 },
               }}
             >
-              <Box
-                sx={{
-                  p: { xs: 1.5, sm: 2 },
-                  borderRadius: 2,
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <CheckCircle sx={{ fontSize: { xs: 28, sm: 32 } }} />
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 1.5,
+                    bgcolor: 'info.50',
+                    display: 'flex',
+                  }}
+                >
+                  <CheckCircle sx={{ fontSize: 20, color: 'info.main' }} />
+                </Box>
               </Box>
-              <Box sx={{ flex: 1, zIndex: 1 }}>
-                <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
-                  {estatisticas.finalizadosHoje}
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Finalizados Hoje
-                </Typography>
-              </Box>
+              <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
+                {estatisticas.finalizadosHoje}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
+                Hoje
+              </Typography>
             </Card>
           </motion.div>
         </Grid>
@@ -786,18 +838,36 @@ function PedidosPageContent() {
                 )}
               </Box>
             )}
-            <Tooltip title="Limpar todos os filtros">
-              <Button 
-                size="small" 
-                onClick={(e) => { e.stopPropagation(); limparFiltros(); }} 
-                sx={{ ml: 'auto' }}
-                disabled={!temFiltrosAtivos}
-                variant={temFiltrosAtivos ? "contained" : "outlined"}
-                color={temFiltrosAtivos ? "error" : "inherit"}
-              >
-                {isMobile ? "Limpar" : "Limpar Filtros"}
-              </Button>
-            </Tooltip>
+            <Box 
+              component="span" 
+              onClick={(e) => { 
+                if (temFiltrosAtivos) {
+                  e.stopPropagation(); 
+                  limparFiltros(); 
+                }
+              }} 
+              sx={{ 
+                ml: 'auto',
+                opacity: temFiltrosAtivos ? 1 : 0.5,
+                cursor: temFiltrosAtivos ? 'pointer' : 'not-allowed',
+                pointerEvents: 'auto',
+              }}
+            >
+              <Tooltip title={temFiltrosAtivos ? "Limpar todos os filtros" : ""}>
+                <Chip 
+                  label={isMobile ? "Limpar" : "Limpar Filtros"}
+                  size="small"
+                  color={temFiltrosAtivos ? "error" : "default"}
+                  variant={temFiltrosAtivos ? "filled" : "outlined"}
+                  onDelete={temFiltrosAtivos ? () => {} : undefined}
+                  deleteIcon={<Close />}
+                  sx={{ 
+                    pointerEvents: 'none',
+                    fontWeight: 600,
+                  }}
+                />
+              </Tooltip>
+            </Box>
           </AccordionSummary>
           
           <AccordionDetails sx={{ px: 3, pb: 3 }}>
@@ -884,7 +954,7 @@ function PedidosPageContent() {
               </FormControl>
             </Grid>
             
-            <Grid item xs={6} sm={6} md={2}>
+            <Grid item xs={12} sm={6} md={2}>
               <TextField
                 fullWidth
                 type="date"
@@ -1584,6 +1654,171 @@ function PedidosPageContent() {
             startIcon={atualizarMutation.isPending ? <CircularProgress size={20} /> : <Check />}
           >
             {atualizarMutation.isPending ? 'Salvando...' : 'Salvar Alterações'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Exportação Profissional */}
+      <Dialog 
+        open={dialogExportar} 
+        onClose={() => setDialogExportar(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <FileDownload />
+            Exportar Pedidos
+          </Box>
+          {isMobile && (
+            <IconButton
+              onClick={() => setDialogExportar(false)}
+              sx={{ color: 'white' }}
+            >
+              <Close />
+            </IconButton>
+          )}
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Selecione as colunas que deseja exportar:
+          </Typography>
+          
+          <Box sx={{ 
+            mb: 2, 
+            p: 2, 
+            bgcolor: 'grey.50', 
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'grey.200',
+          }}>
+            <Box display="flex" gap={1} mb={1.5}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={selecionarTodasColunas}
+                sx={{ flex: 1, fontSize: '0.75rem' }}
+              >
+                Selecionar Todas
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                onClick={desmarcarTodasColunas}
+                sx={{ flex: 1, fontSize: '0.75rem' }}
+              >
+                Desmarcar Todas
+              </Button>
+            </Box>
+            
+            <Box display="flex" flexDirection="column" gap={0.5}>
+              {colunasExportacao.map((coluna) => (
+                <Box
+                  key={coluna.id}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    p: 1,
+                    borderRadius: 1,
+                    bgcolor: coluna.selecionada ? 'primary.50' : 'white',
+                    border: '1px solid',
+                    borderColor: coluna.selecionada ? 'primary.200' : 'grey.200',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      bgcolor: coluna.selecionada ? 'primary.100' : 'grey.100',
+                      transform: 'translateX(4px)',
+                    },
+                  }}
+                  onClick={() => toggleColuna(coluna.id)}
+                >
+                  <Checkbox
+                    checked={coluna.selecionada}
+                    size="small"
+                    sx={{ mr: 1 }}
+                  />
+                  <Typography variant="body2">{coluna.label}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+
+          {/* Resumo */}
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              <strong>{pedidos.length}</strong> pedidos serão exportados com{' '}
+              <strong>{colunasExportacao.filter(c => c.selecionada).length}</strong> colunas.
+            </Typography>
+          </Alert>
+
+          {/* Filtros aplicados */}
+          {temFiltrosAtivos && (
+            <Alert severity="warning" icon={<FilterList />} sx={{ mb: 0 }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Filtros Ativos:
+              </Typography>
+              <Box display="flex" flexWrap="wrap" gap={0.5}>
+                {status && <Chip label={`Status: ${status}`} size="small" />}
+                {tipoAtendimento && <Chip label={`Tipo: ${tipoAtendimento}`} size="small" />}
+                {formaPagamento && (
+                  <Chip 
+                    label={`Pagamento: ${(formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome || formaPagamento}`} 
+                    size="small" 
+                  />
+                )}
+                {clienteSelecionado && <Chip label={`Cliente: ${clienteSelecionado.nome}`} size="small" />}
+                {(dataInicio || dataFim) && (
+                  <Chip 
+                    label={`Período: ${dataInicio ? formatDate(dataInicio) : '...'} - ${dataFim ? formatDate(dataFim) : '...'}`} 
+                    size="small" 
+                  />
+                )}
+              </Box>
+            </Alert>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button 
+            onClick={() => setDialogExportar(false)}
+            variant="outlined"
+            color="inherit"
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<TableChart />}
+            onClick={handleExportarExcel}
+            disabled={colunasExportacao.filter(c => c.selecionada).length === 0}
+            sx={{
+              background: 'linear-gradient(45deg, #4CAF50 30%, #8BC34A 90%)',
+              color: 'white',
+            }}
+          >
+            Excel
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<PictureAsPdf />}
+            onClick={handleExportarPDF}
+            disabled={colunasExportacao.filter(c => c.selecionada).length === 0}
+            sx={{
+              background: 'linear-gradient(45deg, #f44336 30%, #e91e63 90%)',
+              color: 'white',
+            }}
+          >
+            PDF
           </Button>
         </DialogActions>
       </Dialog>
