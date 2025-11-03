@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { useSaidasFiltros } from '@/hooks/useSaidasFiltros';
 import {
   Box,
   Card,
@@ -34,6 +35,10 @@ import {
   Autocomplete,
   useMediaQuery,
   useTheme,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Tooltip,
 } from '@mui/material';
 import {
   Search,
@@ -54,6 +59,7 @@ import {
   CallMade,
   TrendingUp,
   Receipt,
+  ExpandMore,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
@@ -68,13 +74,26 @@ import { dateToString } from '@/lib/utils/dateUtils';
 export default function SaidasPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [status, setStatus] = useState('');
-  const [search, setSearch] = useState('');
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
-  const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+  
+  // Hook customizado para gerenciar filtros com persistência
+  const { 
+    filtros, 
+    atualizarFiltro, 
+    limparFiltros: limparFiltrosHook,
+    temFiltrosAtivos,
+    contarFiltrosAtivos 
+  } = useSaidasFiltros();
+  
+  // Destructuring dos filtros para facilitar o uso
+  const {
+    page,
+    rowsPerPage,
+    status,
+    search,
+    dataInicio,
+    dataFim,
+    clienteSelecionado,
+  } = filtros;
   const [pedidoDetalhes, setPedidoDetalhes] = useState<any>(null);
   const [dialogDetalhes, setDialogDetalhes] = useState(false);
   const [dialogEditar, setDialogEditar] = useState(false);
@@ -155,12 +174,12 @@ export default function SaidasPage() {
   type Pedido = typeof pedidos[number];
 
   const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
+    atualizarFiltro('page', newPage);
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+    atualizarFiltro('rowsPerPage', parseInt(event.target.value, 10));
+    atualizarFiltro('page', 0);
   };
 
   const formatCurrency = (value: number | null | undefined) => {
@@ -347,12 +366,7 @@ export default function SaidasPage() {
   };
   
   const limparFiltros = () => {
-    setStatus('');
-    setSearch('');
-    setDataInicio('');
-    setDataFim('');
-    setClienteSelecionado(null);
-    setPage(0);
+    limparFiltrosHook();
   };
   
   const handleCriarSaida = () => {
@@ -592,25 +606,61 @@ export default function SaidasPage() {
         </Grid>
       </Grid>
 
-      <Box sx={{ mb: 3 }}>
-        <Card sx={{ p: { xs: 2, sm: 3 } }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+      <Card sx={{ overflow: 'hidden', maxWidth: '100%', mb: 3 }}>
+        {/* Filtros Avançados com Accordion */}
+        <Accordion 
+          defaultExpanded={!isMobile}
+          sx={{ 
+            boxShadow: 'none',
+            '&:before': { display: 'none' },
+            borderBottom: '1px solid',
+            borderColor: 'divider'
+          }}
+        >
+          <AccordionSummary 
+            expandIcon={<ExpandMore />}
+            sx={{ 
+              px: 3,
+              '& .MuiAccordionSummary-content': { 
+                alignItems: 'center',
+                gap: 1,
+                my: 2
+              }
+            }}
+          >
             <FilterList color="primary" />
             <Typography variant="h6" fontWeight="bold">
-              Filtros
+              Filtros {temFiltrosAtivos && (
+                <Chip 
+                  label={contarFiltrosAtivos} 
+                  size="small" 
+                  color="primary" 
+                  sx={{ ml: 1 }} 
+                />
+              )}
             </Typography>
-          </Box>
-
+            <Tooltip title="Limpar todos os filtros">
+              <Button 
+                size="small" 
+                onClick={(e) => { e.stopPropagation(); limparFiltros(); }} 
+                sx={{ ml: 'auto' }}
+                disabled={!temFiltrosAtivos}
+                variant={temFiltrosAtivos ? "contained" : "outlined"}
+                color={temFiltrosAtivos ? "error" : "inherit"}
+              >
+                {isMobile ? "Limpar" : "Limpar Filtros"}
+              </Button>
+            </Tooltip>
+          </AccordionSummary>
+          
+          <AccordionDetails sx={{ px: 3, pb: 3 }}>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6} md={3}>
               <TextField
                 fullWidth
                 placeholder="Buscar por número..."
                 value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(0);
-                }}
+                onChange={(e) => atualizarFiltro('search', e.target.value)}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -627,10 +677,7 @@ export default function SaidasPage() {
                 <Select
                   value={status}
                   label="Status"
-                  onChange={(e) => {
-                    setStatus(e.target.value);
-                    setPage(0);
-                  }}
+                  onChange={(e) => atualizarFiltro('status', e.target.value)}
                 >
                   <MenuItem value="">Todos</MenuItem>
                   <MenuItem value="PENDENTE">Pendente</MenuItem>
@@ -647,10 +694,7 @@ export default function SaidasPage() {
                 type="date"
                 label="Data Início"
                 value={dataInicio}
-                onChange={(e) => {
-                  setDataInicio(e.target.value);
-                  setPage(0);
-                }}
+                onChange={(e) => atualizarFiltro('dataInicio', e.target.value)}
                 InputLabelProps={{ shrink: true }}
                 InputProps={{
                   startAdornment: (
@@ -668,10 +712,7 @@ export default function SaidasPage() {
                 type="date"
                 label="Data Fim"
                 value={dataFim}
-                onChange={(e) => {
-                  setDataFim(e.target.value);
-                  setPage(0);
-                }}
+                onChange={(e) => atualizarFiltro('dataFim', e.target.value)}
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
@@ -681,13 +722,8 @@ export default function SaidasPage() {
                 options={(clientes as any)?.clientes || []}
                 getOptionLabel={(option: any) => option.nome || ''}
                 value={clienteSelecionado}
-                onChange={(_, newValue) => {
-                  setClienteSelecionado(newValue);
-                  setPage(0);
-                }}
-                onInputChange={(_, newInputValue) => {
-                  setSearchCliente(newInputValue);
-                }}
+                onChange={(_, newValue) => atualizarFiltro('clienteSelecionado', newValue)}
+                onInputChange={(_, newInputValue) => setSearchCliente(newInputValue)}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -708,21 +744,10 @@ export default function SaidasPage() {
                 )}
               />
             </Grid>
-
-            <Grid item xs={12}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  onClick={limparFiltros}
-                  startIcon={<Close />}
-                >
-                  Limpar Filtros
-                </Button>
-              </Box>
-            </Grid>
           </Grid>
-        </Card>
-      </Box>
+          </AccordionDetails>
+        </Accordion>
+      </Card>
 
       <Card>
         {isLoading ? (
