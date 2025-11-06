@@ -42,7 +42,7 @@ export const clientesRouter = router({
   list: publicProcedure
     .input(
       z.object({
-        limit: z.number().min(1).max(100).default(50),
+        limit: z.number().min(1).max(1000).default(50),
         offset: z.number().min(0).default(0),
         search: z.string().optional(),
       })
@@ -65,8 +65,13 @@ export const clientesRouter = router({
 
       if (error) throw new Error(error.message);
 
+      // Remover duplicatas baseado no ID (garantir que cada cliente apareça apenas uma vez)
+      const clientesUnicos = data ? 
+        Array.from(new Map(data.map((cliente: any) => [cliente.id, cliente])).values()) 
+        : [];
+
       return {
-        clientes: data || [],
+        clientes: clientesUnicos,
         total: count || 0,
       };
     }),

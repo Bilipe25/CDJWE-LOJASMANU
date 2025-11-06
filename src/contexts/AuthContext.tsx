@@ -20,6 +20,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    // Verificar se está no cliente (browser)
+    if (typeof window === 'undefined') {
+      setIsLoading(false);
+      return;
+    }
+    
     // Verificar se o usuário está autenticado no localStorage
     const authenticated = localStorage.getItem('authenticated') === 'true';
     const storedUsername = localStorage.getItem('username');

@@ -195,7 +195,7 @@ function PedidosPageContent() {
   }, [pedidoUrl, pedidoIdUrl]);
   
   const { data: clientes } = trpc.clientes.list.useQuery({
-    limit: 100,
+    limit: 1000,
     offset: 0,
     search: searchCliente || undefined,
   });

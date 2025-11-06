@@ -103,7 +103,6 @@ export default function SaidasPage() {
   const [pedidoDetalhes, setPedidoDetalhes] = useState<any>(null);
   const [dialogDetalhes, setDialogDetalhes] = useState(false);
   const [dialogEditar, setDialogEditar] = useState(false);
-  const [searchCliente, setSearchCliente] = useState('');
   const [pedidoEditando, setPedidoEditando] = useState<any>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -156,9 +155,9 @@ export default function SaidasPage() {
   });
   
   const { data: clientes } = trpc.clientes.list.useQuery({
-    limit: 100,
+    limit: 1000,
     offset: 0,
-    search: searchCliente || undefined,
+    // Removido search - filtragem será feita localmente no Autocomplete
   });
   
   const { data: pedidoCompleto, isLoading: loadingDetalhes } = trpc.pedidos.getById.useQuery(
@@ -876,11 +875,29 @@ export default function SaidasPage() {
             
             <Grid item xs={12} sm={6} md={3}>
               <Autocomplete
-                options={(clientes as any)?.clientes || []}
+                options={
+                  // Remover duplicatas e garantir lista única por ID
+                  Array.from(
+                    new Map(
+                      ((clientes as any)?.clientes || []).map((c: any) => [c.id, c])
+                    ).values()
+                  )
+                }
                 getOptionLabel={(option: any) => option.nome || ''}
+                filterOptions={(options, { inputValue }) => {
+                  // Filtra localmente - muito mais rápido!
+                  if (!inputValue) return options;
+                  const searchLower = inputValue.toLowerCase();
+                  return options.filter((option: any) => 
+                    option.nome?.toLowerCase().includes(searchLower) ||
+                    option.cpf?.toLowerCase().includes(searchLower) ||
+                    option.telefone?.toLowerCase().includes(searchLower)
+                  );
+                }}
                 value={clienteSelecionado}
                 onChange={(_, newValue) => atualizarFiltro('clienteSelecionado', newValue)}
-                onInputChange={(_, newInputValue) => setSearchCliente(newInputValue)}
+                loading={false}
+                noOptionsText="Nenhum fornecedor encontrado"
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -1312,10 +1329,27 @@ export default function SaidasPage() {
                 <Grid item xs={12}>
                   <Autocomplete
                     freeSolo
-                    options={(clientes as any)?.clientes || []}
+                    options={
+                      // Remover duplicatas e garantir lista única por ID
+                      Array.from(
+                        new Map(
+                          ((clientes as any)?.clientes || []).map((c: any) => [c.id, c])
+                        ).values()
+                      )
+                    }
                     getOptionLabel={(option: any) => {
                       if (typeof option === 'string') return option;
                       return option.nome || '';
+                    }}
+                    filterOptions={(options, { inputValue }) => {
+                      // Filtra localmente - muito mais rápido!
+                      if (!inputValue) return options;
+                      const searchLower = inputValue.toLowerCase();
+                      return options.filter((option: any) => 
+                        option.nome?.toLowerCase().includes(searchLower) ||
+                        option.cpf?.toLowerCase().includes(searchLower) ||
+                        option.telefone?.toLowerCase().includes(searchLower)
+                      );
                     }}
                     value={pedidoEditando.destinatario_nome}
                     onChange={(_, newValue) => {
@@ -1345,6 +1379,8 @@ export default function SaidasPage() {
                         destinatario_nome: newInputValue 
                       });
                     }}
+                    loading={false}
+                    noOptionsText="Nenhum fornecedor encontrado - digite para criar novo"
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -1697,10 +1733,27 @@ export default function SaidasPage() {
             <Grid item xs={12}>
               <Autocomplete
                 freeSolo
-                options={(clientes as any)?.clientes || []}
+                options={
+                  // Remover duplicatas e garantir lista única por ID
+                  Array.from(
+                    new Map(
+                      ((clientes as any)?.clientes || []).map((c: any) => [c.id, c])
+                    ).values()
+                  )
+                }
                 getOptionLabel={(option: any) => {
                   if (typeof option === 'string') return option;
                   return option.nome || '';
+                }}
+                filterOptions={(options, { inputValue }) => {
+                  // Filtra localmente - muito mais rápido!
+                  if (!inputValue) return options;
+                  const searchLower = inputValue.toLowerCase();
+                  return options.filter((option: any) => 
+                    option.nome?.toLowerCase().includes(searchLower) ||
+                    option.cpf?.toLowerCase().includes(searchLower) ||
+                    option.telefone?.toLowerCase().includes(searchLower)
+                  );
                 }}
                 value={novaSaida.destinatario_nome}
                 onChange={(_, newValue) => {
@@ -1730,6 +1783,8 @@ export default function SaidasPage() {
                     destinatario_nome: newInputValue 
                   });
                 }}
+                loading={false}
+                noOptionsText="Nenhum fornecedor encontrado - digite para criar novo"
                 renderInput={(params) => (
                   <TextField
                     {...params}

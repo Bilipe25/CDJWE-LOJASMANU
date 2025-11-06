@@ -32,8 +32,13 @@ const filtrosIniciais: FiltrosSaidas = {
 };
 
 export function useSaidasFiltros() {
-  // Carregar filtros salvos do localStorage
+  // Carregar filtros salvos do localStorage (apenas no cliente)
   const carregarFiltrosSalvos = useCallback((): FiltrosSaidas => {
+    // Verificar se está no cliente (browser)
+    if (typeof window === 'undefined') {
+      return filtrosIniciais;
+    }
+    
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -49,8 +54,11 @@ export function useSaidasFiltros() {
 
   const [filtros, setFiltros] = useState<FiltrosSaidas>(carregarFiltrosSalvos);
 
-  // Salvar filtros no localStorage sempre que mudarem
+  // Salvar filtros no localStorage sempre que mudarem (apenas no cliente)
   useEffect(() => {
+    // Verificar se está no cliente (browser)
+    if (typeof window === 'undefined') return;
+    
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(filtros));
     } catch (error) {

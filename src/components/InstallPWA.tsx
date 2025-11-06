@@ -17,6 +17,9 @@ export function InstallPWA() {
   const { nomeEmpresa } = useConfiguracoes();
 
   useEffect(() => {
+    // Verificar se está no cliente (browser)
+    if (typeof window === 'undefined') return;
+    
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);

@@ -38,8 +38,13 @@ export function usePedidosFiltros() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Carregar filtros salvos do localStorage ou da URL
+  // Carregar filtros salvos do localStorage ou da URL (apenas no cliente)
   const carregarFiltrosSalvos = useCallback((): FiltrosPedidos => {
+    // Verificar se está no cliente (browser)
+    if (typeof window === 'undefined') {
+      return filtrosIniciais;
+    }
+    
     try {
       // Primeiro, tentar carregar da URL (tem prioridade)
       const voltouDeEdicao = searchParams.get('voltou_edicao') === 'true';
@@ -92,8 +97,11 @@ export function usePedidosFiltros() {
 
   const [filtros, setFiltros] = useState<FiltrosPedidos>(carregarFiltrosSalvos);
 
-  // Salvar filtros no localStorage sempre que mudarem
+  // Salvar filtros no localStorage sempre que mudarem (apenas no cliente)
   useEffect(() => {
+    // Verificar se está no cliente (browser)
+    if (typeof window === 'undefined') return;
+    
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(filtros));
     } catch (error) {
