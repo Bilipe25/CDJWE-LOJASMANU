@@ -12,6 +12,7 @@ import {
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
 import StatCard from '@/components/common/StatCard';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { trpc } from '@/lib/trpc/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { format } from 'date-fns';
@@ -57,7 +58,8 @@ export default function HomePage() {
   }
 
   return (
-    <AppLayout>
+    <ProtectedRoute>
+      <AppLayout>
       <PageHeader
         title="Dashboard"
         subtitle={
@@ -420,5 +422,6 @@ export default function HomePage() {
         </Fab>
       )}
     </AppLayout>
+    </ProtectedRoute>
   );
 }

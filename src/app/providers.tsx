@@ -8,6 +8,7 @@ import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { ptBR } from '@mui/material/locale';
 import { Toaster } from 'react-hot-toast';
 import { InstallPWA } from '@/components/InstallPWA';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 const theme = createTheme(
   {
@@ -226,44 +227,46 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          {children}
-          <InstallPWA />
-          <ReactQueryDevtools initialIsOpen={false} />
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#ffffff',
-                color: '#0f172a',
-                borderRadius: '12px',
-                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-                padding: '16px',
-                fontSize: '14px',
-                fontWeight: 500,
-              },
-              success: {
-                duration: 3000,
-                iconTheme: {
-                  primary: '#10b981',
-                  secondary: '#ffffff',
+          <AuthProvider>
+            {children}
+            <InstallPWA />
+            <ReactQueryDevtools initialIsOpen={false} />
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: 4000,
+                style: {
+                  background: '#ffffff',
+                  color: '#0f172a',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+                  padding: '16px',
+                  fontSize: '14px',
+                  fontWeight: 500,
                 },
-              },
-              error: {
-                duration: 5000,
-                iconTheme: {
-                  primary: '#ef4444',
-                  secondary: '#ffffff',
+                success: {
+                  duration: 3000,
+                  iconTheme: {
+                    primary: '#10b981',
+                    secondary: '#ffffff',
+                  },
                 },
-              },
-              loading: {
-                iconTheme: {
-                  primary: '#0ea5e9',
-                  secondary: '#ffffff',
+                error: {
+                  duration: 5000,
+                  iconTheme: {
+                    primary: '#ef4444',
+                    secondary: '#ffffff',
+                  },
                 },
-              },
-            }}
-          />
+                loading: {
+                  iconTheme: {
+                    primary: '#0ea5e9',
+                    secondary: '#ffffff',
+                  },
+                },
+              }}
+            />
+          </AuthProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </trpc.Provider>

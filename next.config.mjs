@@ -9,6 +9,19 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['@mui/material', '@mui/icons-material'],
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'fuqycopmtebzypcsuzspa.supabase.co',
+      },
+    ],
+  },
 };
 
 const pwaConfig = withPWA({

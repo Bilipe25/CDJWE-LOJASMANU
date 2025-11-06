@@ -31,10 +31,13 @@ import {
   Store,
   CallMade,
   CalendarToday,
+  Logout,
+  Person,
 } from '@mui/icons-material';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useConfiguracoes } from '@/hooks/useConfiguracoes';
+import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -66,6 +69,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { nomeSistema, nomeEmpresa, logoUrl } = useConfiguracoes();
+  const { username, logout } = useAuth();
 
   // Atualizar data a cada minuto
   useEffect(() => {
@@ -165,6 +169,73 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           );
         })}
       </List>
+
+      {/* User Info and Logout */}
+      <Divider />
+      <Box sx={{ p: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            p: 1.5,
+            borderRadius: 2,
+            bgcolor: 'background.default',
+            mb: 1,
+          }}
+        >
+          <Avatar
+            sx={{
+              width: 36,
+              height: 36,
+              bgcolor: 'primary.main',
+              fontSize: '0.875rem',
+            }}
+          >
+            <Person fontSize="small" />
+          </Avatar>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              variant="body2"
+              fontWeight={600}
+              noWrap
+              sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+            >
+              {username || 'Usuário'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Conectado
+            </Typography>
+          </Box>
+        </Box>
+        <ListItemButton
+          onClick={logout}
+          sx={{
+            borderRadius: 2,
+            py: 1,
+            color: 'error.main',
+            '&:hover': {
+              bgcolor: 'error.main',
+              color: 'white',
+              '& .MuiListItemIcon-root': {
+                color: 'white',
+              },
+            },
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <ListItemIcon sx={{ color: 'error.main', minWidth: 40 }}>
+            <Logout />
+          </ListItemIcon>
+          <ListItemText
+            primary="Sair"
+            primaryTypographyProps={{
+              fontWeight: 600,
+              fontSize: '0.875rem',
+            }}
+          />
+        </ListItemButton>
+      </Box>
 
       {/* Footer */}
       <Box sx={{ p: 2, bgcolor: 'background.default' }}>
