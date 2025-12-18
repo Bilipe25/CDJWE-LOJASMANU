@@ -1,6 +1,8 @@
+
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   Box,
@@ -33,6 +35,8 @@ import {
   Typography,
   useMediaQuery,
   useTheme,
+  Breadcrumbs,
+  Link,
 } from '@mui/material';
 import {
   Search,
@@ -49,6 +53,7 @@ import {
   Cancel,
   Palette,
   Label,
+  NavigateNext,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
@@ -58,10 +63,11 @@ import { trpc } from '@/lib/trpc/client';
 import { motion } from 'framer-motion';
 
 export default function ProdutosPage() {
+  const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [tabAtiva, setTabAtiva] = useState(0);
-  
+
   // Estados de Produtos
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
@@ -74,14 +80,14 @@ export default function ProdutosPage() {
   const [produtoDetalhes, setProdutoDetalhes] = useState<any>(null);
   const [mostrarInativos, setMostrarInativos] = useState(false);
   const [ordenacao, setOrdenacao] = useState<'nome' | 'codigo' | 'valor'>('nome');
-  
+
   // Estados de Cores
   const [dialogNovaCor, setDialogNovaCor] = useState(false);
   const [dialogEditarCor, setDialogEditarCor] = useState(false);
   const [corEditando, setCorEditando] = useState<any>(null);
   const [nomeCorForm, setNomeCorForm] = useState('');
   const [descricaoCorForm, setDescricaoCorForm] = useState('');
-  
+
   // Estados de Categorias
   const [dialogNovaCategoria, setDialogNovaCategoria] = useState(false);
   const [dialogEditarCategoria, setDialogEditarCategoria] = useState(false);
@@ -93,8 +99,8 @@ export default function ProdutosPage() {
     title: string;
     message: string;
     onConfirm: () => void;
-  }>({ open: false, title: '', message: '', onConfirm: () => {} });
-  
+  }>({ open: false, title: '', message: '', onConfirm: () => { } });
+
   // Formulário
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
@@ -110,13 +116,13 @@ export default function ProdutosPage() {
     search: search || undefined,
     categoriaId: categoriaId || undefined,
   });
-  
+
   // Query para estatísticas gerais
   const { data: stats } = trpc.produtos.stats.useQuery();
 
   const { data: categorias } = trpc.dominios.categorias.list.useQuery();
   const { data: cores } = trpc.dominios.cores.list.useQuery();
-  
+
   // Mutations
   const utils = trpc.useUtils();
   const criarMutation = trpc.produtos.create.useMutation({
@@ -137,7 +143,7 @@ export default function ProdutosPage() {
       utils.produtos.stats.invalidate();
     },
   });
-  
+
   // Mutations de Cores
   const criarCorMutation = trpc.dominios.cores.create.useMutation({
     onSuccess: () => {
@@ -154,7 +160,7 @@ export default function ProdutosPage() {
       utils.dominios.cores.list.invalidate();
     },
   });
-  
+
   // Mutations de Categorias
   const criarCategoriaMutation = trpc.dominios.categorias.create.useMutation({
     onSuccess: () => {
@@ -192,7 +198,7 @@ export default function ProdutosPage() {
       currency: 'BRL',
     }).format(value);
   };
-  
+
   const limparFormulario = () => {
     setNome('');
     setCodigo('');
@@ -202,12 +208,12 @@ export default function ProdutosPage() {
     setDescricao('');
     setAtivo(true);
   };
-  
+
   const handleNovoProduto = () => {
     limparFormulario();
     setDialogNovo(true);
   };
-  
+
   const handleEditarProduto = (produto: any) => {
     setProdutoEditando(produto);
     setNome(produto.nome);
@@ -219,32 +225,32 @@ export default function ProdutosPage() {
     setAtivo(produto.ativo);
     setDialogEditar(true);
   };
-  
+
   const handleVisualizarProduto = (produto: any) => {
     setProdutoDetalhes(produto);
     setDialogDetalhes(true);
   };
-  
+
   const handleDuplicarProduto = async (produto: any) => {
     const toastId = toast.loading('Duplicando produto...');
-    
+
     try {
       await criarMutation.mutateAsync({
         nome: `${produto.nome} (cópia)`,
-        codigo: produto.codigo ? `${produto.codigo}-COPY` : undefined,
+        codigo: produto.codigo ? `${produto.codigo} -COPY` : undefined,
         categoria_id: produto.categoria_id || undefined,
         unidade: produto.unidade,
         valor_base: produto.valor_base,
         descricao: produto.descricao,
         ativo: true,
       });
-      
+
       toast.success('Produto duplicado com sucesso!', { id: toastId });
     } catch (error: any) {
       toast.error(error?.message || 'Erro ao duplicar produto', { id: toastId });
     }
   };
-  
+
   const handleExportarCSV = () => {
     const csv = [
       ['Código', 'Nome', 'Categoria', 'Unidade', 'Valor Base', 'Status'].join(','),
@@ -257,16 +263,16 @@ export default function ProdutosPage() {
         p.ativo ? 'Ativo' : 'Inativo'
       ].join(','))
     ].join('\n');
-    
+
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `produtos_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
-    
+
     toast.success('Produtos exportados com sucesso!');
   };
-  
+
   const handleSalvarNovo = async () => {
     if (!nome.trim()) {
       toast.error('Nome é obrigatório');
@@ -276,9 +282,9 @@ export default function ProdutosPage() {
       toast.error('Valor base inválido');
       return;
     }
-    
+
     const toastId = toast.loading('Criando produto...');
-    
+
     try {
       await criarMutation.mutateAsync({
         nome: nome.trim(),
@@ -289,7 +295,7 @@ export default function ProdutosPage() {
         descricao: descricao.trim() || undefined,
         ativo: ativo,
       });
-      
+
       toast.success('Produto criado com sucesso!', { id: toastId });
       setDialogNovo(false);
       limparFormulario();
@@ -297,7 +303,7 @@ export default function ProdutosPage() {
       toast.error(error?.message || 'Erro ao criar produto', { id: toastId });
     }
   };
-  
+
   const handleSalvarEdicao = async () => {
     if (!nome.trim()) {
       toast.error('Nome é obrigatório');
@@ -307,9 +313,9 @@ export default function ProdutosPage() {
       toast.error('Valor base inválido');
       return;
     }
-    
+
     const toastId = toast.loading('Atualizando produto...');
-    
+
     try {
       await atualizarMutation.mutateAsync({
         id: produtoEditando.id,
@@ -321,7 +327,7 @@ export default function ProdutosPage() {
         descricao: descricao.trim() || undefined,
         ativo: ativo,
       });
-      
+
       toast.success('Produto atualizado com sucesso!', { id: toastId });
       setDialogEditar(false);
       setProdutoEditando(null);
@@ -330,12 +336,12 @@ export default function ProdutosPage() {
       toast.error(error?.message || 'Erro ao atualizar produto', { id: toastId });
     }
   };
-  
+
   const handleDeletarProduto = (produto: any) => {
     setConfirmDialog({
       open: true,
       title: 'Desativar Produto',
-      message: `Tem certeza que deseja desativar o produto "${produto.nome}"? Ele não aparecerá mais nas listagens ativas.`,
+      message: `Tem certeza que deseja desativar o produto "${produto.nome}" ? Ele não aparecerá mais nas listagens ativas.`,
       onConfirm: async () => {
         const toastId = toast.loading('Desativando produto...');
         try {
@@ -355,20 +361,20 @@ export default function ProdutosPage() {
     setDescricaoCorForm('');
     setDialogNovaCor(true);
   };
-  
+
   const handleEditarCor = (cor: any) => {
     setCorEditando(cor);
     setNomeCorForm(cor.descricao);
     setDescricaoCorForm(cor.linha || '');
     setDialogEditarCor(true);
   };
-  
+
   const handleSalvarNovaCor = async () => {
     if (!nomeCorForm.trim()) {
       toast.error('Nome da cor é obrigatório');
       return;
     }
-    
+
     const toastId = toast.loading('Criando cor...');
     try {
       await criarCorMutation.mutateAsync({
@@ -381,13 +387,13 @@ export default function ProdutosPage() {
       toast.error(error?.message || 'Erro ao criar cor', { id: toastId });
     }
   };
-  
+
   const handleSalvarEdicaoCor = async () => {
     if (!nomeCorForm.trim()) {
       toast.error('Nome da cor é obrigatório');
       return;
     }
-    
+
     const toastId = toast.loading('Atualizando cor...');
     try {
       await atualizarCorMutation.mutateAsync({
@@ -401,12 +407,12 @@ export default function ProdutosPage() {
       toast.error(error?.message || 'Erro ao atualizar cor', { id: toastId });
     }
   };
-  
+
   const handleDeletarCor = (cor: any) => {
     setConfirmDialog({
       open: true,
       title: 'Excluir Cor',
-      message: `Tem certeza que deseja excluir a cor "${cor.descricao}"?`,
+      message: `Tem certeza que deseja excluir a cor "${cor.descricao}" ? `,
       onConfirm: async () => {
         const toastId = toast.loading('Excluindo cor...');
         try {
@@ -419,27 +425,27 @@ export default function ProdutosPage() {
       },
     });
   };
-  
+
   // Handlers de Categorias
   const handleNovaCategoria = () => {
     setNomeCategoriaForm('');
     setDescricaoCategoriaForm('');
     setDialogNovaCategoria(true);
   };
-  
+
   const handleEditarCategoria = (categoria: any) => {
     setCategoriaEditando(categoria);
     setNomeCategoriaForm(categoria.nome);
     setDescricaoCategoriaForm(categoria.descricao || '');
     setDialogEditarCategoria(true);
   };
-  
+
   const handleSalvarNovaCategoria = async () => {
     if (!nomeCategoriaForm.trim()) {
       toast.error('Nome da categoria é obrigatório');
       return;
     }
-    
+
     const toastId = toast.loading('Criando categoria...');
     try {
       await criarCategoriaMutation.mutateAsync({
@@ -452,13 +458,13 @@ export default function ProdutosPage() {
       toast.error(error?.message || 'Erro ao criar categoria', { id: toastId });
     }
   };
-  
+
   const handleSalvarEdicaoCategoria = async () => {
     if (!nomeCategoriaForm.trim()) {
       toast.error('Nome da categoria é obrigatório');
       return;
     }
-    
+
     const toastId = toast.loading('Atualizando categoria...');
     try {
       await atualizarCategoriaMutation.mutateAsync({
@@ -472,12 +478,12 @@ export default function ProdutosPage() {
       toast.error(error?.message || 'Erro ao atualizar categoria', { id: toastId });
     }
   };
-  
+
   const handleDeletarCategoria = (categoria: any) => {
     setConfirmDialog({
       open: true,
       title: 'Excluir Categoria',
-      message: `Tem certeza que deseja excluir a categoria "${categoria.nome}"?`,
+      message: `Tem certeza que deseja excluir a categoria "${categoria.nome}" ? `,
       onConfirm: async () => {
         const toastId = toast.loading('Excluindo categoria...');
         try {
@@ -493,20 +499,25 @@ export default function ProdutosPage() {
 
   return (
     <AppLayout>
-      <PageHeader
-        title="Gerenciamento"
-        subtitle="Produtos, Cores e Categorias"
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/' },
-          { label: 'Produtos' },
-        ]}
-        action={{
-          label: tabAtiva === 0 ? 'Novo Produto' : tabAtiva === 1 ? 'Nova Cor' : 'Nova Categoria',
-          icon: <Add />,
-          onClick: tabAtiva === 0 ? handleNovoProduto : tabAtiva === 1 ? handleNovaCor : handleNovaCategoria,
-        }}
-      />
-      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+          <Link underline="hover" color="inherit" href="/" onClick={(e: any) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            Dashboard
+          </Link>
+          <Typography color="text.primary">Produtos</Typography>
+        </Breadcrumbs>
+
+        <Button
+          variant="contained"
+          startIcon={<Add />}
+          onClick={tabAtiva === 0 ? handleNovoProduto : tabAtiva === 1 ? handleNovaCor : handleNovaCategoria}
+          size="large"
+          sx={{ minWidth: 140 }}
+        >
+          {tabAtiva === 0 ? 'Novo Produto' : tabAtiva === 1 ? 'Nova Cor' : 'Nova Categoria'}
+        </Button>
+      </Box>
+
       {/* Tabs */}
       <Card sx={{ mb: 3 }}>
         <Tabs value={tabAtiva} onChange={(e, newValue) => setTabAtiva(newValue)} sx={{ borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { fontSize: { xs: '0.75rem', sm: '0.875rem' }, minHeight: { xs: 48, sm: 56 } } }}>
@@ -515,7 +526,7 @@ export default function ProdutosPage() {
           <Tab icon={<Label sx={{ fontSize: { xs: 20, sm: 24 } }} />} label={isMobile ? "Categorias" : "Categorias"} iconPosition="start" />
         </Tabs>
       </Card>
-      
+
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={6} md={3}>
@@ -585,341 +596,345 @@ export default function ProdutosPage() {
           <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid', borderColor: 'divider' }}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                placeholder="Buscar por nome ou código..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(0);
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <FormControl fullWidth>
-                <InputLabel>Categoria</InputLabel>
-                <Select
-                  value={categoriaId}
-                  label="Categoria"
+                <TextField
+                  fullWidth
+                  placeholder="Buscar por nome ou código..."
+                  value={search}
                   onChange={(e) => {
-                    setCategoriaId(e.target.value);
+                    setSearch(e.target.value);
                     setPage(0);
                   }}
-                >
-                  <MenuItem value="">Todas as categorias</MenuItem>
-                  {categorias?.map((cat: any) => (
-                    <MenuItem key={cat.id} value={cat.id}>
-                      {cat.nome}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Tooltip title="Exportar para CSV">
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={handleExportarCSV}
-                    startIcon={<FileDownload />}
-                    disabled={produtos.length === 0}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Categoria</InputLabel>
+                  <Select
+                    value={categoriaId}
+                    label="Categoria"
+                    onChange={(e) => {
+                      setCategoriaId(e.target.value);
+                      setPage(0);
+                    }}
                   >
-                    Exportar
-                  </Button>
-                </Tooltip>
-                <Tooltip title={mostrarInativos ? 'Ocultar inativos' : 'Mostrar inativos'}>
-                  <Button
-                    variant={mostrarInativos ? 'contained' : 'outlined'}
-                    size="small"
-                    onClick={() => setMostrarInativos(!mostrarInativos)}
-                    startIcon={mostrarInativos ? <CheckCircle /> : <Cancel />}
-                  >
-                    {mostrarInativos ? 'Ativos' : 'Todos'}
-                  </Button>
-                </Tooltip>
-              </Box>
+                    <MenuItem value="">Todas as categorias</MenuItem>
+                    {categorias?.map((cat: any) => (
+                      <MenuItem key={cat.id} value={cat.id}>
+                        {cat.nome}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Tooltip title="Exportar para CSV">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={handleExportarCSV}
+                      startIcon={<FileDownload />}
+                      disabled={produtos.length === 0}
+                    >
+                      Exportar
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title={mostrarInativos ? 'Ocultar inativos' : 'Mostrar inativos'}>
+                    <Button
+                      variant={mostrarInativos ? 'contained' : 'outlined'}
+                      size="small"
+                      onClick={() => setMostrarInativos(!mostrarInativos)}
+                      startIcon={mostrarInativos ? <CheckCircle /> : <Cancel />}
+                    >
+                      {mostrarInativos ? 'Ativos' : 'Todos'}
+                    </Button>
+                  </Tooltip>
+                </Box>
+              </Grid>
             </Grid>
-          </Grid>
-        </Box>
-
-        {/* Tabela */}
-        {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress />
           </Box>
-        ) : produtos.length === 0 ? (
-          <EmptyState
-            icon={<Inventory />}
-            title="Nenhum produto encontrado"
-            description={
-              search || categoriaId
-                ? 'Tente ajustar os filtros de busca'
-                : 'Cadastre seu primeiro produto para começar'
-            }
-            action={
-              !search && !categoriaId
-                ? {
+
+          {/* Tabela */}
+          {isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress />
+            </Box>
+          ) : produtos.length === 0 ? (
+            <EmptyState
+              icon={<Inventory />}
+              title="Nenhum produto encontrado"
+              description={
+                search || categoriaId
+                  ? 'Tente ajustar os filtros de busca'
+                  : 'Cadastre seu primeiro produto para começar'
+              }
+              action={
+                !search && !categoriaId
+                  ? {
                     label: 'Cadastrar Produto',
                     onClick: handleNovoProduto,
                   }
-                : undefined
-            }
-          />
-        ) : (
-          <>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Código</TableCell>
-                    <TableCell>Produto</TableCell>
-                    <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Categoria</TableCell>
-                    <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Unidade</TableCell>
-                    <TableCell align="right">Valor Base</TableCell>
-                    <TableCell align="center">Status</TableCell>
-                    <TableCell align="right">Ações</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {produtos.map((produto: any, index) => (
-                    <TableRow
-                      key={produto.id}
-                      component={motion.tr}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      hover
-                      onClick={() => handleVisualizarProduto(produto)}
-                      sx={{
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        '&:hover': {
-                          bgcolor: 'action.hover',
-                          transform: 'scale(1.01)',
-                        }
-                      }}
-                    >
-                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                        <Chip
-                          label={produto.codigo || 'S/Cód'}
-                          size="small"
-                          variant="outlined"
-                          sx={{ fontFamily: 'monospace' }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ fontWeight: 600 }}>{produto.nome}</Box>
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Category fontSize="small" color="action" />
-                          {categorias?.find((c: any) => c.id === produto.categoria_id)?.nome || '-'}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>{produto.unidade}</TableCell>
-                      <TableCell align="right">
-                        <Box sx={{ fontWeight: 600, color: 'primary.main' }}>
-                          {formatCurrency(produto.valor_base)}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Chip
-                          label={produto.ativo ? 'Ativo' : 'Inativo'}
-                          size="small"
-                          color={produto.ativo ? 'success' : 'default'}
-                          sx={{ fontWeight: 600 }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>
-                          <Tooltip title="Visualizar">
+                  : undefined
+              }
+            />
+          ) : (
+            <>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Código</TableCell>
+                      <TableCell>Produto</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Categoria</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Unidade</TableCell>
+                      <TableCell align="right">Valor Base</TableCell>
+                      <TableCell align="center">Status</TableCell>
+                      <TableCell align="right">Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {produtos.map((produto: any, index) => (
+                      <TableRow
+                        key={produto.id}
+                        component={motion.tr}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        hover
+                        onClick={() => handleVisualizarProduto(produto)}
+                        sx={{
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          '&:hover': {
+                            bgcolor: 'action.hover',
+                            transform: 'scale(1.01)',
+                          }
+                        }}
+                      >
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                          <Chip
+                            label={produto.codigo || 'S/Cód'}
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontFamily: 'monospace' }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ fontWeight: 600 }}>{produto.nome}</Box>
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Category fontSize="small" color="action" />
+                            {categorias?.find((c: any) => c.id === produto.categoria_id)?.nome || '-'}
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>{produto.unidade}</TableCell>
+                        <TableCell align="right">
+                          <Box sx={{ fontWeight: 600, color: 'primary.main' }}>
+                            {formatCurrency(produto.valor_base)}
+                          </Box>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Chip
+                            label={produto.ativo ? 'Ativo' : 'Inativo'}
+                            size="small"
+                            color={produto.ativo ? 'success' : 'default'}
+                            sx={{ fontWeight: 600 }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                            <Tooltip title="Visualizar">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleVisualizarProduto(produto);
+                                }}
+                              >
+                                <Visibility fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                          <Tooltip title="Editar">
                             <IconButton
                               size="small"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleVisualizarProduto(produto);
+                                handleEditarProduto(produto);
                               }}
                             >
-                              <Visibility fontSize="small" />
+                              <Edit fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                        </Box>
+                          <Tooltip title="Duplicar">
+                            <IconButton
+                              size="small"
+                              color="info"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDuplicarProduto(produto);
+                              }}
+                            >
+                              <ContentCopy fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Desativar">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletarProduto(produto);
+                              }}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <TablePagination
+                component="div"
+                count={total}
+                page={page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                labelRowsPerPage={isMobile ? "Por pág:" : "Linhas por página:"}
+                labelDisplayedRows={({ from, to, count }) => isMobile ? `${from} -${to}/${count}` : `${from}-${to} de ${count}`}
+                sx={{
+                  '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                  },
+                  '.MuiTablePagination-select': {
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                  }
+                }}
+              />
+            </>
+          )}
+        </Card >
+      )}
+
+      {/* Conteúdo da Tab de Cores */}
+      {
+        tabAtiva === 1 && (
+          <Card>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Cor</TableCell>
+                    <TableCell>Linha</TableCell>
+                    <TableCell align="right">Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {cores?.map((cor: any) => (
+                    <TableRow key={cor.id}>
+                      <TableCell>
+                        <Box sx={{ fontWeight: 600 }}>{cor.descricao}</Box>
+                      </TableCell>
+                      <TableCell>{cor.linha || '-'}</TableCell>
+                      <TableCell align="right">
                         <Tooltip title="Editar">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditarProduto(produto);
-                            }}
-                          >
+                          <IconButton size="small" onClick={() => handleEditarCor(cor)}>
                             <Edit fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Duplicar">
-                          <IconButton
-                            size="small"
-                            color="info"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDuplicarProduto(produto);
-                            }}
-                          >
-                            <ContentCopy fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Desativar">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeletarProduto(produto);
-                            }}
-                          >
+                        <Tooltip title="Excluir">
+                          <IconButton size="small" color="error" onClick={() => handleDeletarCor(cor)}>
                             <Delete fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       </TableCell>
                     </TableRow>
                   ))}
+                  {(!cores || cores.length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={3} align="center" sx={{ py: 8 }}>
+                        <EmptyState
+                          icon={<Palette />}
+                          title="Nenhuma cor cadastrada"
+                          description="Cadastre cores para usar nos produtos"
+                          action={{ label: 'Cadastrar Cor', onClick: handleNovaCor }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
+          </Card>
+        )
+      }
 
-            <TablePagination
-              component="div"
-              count={total}
-              page={page}
-              onPageChange={handleChangePage}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              labelRowsPerPage={isMobile ? "Por pág:" : "Linhas por página:"}
-              labelDisplayedRows={({ from, to, count }) => isMobile ? `${from}-${to}/${count}` : `${from}-${to} de ${count}`}
-              sx={{
-                '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
-                },
-                '.MuiTablePagination-select': {
-                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
-                }
-              }}
-            />
-          </>
-        )}
-        </Card>
-      )}
-      
-      {/* Conteúdo da Tab de Cores */}
-      {tabAtiva === 1 && (
-        <Card>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Cor</TableCell>
-                  <TableCell>Linha</TableCell>
-                  <TableCell align="right">Ações</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {cores?.map((cor: any) => (
-                  <TableRow key={cor.id}>
-                    <TableCell>
-                      <Box sx={{ fontWeight: 600 }}>{cor.descricao}</Box>
-                    </TableCell>
-                    <TableCell>{cor.linha || '-'}</TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="Editar">
-                        <IconButton size="small" onClick={() => handleEditarCor(cor)}>
-                          <Edit fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Excluir">
-                        <IconButton size="small" color="error" onClick={() => handleDeletarCor(cor)}>
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(!cores || cores.length === 0) && (
-                  <TableRow>
-                    <TableCell colSpan={3} align="center" sx={{ py: 8 }}>
-                      <EmptyState
-                        icon={<Palette />}
-                        title="Nenhuma cor cadastrada"
-                        description="Cadastre cores para usar nos produtos"
-                        action={{ label: 'Cadastrar Cor', onClick: handleNovaCor }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Card>
-      )}
-      
       {/* Conteúdo da Tab de Categorias */}
-      {tabAtiva === 2 && (
-        <Card>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Categoria</TableCell>
-                  <TableCell>Descrição</TableCell>
-                  <TableCell align="right">Ações</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {categorias?.map((categoria: any) => (
-                  <TableRow key={categoria.id}>
-                    <TableCell>
-                      <Box sx={{ fontWeight: 600 }}>{categoria.nome}</Box>
-                    </TableCell>
-                    <TableCell>{categoria.descricao || '-'}</TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="Editar">
-                        <IconButton size="small" onClick={() => handleEditarCategoria(categoria)}>
-                          <Edit fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Excluir">
-                        <IconButton size="small" color="error" onClick={() => handleDeletarCategoria(categoria)}>
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(!categorias || categorias.length === 0) && (
+      {
+        tabAtiva === 2 && (
+          <Card>
+            <TableContainer>
+              <Table>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={3} align="center" sx={{ py: 8 }}>
-                      <EmptyState
-                        icon={<Label />}
-                        title="Nenhuma categoria cadastrada"
-                        description="Cadastre categorias para organizar seus produtos"
-                        action={{ label: 'Cadastrar Categoria', onClick: handleNovaCategoria }}
-                      />
-                    </TableCell>
+                    <TableCell>Categoria</TableCell>
+                    <TableCell>Descrição</TableCell>
+                    <TableCell align="right">Ações</TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Card>
-      )}
-      
+                </TableHead>
+                <TableBody>
+                  {categorias?.map((categoria: any) => (
+                    <TableRow key={categoria.id}>
+                      <TableCell>
+                        <Box sx={{ fontWeight: 600 }}>{categoria.nome}</Box>
+                      </TableCell>
+                      <TableCell>{categoria.descricao || '-'}</TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Editar">
+                          <IconButton size="small" onClick={() => handleEditarCategoria(categoria)}>
+                            <Edit fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Excluir">
+                          <IconButton size="small" color="error" onClick={() => handleDeletarCategoria(categoria)}>
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {(!categorias || categorias.length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={3} align="center" sx={{ py: 8 }}>
+                        <EmptyState
+                          icon={<Label />}
+                          title="Nenhuma categoria cadastrada"
+                          description="Cadastre categorias para organizar seus produtos"
+                          action={{ label: 'Cadastrar Categoria', onClick: handleNovaCategoria }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Card>
+        )
+      }
+
       {/* Dialog Novo Produto */}
       <Dialog open={dialogNovo} onClose={() => setDialogNovo(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Novo Produto</DialogTitle>
@@ -1002,7 +1017,7 @@ export default function ProdutosPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog Editar Produto */}
       <Dialog open={dialogEditar} onClose={() => setDialogEditar(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Editar Produto</DialogTitle>
@@ -1085,7 +1100,7 @@ export default function ProdutosPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog Detalhes do Produto */}
       <Dialog open={dialogDetalhes} onClose={() => setDialogDetalhes(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Detalhes do Produto</DialogTitle>
@@ -1149,7 +1164,7 @@ export default function ProdutosPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog Nova Cor */}
       <Dialog open={dialogNovaCor} onClose={() => setDialogNovaCor(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Nova Cor</DialogTitle>
@@ -1180,7 +1195,7 @@ export default function ProdutosPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog Editar Cor */}
       <Dialog open={dialogEditarCor} onClose={() => setDialogEditarCor(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Editar Cor</DialogTitle>
@@ -1211,7 +1226,7 @@ export default function ProdutosPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog Nova Categoria */}
       <Dialog open={dialogNovaCategoria} onClose={() => setDialogNovaCategoria(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Nova Categoria</DialogTitle>
@@ -1242,7 +1257,7 @@ export default function ProdutosPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog Editar Categoria */}
       <Dialog open={dialogEditarCategoria} onClose={() => setDialogEditarCategoria(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Editar Categoria</DialogTitle>
@@ -1273,7 +1288,7 @@ export default function ProdutosPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Confirm Dialog */}
       <ConfirmDialog
         open={confirmDialog.open}
@@ -1285,6 +1300,6 @@ export default function ProdutosPage() {
         cancelText="Cancelar"
         severity="warning"
       />
-    </AppLayout>
+    </AppLayout >
   );
 }

@@ -29,7 +29,10 @@ import {
   Switch,
   Divider,
   useMediaQuery,
+  Breadcrumbs,
+  Link,
   useTheme,
+  Typography,
 } from '@mui/material';
 import {
   Search,
@@ -45,12 +48,16 @@ import {
   ShoppingCart,
   Email,
   History,
+  NavigateNext,
   OpenInNew,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import MaskedInput from '@/components/common/MaskedInput';
+import LoadingSkeleton from '@/components/common/LoadingSkeleton';
+import StatusBadge from '@/components/common/StatusBadge';
 import { trpc } from '@/lib/trpc/client';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -63,7 +70,7 @@ export default function ClientesPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [search, setSearch] = useState('');
-  
+
   // Dialogs
   const [dialogNovo, setDialogNovo] = useState(false);
   const [dialogEditar, setDialogEditar] = useState(false);
@@ -77,15 +84,15 @@ export default function ClientesPage() {
     title: string;
     message: string;
     onConfirm: () => void;
-  }>({ open: false, title: '', message: '', onConfirm: () => {} });
-  
+  }>({ open: false, title: '', message: '', onConfirm: () => { } });
+
   // Formulário
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
   const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
   const [ativo, setAtivo] = useState(true);
-  
+
   // Campos de endereço
   const [logradouro, setLogradouro] = useState('');
   const [numero, setNumero] = useState('');
@@ -94,16 +101,17 @@ export default function ClientesPage() {
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
   const [cep, setCep] = useState('');
+  const [loadingEndereco, setLoadingEndereco] = useState(false);
 
   const { data, isLoading } = trpc.clientes.list.useQuery({
     limit: rowsPerPage,
     offset: page * rowsPerPage,
     search: search || undefined,
   });
-  
+
   // Query para estatísticas
   const { data: stats } = trpc.clientes.stats.useQuery();
-  
+
   // Query para pedidos do cliente (só busca quando dialog está aberto)
   const { data: pedidosCliente, isLoading: loadingPedidos } = trpc.pedidos.listByCliente.useQuery(
     { clienteId: clienteHistorico?.id || '' },
@@ -112,7 +120,7 @@ export default function ClientesPage() {
 
   const clientes = data?.clientes || [];
   const total = data?.total || 0;
-  
+
   // Mutations
   const utils = trpc.useUtils();
   const criarMutation = trpc.clientes.create.useMutation({
@@ -152,7 +160,7 @@ export default function ClientesPage() {
       currency: 'BRL',
     }).format(value);
   };
-  
+
   const limparFormulario = () => {
     setNome('');
     setCpf('');
@@ -167,12 +175,12 @@ export default function ClientesPage() {
     setEstado('');
     setCep('');
   };
-  
+
   const handleNovoCliente = () => {
     limparFormulario();
     setDialogNovo(true);
   };
-  
+
   const handleEditarCliente = (cliente: any) => {
     setClienteEditando(cliente);
     setNome(cliente.nome);
@@ -180,14 +188,15 @@ export default function ClientesPage() {
     setTelefone(cliente.telefone || '');
     setEmail(cliente.email || '');
     setAtivo(cliente.ativo);
-    
+
     // Buscar endereço do cliente via query separada
     buscarEnderecoCliente(cliente.id);
-    
+
     setDialogEditar(true);
   };
-  
+
   const buscarEnderecoCliente = async (clienteId: string) => {
+    setLoadingEndereco(true);
     try {
       const clienteCompleto = await utils.clientes.getById.fetch({ id: clienteId });
       if (clienteCompleto?.enderecos && Array.isArray(clienteCompleto.enderecos) && clienteCompleto.enderecos.length > 0) {
@@ -220,39 +229,57 @@ export default function ClientesPage() {
       setCidade('');
       setEstado('');
       setCep('');
+    } finally {
+      setLoadingEndereco(false);
     }
   };
-  
+
   const handleVisualizarCliente = (cliente: any) => {
     setClienteDetalhes(cliente);
     setDialogDetalhes(true);
   };
-  
+
   const handleHistoricoPedidos = (cliente: any) => {
     setClienteHistorico(cliente);
     setDialogHistorico(true);
   };
-  
+
   const handleVerPedido = (pedidoId: string) => {
     router.push(`/pedidos?id=${pedidoId}`);
   };
-  
+
   const handleSalvarNovo = async () => {
     if (!nome.trim()) {
       toast.error('Nome é obrigatório');
       return;
     }
-    
+
     const toastId = toast.loading('Criando cliente...');
     try {
-      await criarMutation.mutateAsync({
+      const novoClienteData: any = {
         nome: nome.trim(),
         cpf: cpf.trim() || undefined,
         telefone: telefone.trim() || undefined,
         email: email.trim() || undefined,
         ativo: ativo,
-      });
-      
+      };
+
+      // Adicionar endereço se houver dados preenchidos
+      if (logradouro.trim()) {
+        novoClienteData.endereco = {
+          logradouro: logradouro.trim(),
+          numero: numero.trim() || undefined,
+          complemento: complemento.trim() || undefined,
+          bairro: bairro.trim() || undefined,
+          cidade: cidade.trim() || undefined,
+          estado: estado.trim() || undefined,
+          cep: cep.trim() || undefined,
+          principal: true,
+        };
+      }
+
+      await criarMutation.mutateAsync(novoClienteData);
+
       toast.success('Cliente criado com sucesso!', { id: toastId });
       setDialogNovo(false);
       limparFormulario();
@@ -260,13 +287,13 @@ export default function ClientesPage() {
       toast.error(error?.message || 'Erro ao criar cliente', { id: toastId });
     }
   };
-  
+
   const handleSalvarEdicao = async () => {
     if (!nome.trim()) {
       toast.error('Nome é obrigatório');
       return;
     }
-    
+
     const toastId = toast.loading('Atualizando cliente...');
     try {
       const updateData: any = {
@@ -277,7 +304,7 @@ export default function ClientesPage() {
         email: email.trim() || undefined,
         ativo: ativo,
       };
-      
+
       // Adicionar endereço se houver dados preenchidos
       if (logradouro.trim()) {
         updateData.endereco = {
@@ -291,9 +318,9 @@ export default function ClientesPage() {
           principal: true,
         };
       }
-      
+
       await atualizarMutation.mutateAsync(updateData);
-      
+
       toast.success('Cliente atualizado com sucesso!', { id: toastId });
       setDialogEditar(false);
       setClienteEditando(null);
@@ -302,7 +329,7 @@ export default function ClientesPage() {
       toast.error(error?.message || 'Erro ao atualizar cliente', { id: toastId });
     }
   };
-  
+
   const handleDeletarCliente = (cliente: any) => {
     setConfirmDialog({
       open: true,
@@ -323,20 +350,24 @@ export default function ClientesPage() {
 
   return (
     <AppLayout>
-      <PageHeader
-        title="Clientes"
-        subtitle={`${total} clientes cadastrados`}
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/' },
-          { label: 'Clientes' },
-        ]}
-        action={{
-          label: 'Novo Cliente',
-          icon: <Add />,
-          onClick: handleNovoCliente,
-        }}
-      />
-      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+          <Link underline="hover" color="inherit" href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            Dashboard
+          </Link>
+          <Typography color="text.primary">Clientes</Typography>
+        </Breadcrumbs>
+
+        <Button
+          variant="contained"
+          startIcon={<Add />}
+          onClick={handleNovoCliente}
+          size="large"
+        >
+          Novo Cliente
+        </Button>
+      </Box>
+
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={6} md={3}>
@@ -422,8 +453,8 @@ export default function ClientesPage() {
 
         {/* Tabela */}
         {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress />
+          <Box sx={{ p: 2 }}>
+            <LoadingSkeleton type="table" rows={5} />
           </Box>
         ) : clientes.length === 0 ? (
           <EmptyState
@@ -437,9 +468,9 @@ export default function ClientesPage() {
             action={
               !search
                 ? {
-                    label: 'Cadastrar Cliente',
-                    onClick: handleNovoCliente,
-                  }
+                  label: 'Cadastrar Cliente',
+                  onClick: handleNovoCliente,
+                }
                 : undefined
             }
           />
@@ -511,11 +542,8 @@ export default function ClientesPage() {
                         </Box>
                       </TableCell>
                       <TableCell align="center">
-                        <Chip
-                          label={cliente.ativo ? 'Ativo' : 'Inativo'}
-                          size="small"
-                          color={cliente.ativo ? 'success' : 'default'}
-                          sx={{ fontWeight: 600 }}
+                        <StatusBadge
+                          status={cliente.ativo ? 'ATIVO' : 'INATIVO'}
                         />
                       </TableCell>
                       <TableCell align="right">
@@ -596,7 +624,7 @@ export default function ClientesPage() {
           </>
         )}
       </Card>
-      
+
       {/* Dialog Novo Cliente */}
       <Dialog open={dialogNovo} onClose={() => setDialogNovo(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Novo Cliente</DialogTitle>
@@ -611,17 +639,19 @@ export default function ClientesPage() {
               autoFocus
               placeholder="Ex: João Silva"
             />
-            <TextField
+            <MaskedInput
+              maskType="cpf"
               label="CPF"
               value={cpf}
-              onChange={(e) => setCpf(e.target.value)}
+              onChange={(val) => setCpf(val)}
               fullWidth
               placeholder="000.000.000-00"
             />
-            <TextField
+            <MaskedInput
+              maskType="phone"
               label="Telefone"
               value={telefone}
-              onChange={(e) => setTelefone(e.target.value)}
+              onChange={(val) => setTelefone(val)}
               fullWidth
               placeholder="(00) 00000-0000"
             />
@@ -637,61 +667,11 @@ export default function ClientesPage() {
               control={<Switch checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />}
               label="Cliente Ativo"
             />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogNovo(false)}>Cancelar</Button>
-          <Button onClick={handleSalvarNovo} variant="contained" disabled={criarMutation.isPending}>
-            {criarMutation.isPending ? 'Salvando...' : 'Salvar'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog Editar Cliente */}
-      <Dialog open={dialogEditar} onClose={() => setDialogEditar(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
-        <DialogTitle>Editar Cliente</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <TextField
-              label="Nome Completo"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              fullWidth
-              required
-              autoFocus
-              placeholder="Ex: João Silva"
-            />
-            <TextField
-              label="CPF"
-              value={cpf}
-              onChange={(e) => setCpf(e.target.value)}
-              fullWidth
-              placeholder="000.000.000-00"
-            />
-            <TextField
-              label="Telefone"
-              value={telefone}
-              onChange={(e) => setTelefone(e.target.value)}
-              fullWidth
-              placeholder="(00) 00000-0000"
-            />
-            <TextField
-              label="E-mail"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              fullWidth
-              type="email"
-              placeholder="email@exemplo.com"
-            />
-            <FormControlLabel
-              control={<Switch checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />}
-              label="Cliente Ativo"
-            />
-            
+
             <Divider sx={{ my: 2 }}>
               <Chip label="Endereço" size="small" />
             </Divider>
-            
+
             <TextField
               label="Logradouro"
               value={logradouro}
@@ -699,7 +679,7 @@ export default function ClientesPage() {
               fullWidth
               placeholder="Ex: Rua das Flores"
             />
-            
+
             <Grid container spacing={2}>
               <Grid item xs={4}>
                 <TextField
@@ -720,7 +700,7 @@ export default function ClientesPage() {
                 />
               </Grid>
             </Grid>
-            
+
             <Grid container spacing={2}>
               <Grid item xs={6}>
                 <TextField
@@ -732,16 +712,17 @@ export default function ClientesPage() {
                 />
               </Grid>
               <Grid item xs={6}>
-                <TextField
+                <MaskedInput
+                  maskType="cep"
                   label="CEP"
                   value={cep}
-                  onChange={(e) => setCep(e.target.value)}
+                  onChange={(val) => setCep(val)}
                   fullWidth
                   placeholder="00000-000"
                 />
               </Grid>
             </Grid>
-            
+
             <Grid container spacing={2}>
               <Grid item xs={8}>
                 <TextField
@@ -766,13 +747,150 @@ export default function ClientesPage() {
           </Box>
         </DialogContent>
         <DialogActions>
+          <Button onClick={() => setDialogNovo(false)}>Cancelar</Button>
+          <Button onClick={handleSalvarNovo} variant="contained" disabled={criarMutation.isPending}>
+            {criarMutation.isPending ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog Editar Cliente */}
+      <Dialog open={dialogEditar} onClose={() => setDialogEditar(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
+        <DialogTitle>Editar Cliente</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            <TextField
+              label="Nome Completo"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              fullWidth
+              required
+              autoFocus
+              placeholder="Ex: João Silva"
+            />
+            <MaskedInput
+              maskType="cpf"
+              label="CPF"
+              value={cpf}
+              onChange={(val) => setCpf(val)}
+              fullWidth
+              placeholder="000.000.000-00"
+            />
+            <MaskedInput
+              maskType="phone"
+              label="Telefone"
+              value={telefone}
+              onChange={(val) => setTelefone(val)}
+              fullWidth
+              placeholder="(00) 00000-0000"
+            />
+            <TextField
+              label="E-mail"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              fullWidth
+              type="email"
+              placeholder="email@exemplo.com"
+            />
+            <FormControlLabel
+              control={<Switch checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />}
+              label="Cliente Ativo"
+            />
+
+            <Divider sx={{ my: 2 }}>
+              <Chip label="Endereço" size="small" />
+            </Divider>
+
+            {loadingEndereco ? (
+              <Box sx={{ py: 2 }}>
+                <LoadingSkeleton type="form" rows={4} />
+              </Box>
+            ) : (
+              <>
+                <TextField
+                  label="Logradouro"
+                  value={logradouro}
+                  onChange={(e) => setLogradouro(e.target.value)}
+                  fullWidth
+                  placeholder="Ex: Rua das Flores"
+                />
+
+                <Grid container spacing={2}>
+                  <Grid item xs={4}>
+                    <TextField
+                      label="Número"
+                      value={numero}
+                      onChange={(e) => setNumero(e.target.value)}
+                      fullWidth
+                      placeholder="123"
+                    />
+                  </Grid>
+                  <Grid item xs={8}>
+                    <TextField
+                      label="Complemento"
+                      value={complemento}
+                      onChange={(e) => setComplemento(e.target.value)}
+                      fullWidth
+                      placeholder="Apto 45"
+                    />
+                  </Grid>
+                </Grid>
+
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextField
+                      label="Bairro"
+                      value={bairro}
+                      onChange={(e) => setBairro(e.target.value)}
+                      fullWidth
+                      placeholder="Centro"
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <MaskedInput
+                      maskType="cep"
+                      label="CEP"
+                      value={cep}
+                      onChange={(val) => setCep(val)}
+                      fullWidth
+                      placeholder="00000-000"
+                    />
+                  </Grid>
+                </Grid>
+
+                <Grid container spacing={2}>
+                  <Grid item xs={8}>
+                    <TextField
+                      label="Cidade"
+                      value={cidade}
+                      onChange={(e) => setCidade(e.target.value)}
+                      fullWidth
+                      placeholder="São Paulo"
+                    />
+                  </Grid>
+                  <Grid item xs={4}>
+                    <TextField
+                      label="Estado"
+                      value={estado}
+                      onChange={(e) => setEstado(e.target.value)}
+                      fullWidth
+                      placeholder="SP"
+                      inputProps={{ maxLength: 2 }}
+                    />
+                  </Grid>
+                </Grid>
+              </>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
           <Button onClick={() => setDialogEditar(false)}>Cancelar</Button>
           <Button onClick={handleSalvarEdicao} variant="contained" disabled={atualizarMutation.isPending}>
             {atualizarMutation.isPending ? 'Salvando...' : 'Salvar'}
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog Detalhes do Cliente */}
       <Dialog open={dialogDetalhes} onClose={() => setDialogDetalhes(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Detalhes do Cliente</DialogTitle>
@@ -847,7 +965,7 @@ export default function ClientesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog Histórico de Pedidos */}
       <Dialog open={dialogHistorico} onClose={() => setDialogHistorico(false)} maxWidth="md" fullWidth fullScreen={isMobile}>
         <DialogTitle>
@@ -881,9 +999,9 @@ export default function ClientesPage() {
                   {pedidosCliente.map((pedido: any) => (
                     <TableRow key={pedido.id} hover>
                       <TableCell>
-                        <Chip 
-                          label={`#${pedido.numero}`} 
-                          size="small" 
+                        <Chip
+                          label={`#${pedido.numero}`}
+                          size="small"
                           variant="outlined"
                           sx={{ fontFamily: 'monospace', fontWeight: 600 }}
                         />
@@ -897,8 +1015,8 @@ export default function ClientesPage() {
                           size="small"
                           color={
                             pedido.status === 'FINALIZADO' ? 'success' :
-                            pedido.status === 'PENDENTE' ? 'warning' :
-                            pedido.status === 'CANCELADO' ? 'error' : 'default'
+                              pedido.status === 'PENDENTE' ? 'warning' :
+                                pedido.status === 'CANCELADO' ? 'error' : 'default'
                           }
                         />
                       </TableCell>
@@ -929,7 +1047,7 @@ export default function ClientesPage() {
           <Button onClick={() => setDialogHistorico(false)}>Fechar</Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Confirm Dialog */}
       <ConfirmDialog
         open={confirmDialog.open}

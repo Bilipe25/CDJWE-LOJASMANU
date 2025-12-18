@@ -39,9 +39,12 @@ import {
   AccordionSummary,
   AccordionDetails,
   Checkbox,
+  Breadcrumbs,
+  Link,
 } from '@mui/material';
 import {
   Search,
+  NavigateNext,
   Visibility,
   Print,
   ContentCopy,
@@ -65,6 +68,7 @@ import {
   PictureAsPdf,
   Category,
 } from '@mui/icons-material';
+import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/layout/AppLayout';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
@@ -76,18 +80,19 @@ import { format } from 'date-fns';
 import { dateToString } from '@/lib/utils/dateUtils';
 
 export default function SaidasPage() {
+  const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  
+
   // Hook customizado para gerenciar filtros com persistência
-  const { 
-    filtros, 
-    atualizarFiltro, 
+  const {
+    filtros,
+    atualizarFiltro,
     limparFiltros: limparFiltrosHook,
     temFiltrosAtivos,
-    contarFiltrosAtivos 
+    contarFiltrosAtivos
   } = useSaidasFiltros();
-  
+
   // Destructuring dos filtros para facilitar o uso
   const {
     page,
@@ -110,7 +115,7 @@ export default function SaidasPage() {
     message: string;
     onConfirm: () => void;
     severity?: 'warning' | 'error' | 'info' | 'success';
-  }>({ open: false, title: '', message: '', onConfirm: () => {}, severity: 'warning' });
+  }>({ open: false, title: '', message: '', onConfirm: () => { }, severity: 'warning' });
   const [printDialog, setPrintDialog] = useState<{
     open: boolean;
     pedido: any;
@@ -146,25 +151,25 @@ export default function SaidasPage() {
     clienteId: clienteSelecionado?.id,
     formaPagamentoId: formaPagamento || undefined,
   });
-  
+
   // Query de estatísticas - busca com limit menor mas sem outros filtros
   const { data: estatisticasTotais } = trpc.pedidos.list.useQuery({
     limit: 1000,
     offset: 0,
     tipoAtendimento: 'SAIDA',
   });
-  
+
   const { data: clientes } = trpc.clientes.list.useQuery({
     limit: 1000,
     offset: 0,
     // Removido search - filtragem será feita localmente no Autocomplete
   });
-  
+
   const { data: pedidoCompleto, isLoading: loadingDetalhes } = trpc.pedidos.getById.useQuery(
     { id: pedidoDetalhes?.id || '' },
     { enabled: !!pedidoDetalhes?.id }
   );
-  
+
   const cancelarMutation = trpc.pedidos.cancelar.useMutation();
   const finalizarMutation = trpc.pedidos.finalizar.useMutation();
   const duplicarMutation = trpc.pedidos.duplicar.useMutation();
@@ -172,14 +177,14 @@ export default function SaidasPage() {
   const deletarMutation = trpc.pedidos.delete.useMutation();
   const criarClienteMutation = trpc.clientes.create.useMutation();
   const criarPedidoMutation = trpc.pedidos.create.useMutation();
-  
+
   const { data: formasPagamento } = trpc.dominios.formasPagamento.list.useQuery();
   const { data: tiposAtendimento } = trpc.dominios.tiposAtendimento.list.useQuery();
   const { data: configuracoes } = trpc.configuracoes.get.useQuery();
 
   const pedidos = data?.pedidos || [];
   const total = data?.total || 0;
-  
+
   // Usar dados das estatísticas totais (sem filtros de status/data/cliente)
   const todosPedidos = estatisticasTotais?.pedidos || [];
   const totalSaidas = estatisticasTotais?.total || 0;
@@ -226,12 +231,12 @@ export default function SaidasPage() {
 
     return <Chip label={config.label} color={config.color} size="small" sx={{ fontWeight: 600 }} />;
   };
-  
+
   const handleVisualizarPedido = (pedido: any) => {
     setPedidoDetalhes(pedido);
     setDialogDetalhes(true);
   };
-  
+
   const handleEditarPedido = (pedido: any) => {
     setPedidoEditando({
       id: pedido.id,
@@ -245,25 +250,25 @@ export default function SaidasPage() {
     });
     setDialogEditar(true);
   };
-  
+
   const handleSalvarEdicao = async () => {
     if (!pedidoEditando) return;
-    
+
     // Validar valor
     if (!pedidoEditando.valor || pedidoEditando.valor <= 0) {
       toast.error('Por favor, informe o valor da despesa');
       return;
     }
-    
+
     const toastId = toast.loading('Salvando alterações...');
-    
+
     try {
       let clienteIdFinal = pedidoEditando.cliente_id;
-      
+
       // Se foi alterado o nome do destinatário e não tem ID, criar novo
       if (pedidoEditando.destinatario_nome && !pedidoEditando.cliente_id) {
         toast.loading('Criando novo destinatário...', { id: toastId });
-        
+
         try {
           const novoCliente = await criarClienteMutation.mutateAsync({
             nome: pedidoEditando.destinatario_nome,
@@ -273,9 +278,9 @@ export default function SaidasPage() {
           console.error('Erro ao criar destinatário:', error);
         }
       }
-      
+
       toast.loading('Atualizando despesa...', { id: toastId });
-      
+
       await atualizarMutation.mutateAsync({
         id: pedidoEditando.id,
         cliente_id: clienteIdFinal || undefined,
@@ -287,17 +292,17 @@ export default function SaidasPage() {
         data: pedidoEditando.data,
         desconto_valor: 0,
       });
-      
+
       toast.success('Despesa atualizada com sucesso!', { id: toastId });
       setDialogEditar(false);
       setPedidoEditando(null);
-      
+
       setTimeout(() => window.location.reload(), 500);
     } catch (error) {
       toast.error('Erro ao atualizar despesa. Tente novamente.', { id: toastId });
     }
   };
-  
+
   const handleCancelarPedido = async (pedido: any) => {
     setConfirmDialog({
       open: true,
@@ -307,7 +312,7 @@ export default function SaidasPage() {
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Cancelando saída...');
-        
+
         try {
           await cancelarMutation.mutateAsync({ id: pedido.id });
           toast.success(`Saída #${pedido.numero} cancelada com sucesso!`, { id: toastId });
@@ -318,7 +323,7 @@ export default function SaidasPage() {
       },
     });
   };
-  
+
   const handleFinalizarPedido = async (pedido: any) => {
     setConfirmDialog({
       open: true,
@@ -328,7 +333,7 @@ export default function SaidasPage() {
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Finalizando saída...');
-        
+
         try {
           await finalizarMutation.mutateAsync({ id: pedido.id });
           toast.success(`Saída #${pedido.numero} finalizada com sucesso!`, { id: toastId });
@@ -339,7 +344,7 @@ export default function SaidasPage() {
       },
     });
   };
-  
+
   const handleDuplicarPedido = async (pedido: any) => {
     setConfirmDialog({
       open: true,
@@ -349,7 +354,7 @@ export default function SaidasPage() {
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Duplicando saída...');
-        
+
         try {
           await duplicarMutation.mutateAsync({ id: pedido.id });
           toast.success('Saída duplicada com sucesso!', { id: toastId });
@@ -360,7 +365,7 @@ export default function SaidasPage() {
       },
     });
   };
-  
+
   const handleExcluirPedido = async (pedido: any) => {
     setConfirmDialog({
       open: true,
@@ -370,7 +375,7 @@ export default function SaidasPage() {
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Excluindo saída...');
-        
+
         try {
           await deletarMutation.mutateAsync({ id: pedido.id });
           toast.success(`Saída #${pedido.numero} excluída com sucesso!`, { id: toastId });
@@ -381,7 +386,7 @@ export default function SaidasPage() {
       },
     });
   };
-  
+
   const limparFiltros = () => {
     limparFiltrosHook();
   };
@@ -390,7 +395,7 @@ export default function SaidasPage() {
   const handleExportarPDF = async () => {
     try {
       const { exportarSaidasParaPDF } = await import('@/lib/pdf/saidas-export-pdf');
-      
+
       const filtrosTexto: string[] = [];
       if (status) filtrosTexto.push(`Status: ${status}`);
       if (formaPagamento) {
@@ -408,7 +413,7 @@ export default function SaidasPage() {
         configuracoes as any || {},
         filtrosTexto.length > 0 ? filtrosTexto : undefined
       );
-      
+
       toast.success('PDF gerado com sucesso!');
       setDialogExportar(false);
     } catch (error) {
@@ -420,7 +425,7 @@ export default function SaidasPage() {
   const handleExportarExcel = async () => {
     try {
       const { exportarSaidasParaExcel } = await import('@/lib/excel/saidas-export-excel');
-      
+
       const filtrosTexto: string[] = [];
       if (status) filtrosTexto.push(`Status: ${status}`);
       if (formaPagamento) {
@@ -438,7 +443,7 @@ export default function SaidasPage() {
         configuracoes as any || {},
         filtrosTexto.length > 0 ? filtrosTexto : undefined
       );
-      
+
       toast.success('Excel exportado com sucesso!');
       setDialogExportar(false);
     } catch (error) {
@@ -462,27 +467,27 @@ export default function SaidasPage() {
   const desmarcarTodasColunas = () => {
     setColunasExportacao(prev => prev.map(col => ({ ...col, selecionada: false })));
   };
-  
+
   const handleCriarSaida = () => {
     setDialogNovaSaida(true);
   };
-  
+
   const handleSalvarNovaSaida = async () => {
     // Validar valor
     if (!novaSaida.valor || novaSaida.valor <= 0) {
       toast.error('Por favor, informe o valor da despesa');
       return;
     }
-    
+
     const toastId = toast.loading('Criando nova despesa...');
-    
+
     try {
       let clienteIdFinal = novaSaida.cliente_id;
-      
+
       // Se foi digitado um nome novo (não selecionado da lista)
       if (novaSaida.destinatario_nome && !novaSaida.cliente_id) {
         toast.loading('Criando novo destinatário...', { id: toastId });
-        
+
         try {
           const novoCliente = await criarClienteMutation.mutateAsync({
             nome: novaSaida.destinatario_nome,
@@ -493,18 +498,18 @@ export default function SaidasPage() {
           // Continua mesmo se falhar ao criar o destinatário
         }
       }
-      
+
       // Buscar o ID do tipo de atendimento SAIDA
       const tipoSaida = (tiposAtendimento as any)?.find((t: any) => t.tipo === 'SAIDA');
-      
+
       if (!tipoSaida) {
         toast.error('Tipo de atendimento SAÍDA não encontrado', { id: toastId });
         return;
       }
-      
+
       // Criar o pedido (despesa)
       toast.loading('Salvando despesa...', { id: toastId });
-      
+
       await criarPedidoMutation.mutateAsync({
         cliente_id: clienteIdFinal || undefined,
         tipo_atendimento_id: tipoSaida.id,
@@ -515,7 +520,7 @@ export default function SaidasPage() {
         subtotal: novaSaida.valor,
         desconto_valor: 0,
       });
-      
+
       toast.success('Despesa criada com sucesso!', { id: toastId });
       setDialogNovaSaida(false);
       setNovaSaida({
@@ -534,20 +539,23 @@ export default function SaidasPage() {
 
   return (
     <AppLayout>
-      <PageHeader
-        title="Gerenciar Saídas Financeiras"
-        subtitle={`${total} despesas registradas`}
-        breadcrumbs={[
-          { label: 'Início', href: '/' },
-          { label: 'Saídas Financeiras' },
-        ]}
-        action={{
-          label: 'Nova Despesa',
-          onClick: handleCriarSaida,
-          icon: <CallMade />,
-          variant: 'contained',
-        }}
-      />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+          <Link underline="hover" color="inherit" href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            Dashboard
+          </Link>
+          <Typography color="text.primary">Saídas Financeiras</Typography>
+        </Breadcrumbs>
+
+        <Button
+          variant="contained"
+          startIcon={<CallMade />}
+          onClick={handleCriarSaida}
+          size="large"
+        >
+          Nova Despesa
+        </Button>
+      </Box>
 
       {/* Botão de Exportação */}
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
@@ -568,7 +576,7 @@ export default function SaidasPage() {
           Exportar
         </Button>
       </Box>
-      
+
       {/* Cards de Estatísticas - Design Sutil */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={6} md={3}>
@@ -577,61 +585,61 @@ export default function SaidasPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-          <Card
-            variant="outlined"
-            sx={{
-              p: 2.5,
-              height: '100%',
-              position: 'relative',
-              overflow: 'hidden',
-              bgcolor: 'background.paper',
-              transition: 'all 0.3s ease',
-              '&:hover': {
-                transform: 'translateY(-4px)',
-                boxShadow: 3,
-                borderColor: 'error.main',
-              },
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '4px',
-                bgcolor: 'error.main',
-              },
-            }}
-          >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Box>
-                <Typography variant="body2" sx={{ opacity: 0.9, mb: 1 }}>
-                  Total de Despesas
-                </Typography>
-                <Typography variant="h4" fontWeight="bold">
-                  {totalSaidas}
-                </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                  Registradas
-                </Typography>
+            <Card
+              variant="outlined"
+              sx={{
+                p: 2.5,
+                height: '100%',
+                position: 'relative',
+                overflow: 'hidden',
+                bgcolor: 'background.paper',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 3,
+                  borderColor: 'error.main',
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  bgcolor: 'error.main',
+                },
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                  <Typography variant="body2" sx={{ opacity: 0.9, mb: 1 }}>
+                    Total de Despesas
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold">
+                    {totalSaidas}
+                  </Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                    Registradas
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 2,
+                    bgcolor: 'rgba(255,255,255,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <CallMade sx={{ fontSize: { xs: 32, sm: 28 } }} />
+                </Box>
               </Box>
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 2,
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <CallMade sx={{ fontSize: { xs: 32, sm: 28 } }} />
-              </Box>
-            </Box>
-          </Card>
+            </Card>
           </motion.div>
         </Grid>
-        
+
         <Grid item xs={6} sm={6} md={3}>
           <Card
             sx={{
@@ -668,7 +676,7 @@ export default function SaidasPage() {
             </Box>
           </Card>
         </Grid>
-        
+
         <Grid item xs={6} sm={6} md={3}>
           <Card
             sx={{
@@ -705,7 +713,7 @@ export default function SaidasPage() {
             </Box>
           </Card>
         </Grid>
-        
+
         <Grid item xs={6} sm={6} md={3}>
           <Card
             sx={{
@@ -746,20 +754,20 @@ export default function SaidasPage() {
 
       <Card sx={{ overflow: 'hidden', maxWidth: '100%', mb: 3 }}>
         {/* Filtros Avançados com Accordion */}
-        <Accordion 
+        <Accordion
           defaultExpanded={!isMobile}
-          sx={{ 
+          sx={{
             boxShadow: 'none',
             '&:before': { display: 'none' },
             borderBottom: '1px solid',
             borderColor: 'divider'
           }}
         >
-          <AccordionSummary 
+          <AccordionSummary
             expandIcon={<ExpandMore />}
-            sx={{ 
+            sx={{
               px: 3,
-              '& .MuiAccordionSummary-content': { 
+              '& .MuiAccordionSummary-content': {
                 alignItems: 'center',
                 gap: 1,
                 my: 2
@@ -769,18 +777,18 @@ export default function SaidasPage() {
             <FilterList color="primary" />
             <Typography variant="h6" fontWeight="bold">
               Filtros {temFiltrosAtivos && (
-                <Chip 
-                  label={contarFiltrosAtivos} 
-                  size="small" 
-                  color="primary" 
-                  sx={{ ml: 1 }} 
+                <Chip
+                  label={contarFiltrosAtivos}
+                  size="small"
+                  color="primary"
+                  sx={{ ml: 1 }}
                 />
               )}
             </Typography>
             <Tooltip title="Limpar todos os filtros">
-              <Button 
-                size="small" 
-                onClick={(e) => { e.stopPropagation(); limparFiltros(); }} 
+              <Button
+                size="small"
+                onClick={(e) => { e.stopPropagation(); limparFiltros(); }}
                 sx={{ ml: 'auto' }}
                 disabled={!temFiltrosAtivos}
                 variant={temFiltrosAtivos ? "contained" : "outlined"}
@@ -790,135 +798,135 @@ export default function SaidasPage() {
               </Button>
             </Tooltip>
           </AccordionSummary>
-          
-          <AccordionDetails sx={{ px: 3, pb: 3 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                fullWidth
-                placeholder="Buscar por número..."
-                value={search}
-                onChange={(e) => atualizarFiltro('search', e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={status}
-                  label="Status"
-                  onChange={(e) => atualizarFiltro('status', e.target.value)}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="PENDENTE">Pendente</MenuItem>
-                  <MenuItem value="CONFIRMADO">Confirmado</MenuItem>
-                  <MenuItem value="FINALIZADO">Finalizado</MenuItem>
-                  <MenuItem value="CANCELADO">Cancelado</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
 
-            <Grid item xs={12} sm={6} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Forma Pgto.</InputLabel>
-                <Select
-                  value={formaPagamento}
-                  label="Forma Pgto."
-                  onChange={(e) => atualizarFiltro('formaPagamento', e.target.value)}
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  {(formasPagamento as any)?.map((forma: any) => (
-                    <MenuItem key={forma.id} value={forma.id}>
-                      {forma.nome}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+          <AccordionDetails sx={{ px: 3, pb: 3 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  fullWidth
+                  placeholder="Buscar por número..."
+                  value={search}
+                  onChange={(e) => atualizarFiltro('search', e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={2}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={status}
+                    label="Status"
+                    onChange={(e) => atualizarFiltro('status', e.target.value)}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    <MenuItem value="PENDENTE">Pendente</MenuItem>
+                    <MenuItem value="CONFIRMADO">Confirmado</MenuItem>
+                    <MenuItem value="FINALIZADO">Finalizado</MenuItem>
+                    <MenuItem value="CANCELADO">Cancelado</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={2}>
+                <FormControl fullWidth>
+                  <InputLabel>Forma Pgto.</InputLabel>
+                  <Select
+                    value={formaPagamento}
+                    label="Forma Pgto."
+                    onChange={(e) => atualizarFiltro('formaPagamento', e.target.value)}
+                  >
+                    <MenuItem value="">Todas</MenuItem>
+                    {(formasPagamento as any)?.map((forma: any) => (
+                      <MenuItem key={forma.id} value={forma.id}>
+                        {forma.nome}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Data Início"
+                  value={dataInicio}
+                  onChange={(e) => atualizarFiltro('dataInicio', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <CalendarToday fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={6} sm={6} md={2}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Data Fim"
+                  value={dataFim}
+                  onChange={(e) => atualizarFiltro('dataFim', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <Autocomplete
+                  options={
+                    // Remover duplicatas e garantir lista única por ID
+                    Array.from(
+                      new Map(
+                        ((clientes as any)?.clientes || []).map((c: any) => [c.id, c])
+                      ).values()
+                    )
+                  }
+                  getOptionLabel={(option: any) => option.nome || ''}
+                  filterOptions={(options, { inputValue }) => {
+                    // Filtra localmente - muito mais rápido!
+                    if (!inputValue) return options;
+                    const searchLower = inputValue.toLowerCase();
+                    return options.filter((option: any) =>
+                      option.nome?.toLowerCase().includes(searchLower) ||
+                      option.cpf?.toLowerCase().includes(searchLower) ||
+                      option.telefone?.toLowerCase().includes(searchLower)
+                    );
+                  }}
+                  value={clienteSelecionado}
+                  onChange={(_, newValue) => atualizarFiltro('clienteSelecionado', newValue)}
+                  loading={false}
+                  noOptionsText="Nenhum fornecedor encontrado"
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Fornecedor/Destinatário"
+                      placeholder="Filtrar por fornecedor ou destinatário"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <InputAdornment position="start">
+                              <Person />
+                            </InputAdornment>
+                            {params.InputProps.startAdornment}
+                          </>
+                        ),
+                      }}
+                    />
+                  )}
+                />
+              </Grid>
             </Grid>
-            
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Data Início"
-                value={dataInicio}
-                onChange={(e) => atualizarFiltro('dataInicio', e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <CalendarToday fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            
-            <Grid item xs={6} sm={6} md={2}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Data Fim"
-                value={dataFim}
-                onChange={(e) => atualizarFiltro('dataFim', e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={3}>
-              <Autocomplete
-                options={
-                  // Remover duplicatas e garantir lista única por ID
-                  Array.from(
-                    new Map(
-                      ((clientes as any)?.clientes || []).map((c: any) => [c.id, c])
-                    ).values()
-                  )
-                }
-                getOptionLabel={(option: any) => option.nome || ''}
-                filterOptions={(options, { inputValue }) => {
-                  // Filtra localmente - muito mais rápido!
-                  if (!inputValue) return options;
-                  const searchLower = inputValue.toLowerCase();
-                  return options.filter((option: any) => 
-                    option.nome?.toLowerCase().includes(searchLower) ||
-                    option.cpf?.toLowerCase().includes(searchLower) ||
-                    option.telefone?.toLowerCase().includes(searchLower)
-                  );
-                }}
-                value={clienteSelecionado}
-                onChange={(_, newValue) => atualizarFiltro('clienteSelecionado', newValue)}
-                loading={false}
-                noOptionsText="Nenhum fornecedor encontrado"
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Fornecedor/Destinatário"
-                    placeholder="Filtrar por fornecedor ou destinatário"
-                    InputProps={{
-                      ...params.InputProps,
-                      startAdornment: (
-                        <>
-                          <InputAdornment position="start">
-                            <Person />
-                          </InputAdornment>
-                          {params.InputProps.startAdornment}
-                        </>
-                      ),
-                    }}
-                  />
-                )}
-              />
-            </Grid>
-          </Grid>
           </AccordionDetails>
         </Accordion>
       </Card>
@@ -997,7 +1005,7 @@ export default function SaidasPage() {
                             variant="outlined"
                             color="default"
                             icon={<AttachMoney />}
-                            sx={{ 
+                            sx={{
                               maxWidth: '130px',
                               '& .MuiChip-label': {
                                 overflow: 'hidden',
@@ -1129,7 +1137,7 @@ export default function SaidasPage() {
         confirmText="Confirmar"
         cancelText="Cancelar"
       />
-      
+
       {/* Dialog de Impressão */}
       <PrintConfirmDialog
         open={printDialog.open}
@@ -1147,12 +1155,12 @@ export default function SaidasPage() {
         title="Imprimir Saída"
         subtitle={printDialog.pedido ? `Saída #${printDialog.pedido.numero}` : ''}
       />
-      
+
       {/* Dialog de Detalhes da Saída */}
-      <Dialog 
-        open={dialogDetalhes} 
-        onClose={() => setDialogDetalhes(false)} 
-        maxWidth="md" 
+      <Dialog
+        open={dialogDetalhes}
+        onClose={() => setDialogDetalhes(false)}
+        maxWidth="md"
         fullWidth
         fullScreen={isMobile}
       >
@@ -1167,7 +1175,7 @@ export default function SaidasPage() {
             <Close />
           </IconButton>
         </DialogTitle>
-        
+
         <DialogContent>
           {loadingDetalhes ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
@@ -1202,7 +1210,7 @@ export default function SaidasPage() {
                   </Card>
                 </Grid>
               </Grid>
-              
+
               {/* Valores */}
               <Card variant="outlined" sx={{ p: 2, mb: 3, bgcolor: 'error.50' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1212,7 +1220,7 @@ export default function SaidasPage() {
                   </Typography>
                 </Box>
               </Card>
-              
+
               {/* Observações */}
               {pedidoCompleto.observacao && (
                 <Card variant="outlined" sx={{ p: 2 }}>
@@ -1227,57 +1235,57 @@ export default function SaidasPage() {
             <Alert severity="error">Erro ao carregar detalhes da despesa</Alert>
           )}
         </DialogContent>
-        
+
         <DialogActions sx={{ p: 3, justifyContent: 'space-between' }}>
           <Button onClick={() => setDialogDetalhes(false)} variant="outlined">
             Fechar
           </Button>
-          
+
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button 
+            <Button
               onClick={() => {
                 setPrintDialog({ open: true, pedido: pedidoDetalhes });
                 setDialogDetalhes(false);
-              }} 
+              }}
               variant="outlined"
               color="primary"
               startIcon={<Print />}
             >
               Imprimir
             </Button>
-            
+
             {pedidoDetalhes?.status !== 'CANCELADO' && (
-              <Button 
+              <Button
                 onClick={() => {
                   handleEditarPedido(pedidoDetalhes);
                   setDialogDetalhes(false);
-                }} 
+                }}
                 variant="outlined"
                 startIcon={<Edit />}
               >
                 Editar
               </Button>
             )}
-            
+
             {pedidoDetalhes?.status === 'PENDENTE' && (
               <>
-                <Button 
+                <Button
                   onClick={() => {
                     handleFinalizarPedido(pedidoDetalhes);
                     setDialogDetalhes(false);
-                  }} 
-                  variant="contained" 
+                  }}
+                  variant="contained"
                   color="success"
                   startIcon={<CheckCircle />}
                 >
                   Finalizar
                 </Button>
-                <Button 
+                <Button
                   onClick={() => {
                     handleCancelarPedido(pedidoDetalhes);
                     setDialogDetalhes(false);
-                  }} 
-                  variant="outlined" 
+                  }}
+                  variant="outlined"
                   color="error"
                   startIcon={<Cancel />}
                 >
@@ -1285,13 +1293,13 @@ export default function SaidasPage() {
                 </Button>
               </>
             )}
-            
-            <Button 
+
+            <Button
               onClick={() => {
                 handleExcluirPedido(pedidoDetalhes);
                 setDialogDetalhes(false);
-              }} 
-              variant="outlined" 
+              }}
+              variant="outlined"
               color="error"
               startIcon={<Delete />}
             >
@@ -1300,12 +1308,12 @@ export default function SaidasPage() {
           </Box>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog de Edição */}
-      <Dialog 
-        open={dialogEditar} 
-        onClose={() => setDialogEditar(false)} 
-        maxWidth="sm" 
+      <Dialog
+        open={dialogEditar}
+        onClose={() => setDialogEditar(false)}
+        maxWidth="sm"
         fullWidth
         fullScreen={isMobile}
       >
@@ -1320,7 +1328,7 @@ export default function SaidasPage() {
             <Close />
           </IconButton>
         </DialogTitle>
-        
+
         <DialogContent>
           {pedidoEditando && (
             <Box sx={{ pt: 2 }}>
@@ -1345,7 +1353,7 @@ export default function SaidasPage() {
                       // Filtra localmente - muito mais rápido!
                       if (!inputValue) return options;
                       const searchLower = inputValue.toLowerCase();
-                      return options.filter((option: any) => 
+                      return options.filter((option: any) =>
                         option.nome?.toLowerCase().includes(searchLower) ||
                         option.cpf?.toLowerCase().includes(searchLower) ||
                         option.telefone?.toLowerCase().includes(searchLower)
@@ -1354,29 +1362,29 @@ export default function SaidasPage() {
                     value={pedidoEditando.destinatario_nome}
                     onChange={(_, newValue) => {
                       if (typeof newValue === 'string') {
-                        setPedidoEditando({ 
-                          ...pedidoEditando, 
+                        setPedidoEditando({
+                          ...pedidoEditando,
                           destinatario_nome: newValue,
                           cliente_id: ''
                         });
                       } else if (newValue) {
-                        setPedidoEditando({ 
-                          ...pedidoEditando, 
+                        setPedidoEditando({
+                          ...pedidoEditando,
                           destinatario_nome: (newValue as any).nome || '',
                           cliente_id: (newValue as any).id || ''
                         });
                       } else {
-                        setPedidoEditando({ 
-                          ...pedidoEditando, 
+                        setPedidoEditando({
+                          ...pedidoEditando,
                           destinatario_nome: '',
                           cliente_id: ''
                         });
                       }
                     }}
                     onInputChange={(_, newInputValue) => {
-                      setPedidoEditando({ 
-                        ...pedidoEditando, 
-                        destinatario_nome: newInputValue 
+                      setPedidoEditando({
+                        ...pedidoEditando,
+                        destinatario_nome: newInputValue
                       });
                     }}
                     loading={false}
@@ -1401,7 +1409,7 @@ export default function SaidasPage() {
                     )}
                   />
                 </Grid>
-                
+
                 {/* Data */}
                 <Grid item xs={12} md={6}>
                   <TextField
@@ -1409,9 +1417,9 @@ export default function SaidasPage() {
                     label="Data da Despesa"
                     type="date"
                     value={pedidoEditando.data}
-                    onChange={(e) => setPedidoEditando({ 
-                      ...pedidoEditando, 
-                      data: e.target.value 
+                    onChange={(e) => setPedidoEditando({
+                      ...pedidoEditando,
+                      data: e.target.value
                     })}
                     InputLabelProps={{ shrink: true }}
                     InputProps={{
@@ -1423,7 +1431,7 @@ export default function SaidasPage() {
                     }}
                   />
                 </Grid>
-                
+
                 {/* Valor */}
                 <Grid item xs={12} md={6}>
                   <TextField
@@ -1432,9 +1440,9 @@ export default function SaidasPage() {
                     type="number"
                     required
                     value={pedidoEditando.valor}
-                    onChange={(e) => setPedidoEditando({ 
-                      ...pedidoEditando, 
-                      valor: parseFloat(e.target.value) || 0 
+                    onChange={(e) => setPedidoEditando({
+                      ...pedidoEditando,
+                      valor: parseFloat(e.target.value) || 0
                     })}
                     InputProps={{
                       startAdornment: (
@@ -1446,7 +1454,7 @@ export default function SaidasPage() {
                     error={pedidoEditando.valor <= 0}
                   />
                 </Grid>
-                
+
                 {/* Forma de Pagamento */}
                 <Grid item xs={12}>
                   <FormControl fullWidth>
@@ -1454,9 +1462,9 @@ export default function SaidasPage() {
                     <Select
                       value={pedidoEditando.forma_pagamento_id || ''}
                       label="Forma de Pagamento"
-                      onChange={(e) => setPedidoEditando({ 
-                        ...pedidoEditando, 
-                        forma_pagamento_id: e.target.value 
+                      onChange={(e) => setPedidoEditando({
+                        ...pedidoEditando,
+                        forma_pagamento_id: e.target.value
                       })}
                     >
                       <MenuItem value="">Nenhuma</MenuItem>
@@ -1468,7 +1476,7 @@ export default function SaidasPage() {
                     </Select>
                   </FormControl>
                 </Grid>
-                
+
                 {/* Status */}
                 <Grid item xs={12}>
                   <FormControl fullWidth>
@@ -1476,9 +1484,9 @@ export default function SaidasPage() {
                     <Select
                       value={pedidoEditando.status || 'PENDENTE'}
                       label="Status"
-                      onChange={(e) => setPedidoEditando({ 
-                        ...pedidoEditando, 
-                        status: e.target.value 
+                      onChange={(e) => setPedidoEditando({
+                        ...pedidoEditando,
+                        status: e.target.value
                       })}
                     >
                       <MenuItem value="PENDENTE">Pendente</MenuItem>
@@ -1488,7 +1496,7 @@ export default function SaidasPage() {
                     </Select>
                   </FormControl>
                 </Grid>
-                
+
                 {/* Observações */}
                 <Grid item xs={12}>
                   <TextField
@@ -1497,9 +1505,9 @@ export default function SaidasPage() {
                     rows={4}
                     label="Observações"
                     value={pedidoEditando.observacao}
-                    onChange={(e) => setPedidoEditando({ 
-                      ...pedidoEditando, 
-                      observacao: e.target.value 
+                    onChange={(e) => setPedidoEditando({
+                      ...pedidoEditando,
+                      observacao: e.target.value
                     })}
                     InputProps={{
                       startAdornment: (
@@ -1514,16 +1522,16 @@ export default function SaidasPage() {
             </Box>
           )}
         </DialogContent>
-        
+
         <DialogActions sx={{ p: 3 }}>
-          <Button 
-            onClick={() => setDialogEditar(false)} 
+          <Button
+            onClick={() => setDialogEditar(false)}
             variant="outlined"
           >
             Cancelar
           </Button>
-          <Button 
-            onClick={handleSalvarEdicao} 
+          <Button
+            onClick={handleSalvarEdicao}
             variant="contained"
             disabled={atualizarMutation.isPending || (pedidoEditando && pedidoEditando.valor <= 0)}
             startIcon={atualizarMutation.isPending ? <CircularProgress size={20} /> : <Check />}
@@ -1534,14 +1542,14 @@ export default function SaidasPage() {
       </Dialog>
 
       {/* Dialog de Exportação Profissional */}
-      <Dialog 
-        open={dialogExportar} 
+      <Dialog
+        open={dialogExportar}
         onClose={() => setDialogExportar(false)}
         maxWidth="sm"
         fullWidth
         fullScreen={isMobile}
       >
-        <DialogTitle sx={{ 
+        <DialogTitle sx={{
           background: 'linear-gradient(135deg, #dc2626 0%, #f97316 100%)',
           color: 'white',
           fontWeight: 'bold',
@@ -1562,16 +1570,16 @@ export default function SaidasPage() {
             </IconButton>
           )}
         </DialogTitle>
-        
+
         <DialogContent sx={{ mt: 2 }}>
           <Typography variant="body2" color="text.secondary" gutterBottom>
             Selecione as colunas que deseja exportar:
           </Typography>
-          
-          <Box sx={{ 
-            mb: 2, 
-            p: 2, 
-            bgcolor: 'grey.50', 
+
+          <Box sx={{
+            mb: 2,
+            p: 2,
+            bgcolor: 'grey.50',
             borderRadius: 1,
             border: '1px solid',
             borderColor: 'grey.200',
@@ -1595,7 +1603,7 @@ export default function SaidasPage() {
                 Desmarcar Todas
               </Button>
             </Box>
-            
+
             <Box display="flex" flexDirection="column" gap={0.5}>
               {colunasExportacao.map((coluna) => (
                 <Box
@@ -1645,25 +1653,25 @@ export default function SaidasPage() {
               <Box display="flex" flexWrap="wrap" gap={0.5}>
                 {status && <Chip label={`Status: ${status}`} size="small" />}
                 {formaPagamento && (
-                  <Chip 
-                    label={`Pagamento: ${(formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome || formaPagamento}`} 
-                    size="small" 
+                  <Chip
+                    label={`Pagamento: ${(formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome || formaPagamento}`}
+                    size="small"
                   />
                 )}
                 {clienteSelecionado && <Chip label={`Destinatário: ${clienteSelecionado.nome}`} size="small" />}
                 {(dataInicio || dataFim) && (
-                  <Chip 
-                    label={`Período: ${dataInicio ? formatDate(dataInicio) : '...'} - ${dataFim ? formatDate(dataFim) : '...'}`} 
-                    size="small" 
+                  <Chip
+                    label={`Período: ${dataInicio ? formatDate(dataInicio) : '...'} - ${dataFim ? formatDate(dataFim) : '...'}`}
+                    size="small"
                   />
                 )}
               </Box>
             </Alert>
           )}
         </DialogContent>
-        
+
         <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button 
+          <Button
             onClick={() => setDialogExportar(false)}
             variant="outlined"
             color="inherit"
@@ -1696,12 +1704,12 @@ export default function SaidasPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog de Nova Saída */}
-      <Dialog 
-        open={dialogNovaSaida} 
-        onClose={() => setDialogNovaSaida(false)} 
-        maxWidth="md" 
+      <Dialog
+        open={dialogNovaSaida}
+        onClose={() => setDialogNovaSaida(false)}
+        maxWidth="md"
         fullWidth
         fullScreen={isMobile}
       >
@@ -1716,18 +1724,18 @@ export default function SaidasPage() {
             <Close />
           </IconButton>
         </DialogTitle>
-        
+
         <DialogContent>
           <Alert severity="info" sx={{ mb: 3 }}>
             Registre uma nova despesa ou gasto financeiro da empresa.
           </Alert>
-          
+
           {novaSaida.destinatario_nome && !novaSaida.cliente_id && (
             <Alert severity="success" sx={{ mb: 3 }}>
               ✨ Novo destinatário "{novaSaida.destinatario_nome}" será criado automaticamente
             </Alert>
           )}
-          
+
           <Grid container spacing={2}>
             {/* Destinatário */}
             <Grid item xs={12}>
@@ -1749,7 +1757,7 @@ export default function SaidasPage() {
                   // Filtra localmente - muito mais rápido!
                   if (!inputValue) return options;
                   const searchLower = inputValue.toLowerCase();
-                  return options.filter((option: any) => 
+                  return options.filter((option: any) =>
                     option.nome?.toLowerCase().includes(searchLower) ||
                     option.cpf?.toLowerCase().includes(searchLower) ||
                     option.telefone?.toLowerCase().includes(searchLower)
@@ -1758,29 +1766,29 @@ export default function SaidasPage() {
                 value={novaSaida.destinatario_nome}
                 onChange={(_, newValue) => {
                   if (typeof newValue === 'string') {
-                    setNovaSaida({ 
-                      ...novaSaida, 
+                    setNovaSaida({
+                      ...novaSaida,
                       destinatario_nome: newValue,
                       cliente_id: ''
                     });
                   } else if (newValue) {
-                    setNovaSaida({ 
-                      ...novaSaida, 
+                    setNovaSaida({
+                      ...novaSaida,
                       destinatario_nome: (newValue as any).nome || '',
                       cliente_id: (newValue as any).id || ''
                     });
                   } else {
-                    setNovaSaida({ 
-                      ...novaSaida, 
+                    setNovaSaida({
+                      ...novaSaida,
                       destinatario_nome: '',
                       cliente_id: ''
                     });
                   }
                 }}
                 onInputChange={(_, newInputValue) => {
-                  setNovaSaida({ 
-                    ...novaSaida, 
-                    destinatario_nome: newInputValue 
+                  setNovaSaida({
+                    ...novaSaida,
+                    destinatario_nome: newInputValue
                   });
                 }}
                 loading={false}
@@ -1806,7 +1814,7 @@ export default function SaidasPage() {
                 )}
               />
             </Grid>
-            
+
             {/* Forma de Pagamento */}
             <Grid item xs={12}>
               <FormControl fullWidth>
@@ -1825,7 +1833,7 @@ export default function SaidasPage() {
                 </Select>
               </FormControl>
             </Grid>
-            
+
             {/* Data da Despesa */}
             <Grid item xs={12} md={6}>
               <TextField
@@ -1846,7 +1854,7 @@ export default function SaidasPage() {
                 helperText="Quando a despesa ocorreu?"
               />
             </Grid>
-            
+
             {/* Valor da Despesa */}
             <Grid item xs={12} md={6}>
               <TextField
@@ -1867,7 +1875,7 @@ export default function SaidasPage() {
                 error={novaSaida.valor <= 0}
               />
             </Grid>
-            
+
             {/* Observações */}
             <Grid item xs={12}>
               <TextField
@@ -1887,21 +1895,21 @@ export default function SaidasPage() {
               />
             </Grid>
           </Grid>
-          
+
           <Alert severity="warning" sx={{ mt: 3 }}>
             Esta saída representa uma despesa financeira da empresa.
           </Alert>
         </DialogContent>
-        
+
         <DialogActions sx={{ p: 3 }}>
-          <Button 
-            onClick={() => setDialogNovaSaida(false)} 
+          <Button
+            onClick={() => setDialogNovaSaida(false)}
             variant="outlined"
           >
             Cancelar
           </Button>
-          <Button 
-            onClick={handleSalvarNovaSaida} 
+          <Button
+            onClick={handleSalvarNovaSaida}
             variant="contained"
             color="error"
             startIcon={<Check />}

@@ -42,9 +42,12 @@ import {
   useMediaQuery,
   useTheme,
   Checkbox,
+  Breadcrumbs,
+  Link,
 } from '@mui/material';
 import {
   Search,
+  NavigateNext,
   Visibility,
   Print,
   ContentCopy,
@@ -76,6 +79,8 @@ import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import PrintConfirmDialog from '@/components/common/PrintConfirmDialog';
+import StatusBadge from '@/components/common/StatusBadge';
+import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import { trpc } from '@/lib/trpc/client';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
@@ -90,17 +95,17 @@ function PedidosPageContent() {
   const utils = trpc.useUtils();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  
+
   // Hook customizado para gerenciar filtros com persistência
-  const { 
-    filtros, 
-    atualizarFiltro, 
-    limparFiltros: limparFiltrosHook, 
+  const {
+    filtros,
+    atualizarFiltro,
+    limparFiltros: limparFiltrosHook,
     getUrlComFiltros,
     temFiltrosAtivos,
-    contarFiltrosAtivos 
+    contarFiltrosAtivos
   } = usePedidosFiltros();
-  
+
   // Destructuring dos filtros para facilitar o uso
   const {
     page,
@@ -125,7 +130,7 @@ function PedidosPageContent() {
     message: string;
     onConfirm: () => void;
     severity?: 'warning' | 'error' | 'info' | 'success';
-  }>({ open: false, title: '', message: '', onConfirm: () => {}, severity: 'warning' });
+  }>({ open: false, title: '', message: '', onConfirm: () => { }, severity: 'warning' });
   const [printDialog, setPrintDialog] = useState<{
     open: boolean;
     pedido: any;
@@ -146,7 +151,7 @@ function PedidosPageContent() {
 
   const searchParams = useSearchParams();
   const pedidoIdUrl = searchParams?.get('id');
-  
+
   // Mostrar toast quando retornar da edição com filtros
   useEffect(() => {
     const voltouDeEdicao = searchParams.get('voltou_edicao') === 'true';
@@ -179,13 +184,13 @@ function PedidosPageContent() {
       staleTime: 5 * 60 * 1000, // Cache de 5 minutos
     }
   );
-  
+
   // Query para buscar pedido específico da URL
   const { data: pedidoUrl, isLoading: loadingPedidoUrl } = trpc.pedidos.getById.useQuery(
     { id: pedidoIdUrl || '' },
     { enabled: !!pedidoIdUrl }
   );
-  
+
   // Abrir dialog automaticamente quando vier da URL
   useEffect(() => {
     if (pedidoUrl && pedidoIdUrl) {
@@ -193,24 +198,24 @@ function PedidosPageContent() {
       setDialogDetalhes(true);
     }
   }, [pedidoUrl, pedidoIdUrl]);
-  
+
   const { data: clientes } = trpc.clientes.list.useQuery({
     limit: 1000,
     offset: 0,
     search: searchCliente || undefined,
   });
-  
+
   const { data: pedidoCompleto, isLoading: loadingDetalhes } = trpc.pedidos.getById.useQuery(
     { id: pedidoDetalhes?.id || '' },
     { enabled: !!pedidoDetalhes?.id }
   );
-  
+
   const cancelarMutation = trpc.pedidos.cancelar.useMutation();
   const finalizarMutation = trpc.pedidos.finalizar.useMutation();
   const duplicarMutation = trpc.pedidos.duplicar.useMutation();
   const atualizarMutation = trpc.pedidos.update.useMutation();
   const deletarMutation = trpc.pedidos.delete.useMutation();
-  
+
   const { data: tiposAtendimento } = trpc.dominios.tiposAtendimento.list.useQuery();
   const { data: formasPagamento } = trpc.dominios.formasPagamento.list.useQuery();
   const { data: configuracoes } = trpc.configuracoes.get.useQuery();
@@ -227,7 +232,7 @@ function PedidosPageContent() {
     totalPedidos: total, // Total de pedidos filtrados
     pedidosPendentes: pedidos.filter((p: any) => p.status === 'PENDENTE').length,
     // Total de vendas: soma de TODOS os pedidos (dados gerais)
-    totalVendas: pedidosGerais.length > 0 
+    totalVendas: pedidosGerais.length > 0
       ? pedidosGerais.reduce((acc: number, p: any) => acc + (p.total || 0), 0)
       : pedidos.reduce((acc: number, p: any) => acc + (p.total || 0), 0), // Fallback para filtrados
     // Pedidos finalizados hoje de TODOS os pedidos
@@ -267,21 +272,7 @@ function PedidosPageContent() {
     }
   };
 
-  const getStatusChip = (status: string | null) => {
-    const statusConfig = {
-      PENDENTE: { label: 'Pendente', color: 'warning' as const },
-      CONFIRMADO: { label: 'Confirmado', color: 'info' as const },
-      FINALIZADO: { label: 'Finalizado', color: 'success' as const },
-      CANCELADO: { label: 'Cancelado', color: 'error' as const },
-    };
 
-    const config = statusConfig[status as keyof typeof statusConfig] || {
-      label: status || 'Desconhecido',
-      color: 'default' as const,
-    };
-
-    return <Chip label={config.label} color={config.color} size="small" sx={{ fontWeight: 600 }} />;
-  };
 
   // Função para atualizar a lista de pedidos sem reload
   const atualizarListaPedidos = async () => {
@@ -291,7 +282,7 @@ function PedidosPageContent() {
   // Função para obter cor do chip de tipo de atendimento
   const getTipoChipColor = (tipo: string | null) => {
     const tipoUpper = tipo?.toUpperCase() || '';
-    
+
     const colorMap: Record<string, 'success' | 'primary' | 'warning' | 'error' | 'info' | 'default'> = {
       'ENTRADA': 'success',
       'SAIDA': 'error',
@@ -302,7 +293,7 @@ function PedidosPageContent() {
 
     return colorMap[tipoUpper] || 'default';
   };
-  
+
   const handleFecharDialogDetalhes = () => {
     setDialogDetalhes(false);
     setPedidoDetalhes(null);
@@ -311,87 +302,109 @@ function PedidosPageContent() {
       router.push('/pedidos');
     }
   };
-  
+
   const handleImprimirPedido = async (pedido: any, acao: 'print' | 'download' = 'print') => {
-    // Buscar endereço do cliente direto do Supabase
-    let enderecoCompleto = '';
-    
-    if (pedido.cliente_id) {
-      try {
-        const supabase = createClient();
-        
-        // Buscar endereços do cliente direto
-        const { data: enderecos, error } = await supabase
-          .from('enderecos')
-          .select('*')
-          .eq('cliente_id', pedido.cliente_id)
-          .order('principal', { ascending: false });
-        
-        if (!error && enderecos && enderecos.length > 0) {
-          // Pegar o primeiro (que é o principal por causa do order)
-          const enderecoPrincipal = enderecos[0];
-          
-          // Montar endereço completo com todos os campos
-          enderecoCompleto = [
-            enderecoPrincipal.logradouro,
-            enderecoPrincipal.numero,
-            enderecoPrincipal.complemento,
-            enderecoPrincipal.bairro,
-            enderecoPrincipal.cidade,
-            enderecoPrincipal.estado,
-            enderecoPrincipal.cep ? `CEP: ${enderecoPrincipal.cep}` : '',
-          ].filter(Boolean).join(', ');
-        }
-      } catch (error) {
-        console.error('Erro ao buscar endereço do cliente:', error);
+    const toastId = toast.loading('Gerando documento...');
+
+    try {
+      // 1. Buscar dados completos do pedido (incluindo itens)
+      const pedidoCompleto = await utils.pedidos.getById.fetch({ id: pedido.id });
+
+      if (!pedidoCompleto) {
+        throw new Error('Pedido não encontrado');
       }
+
+      // 2. Buscar endereço do cliente direto do Supabase
+      let enderecoCompleto = '';
+
+      if (pedidoCompleto.cliente_id) {
+        try {
+          const supabase = createClient();
+
+          // Buscar endereços do cliente direto
+          const { data: enderecos, error } = await supabase
+            .from('enderecos')
+            .select('*')
+            .eq('cliente_id', pedidoCompleto.cliente_id)
+            .order('principal', { ascending: false });
+
+          if (!error && enderecos && enderecos.length > 0) {
+            // Pegar o primeiro (que é o principal por causa do order)
+            const enderecoPrincipal = enderecos[0];
+
+            // Montar endereço completo com todos os campos
+            enderecoCompleto = [
+              enderecoPrincipal.logradouro,
+              enderecoPrincipal.numero,
+              enderecoPrincipal.complemento,
+              enderecoPrincipal.bairro,
+              enderecoPrincipal.cidade,
+              enderecoPrincipal.estado,
+              enderecoPrincipal.cep ? `CEP: ${enderecoPrincipal.cep}` : '',
+            ].filter(Boolean).join(', ');
+          }
+        } catch (error) {
+          console.error('Erro ao buscar endereço do cliente:', error);
+        }
+      }
+
+      const dadosPedido = {
+        numero: pedidoCompleto.numero ?? undefined,
+        data: pedidoCompleto.data || new Date().toISOString(),
+        cliente_nome: pedidoCompleto.cliente_nome ?? undefined,
+        cliente_cpf: pedidoCompleto.cliente_cpf ?? undefined,
+        cliente_telefone: (pedidoCompleto as any).telefone_contato || pedidoCompleto.cliente_telefone || undefined,
+        endereco: enderecoCompleto,
+        tipo_atendimento: pedidoCompleto.tipo_atendimento_nome ?? undefined,
+        forma_pagamento: pedidoCompleto.forma_pagamento_nome ?? undefined,
+        observacoes: pedidoCompleto.observacao ?? undefined,
+        itens: (pedidoCompleto.itens || []).map((item: any) => ({
+          ...item,
+          produto_nome: item.produto_nome || '',
+          cor_descricao: item.cor_descricao || '',
+          cor_codigo: item.cor_codigo || '',
+          categoria_nome: item.categoria_nome || '',
+          cor_linha: item.cor_linha || '',
+        })),
+        subtotal: pedidoCompleto.subtotal || 0,
+        desconto_valor: pedidoCompleto.desconto_valor || 0,
+        total: pedidoCompleto.total || 0,
+      };
+
+      // Montar endereço completo da empresa
+      const enderecoEmpresa = [
+        (configuracoes as any)?.logradouro,
+        (configuracoes as any)?.numero,
+        (configuracoes as any)?.bairro,
+        (configuracoes as any)?.cidade,
+        (configuracoes as any)?.estado,
+        (configuracoes as any)?.cep ? `CEP: ${(configuracoes as any)?.cep}` : '',
+      ].filter(Boolean).join(', ');
+
+      const dadosEmpresa = {
+        nome_empresa: (configuracoes as any)?.nome_empresa,
+        razao_social: (configuracoes as any)?.razao_social,
+        cnpj: (configuracoes as any)?.cnpj,
+        telefone: (configuracoes as any)?.telefone,
+        endereco: enderecoEmpresa || (configuracoes as any)?.endereco,
+        logo_url: (configuracoes as any)?.logo_url,
+        instagram: (configuracoes as any)?.instagram,
+        site: (configuracoes as any)?.site,
+      };
+
+      await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
+      toast.dismiss(toastId);
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar o documento. Tente novamente.', { id: toastId });
     }
-
-    const dadosPedido = {
-      numero: pedido.numero,
-      data: pedido.data,
-      cliente_nome: pedido.cliente_nome,
-      cliente_cpf: pedido.cliente_cpf,
-      cliente_telefone: pedido.telefone_contato || pedido.cliente_telefone,
-      endereco: enderecoCompleto,
-      tipo_atendimento: pedido.tipo_atendimento_nome,
-      forma_pagamento: pedido.forma_pagamento_nome,
-      observacoes: pedido.observacoes,
-      itens: pedido.itens || [],
-      subtotal: pedido.subtotal || 0,
-      desconto_valor: pedido.desconto_valor || 0,
-      total: pedido.total || 0,
-    };
-    
-    // Montar endereço completo da empresa
-    const enderecoEmpresa = [
-      (configuracoes as any)?.logradouro,
-      (configuracoes as any)?.numero,
-      (configuracoes as any)?.bairro,
-      (configuracoes as any)?.cidade,
-      (configuracoes as any)?.estado,
-      (configuracoes as any)?.cep ? `CEP: ${(configuracoes as any)?.cep}` : '',
-    ].filter(Boolean).join(', ');
-
-    const dadosEmpresa = {
-      nome_empresa: (configuracoes as any)?.nome_empresa,
-      razao_social: (configuracoes as any)?.razao_social,
-      cnpj: (configuracoes as any)?.cnpj,
-      telefone: (configuracoes as any)?.telefone,
-      endereco: enderecoEmpresa || (configuracoes as any)?.endereco,
-      logo_url: (configuracoes as any)?.logo_url,
-      instagram: (configuracoes as any)?.instagram,
-      site: (configuracoes as any)?.site,
-    };
-    
-    await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
   };
-  
+
   const handleVisualizarPedido = (pedido: any) => {
     setPedidoDetalhes(pedido);
     setDialogDetalhes(true);
   };
-  
+
   const handleEditarPedido = (pedido: any) => {
     // Redirecionar para PDV com o ID do pedido para edição
     // Salvar URL de retorno com filtros no sessionStorage
@@ -399,12 +412,12 @@ function PedidosPageContent() {
     sessionStorage.setItem('pedidos_url_retorno', urlRetorno);
     router.push(`/pdv?edit=${pedido.id}`);
   };
-  
+
   const handleSalvarEdicao = async () => {
     if (!pedidoEditando) return;
-    
+
     const toastId = toast.loading('Salvando alterações...');
-    
+
     try {
       await atualizarMutation.mutateAsync({
         id: pedidoEditando.id,
@@ -416,18 +429,18 @@ function PedidosPageContent() {
         observacao: pedidoEditando.observacao,
         status: pedidoEditando.status,
       });
-      
+
       toast.success('Pedido atualizado com sucesso!', { id: toastId });
       setDialogEditar(false);
       setPedidoEditando(null);
-      
+
       // Atualizar lista sem reload
       await atualizarListaPedidos();
     } catch (error) {
       toast.error('Erro ao atualizar pedido. Tente novamente.', { id: toastId });
     }
   };
-  
+
   const handleCancelarPedido = async (pedido: any) => {
     setConfirmDialog({
       open: true,
@@ -437,7 +450,7 @@ function PedidosPageContent() {
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Cancelando pedido...');
-        
+
         try {
           await cancelarMutation.mutateAsync({ id: pedido.id });
           toast.success(`Pedido #${pedido.numero} cancelado com sucesso!`, { id: toastId });
@@ -448,7 +461,7 @@ function PedidosPageContent() {
       },
     });
   };
-  
+
   const handleFinalizarPedido = async (pedido: any) => {
     setConfirmDialog({
       open: true,
@@ -458,7 +471,7 @@ function PedidosPageContent() {
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Finalizando pedido...');
-        
+
         try {
           await finalizarMutation.mutateAsync({ id: pedido.id });
           toast.success(`Pedido #${pedido.numero} finalizado com sucesso!`, { id: toastId });
@@ -469,7 +482,7 @@ function PedidosPageContent() {
       },
     });
   };
-  
+
   const handleDuplicarPedido = async (pedido: any) => {
     setConfirmDialog({
       open: true,
@@ -479,7 +492,7 @@ function PedidosPageContent() {
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Duplicando pedido...');
-        
+
         try {
           await duplicarMutation.mutateAsync({ id: pedido.id });
           toast.success('Pedido duplicado com sucesso!', { id: toastId });
@@ -490,7 +503,7 @@ function PedidosPageContent() {
       },
     });
   };
-  
+
   const handleExcluirPedido = async (pedido: any) => {
     setConfirmDialog({
       open: true,
@@ -500,7 +513,7 @@ function PedidosPageContent() {
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Excluindo pedido...');
-        
+
         try {
           await deletarMutation.mutateAsync({ id: pedido.id });
           toast.success(`Pedido #${pedido.numero} excluído com sucesso!`, { id: toastId });
@@ -511,7 +524,7 @@ function PedidosPageContent() {
       },
     });
   };
-  
+
   const limparFiltros = () => {
     limparFiltrosHook();
   };
@@ -520,7 +533,7 @@ function PedidosPageContent() {
   const handleExportarPDF = async () => {
     try {
       const { exportarPedidosParaPDF } = await import('@/lib/pdf/pedidos-export-pdf');
-      
+
       const filtrosTexto: string[] = [];
       if (status) filtrosTexto.push(`Status: ${status}`);
       if (tipoAtendimento) filtrosTexto.push(`Tipo: ${tipoAtendimento}`);
@@ -539,7 +552,7 @@ function PedidosPageContent() {
         configuracoes as any || {},
         filtrosTexto.length > 0 ? filtrosTexto : undefined
       );
-      
+
       toast.success('PDF gerado com sucesso!');
       setDialogExportar(false);
     } catch (error) {
@@ -551,7 +564,7 @@ function PedidosPageContent() {
   const handleExportarExcel = async () => {
     try {
       const { exportarPedidosParaExcel } = await import('@/lib/excel/pedidos-export-excel');
-      
+
       const filtrosTexto: string[] = [];
       if (status) filtrosTexto.push(`Status: ${status}`);
       if (tipoAtendimento) filtrosTexto.push(`Tipo: ${tipoAtendimento}`);
@@ -570,7 +583,7 @@ function PedidosPageContent() {
         configuracoes as any || {},
         filtrosTexto.length > 0 ? filtrosTexto : undefined
       );
-      
+
       toast.success('Excel exportado com sucesso!');
       setDialogExportar(false);
     } catch (error) {
@@ -612,20 +625,22 @@ function PedidosPageContent() {
 
   return (
     <AppLayout>
-      <PageHeader
-        title="Pedidos"
-        subtitle={`${total} pedidos registrados`}
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/' },
-          { label: 'Pedidos' },
-        ]}
-        action={{
-          label: 'Exportar',
-          onClick: () => setDialogExportar(true),
-          icon: <FileDownload />,
-          variant: 'contained',
-        }}
-      />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+          <Link underline="hover" color="inherit" href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            Dashboard
+          </Link>
+          <Typography color="text.primary">Pedidos</Typography>
+        </Breadcrumbs>
+
+        <Button
+          variant="contained"
+          startIcon={<FileDownload />}
+          onClick={() => setDialogExportar(true)}
+        >
+          Exportar
+        </Button>
+      </Box>
 
       {/* Cards de Estatísticas - Design Sutil */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -792,21 +807,21 @@ function PedidosPageContent() {
 
       <Card sx={{ overflow: 'hidden', maxWidth: '100%' }}>
         {/* Filtros Avançados */}
-        <Accordion 
-          expanded={filtrosExpanded} 
+        <Accordion
+          expanded={filtrosExpanded}
           onChange={() => atualizarFiltro('filtrosExpanded', !filtrosExpanded)}
-          sx={{ 
+          sx={{
             boxShadow: 'none',
             '&:before': { display: 'none' },
             borderBottom: '1px solid',
             borderColor: 'divider'
           }}
         >
-          <AccordionSummary 
+          <AccordionSummary
             expandIcon={<ExpandMore />}
-            sx={{ 
+            sx={{
               px: 3,
-              '& .MuiAccordionSummary-content': { 
+              '& .MuiAccordionSummary-content': {
                 alignItems: 'center',
                 gap: 1,
                 my: 2
@@ -816,11 +831,11 @@ function PedidosPageContent() {
             <FilterList color="primary" />
             <Typography variant="h6" fontWeight="bold">
               Filtros {temFiltrosAtivos && (
-                <Chip 
-                  label={contarFiltrosAtivos} 
-                  size="small" 
-                  color="primary" 
-                  sx={{ ml: 1 }} 
+                <Chip
+                  label={contarFiltrosAtivos}
+                  size="small"
+                  color="primary"
+                  sx={{ ml: 1 }}
                 />
               )}
             </Typography>
@@ -838,15 +853,15 @@ function PedidosPageContent() {
                 )}
               </Box>
             )}
-            <Box 
-              component="span" 
-              onClick={(e) => { 
+            <Box
+              component="span"
+              onClick={(e) => {
                 if (temFiltrosAtivos) {
-                  e.stopPropagation(); 
-                  limparFiltros(); 
+                  e.stopPropagation();
+                  limparFiltros();
                 }
-              }} 
-              sx={{ 
+              }}
+              sx={{
                 ml: 'auto',
                 opacity: temFiltrosAtivos ? 1 : 0.5,
                 cursor: temFiltrosAtivos ? 'pointer' : 'not-allowed',
@@ -854,14 +869,14 @@ function PedidosPageContent() {
               }}
             >
               <Tooltip title={temFiltrosAtivos ? "Limpar todos os filtros" : ""}>
-                <Chip 
+                <Chip
                   label={isMobile ? "Limpar" : "Limpar Filtros"}
                   size="small"
                   color={temFiltrosAtivos ? "error" : "default"}
                   variant={temFiltrosAtivos ? "filled" : "outlined"}
-                  onDelete={temFiltrosAtivos ? () => {} : undefined}
+                  onDelete={temFiltrosAtivos ? () => { } : undefined}
                   deleteIcon={<Close />}
-                  sx={{ 
+                  sx={{
                     pointerEvents: 'none',
                     fontWeight: 600,
                   }}
@@ -869,152 +884,152 @@ function PedidosPageContent() {
               </Tooltip>
             </Box>
           </AccordionSummary>
-          
+
           <AccordionDetails sx={{ px: 3, pb: 3 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                fullWidth
-                label="Buscar pedido"
-                placeholder="Número, cliente..."
-                value={search}
-                onChange={(e) => {
-                  atualizarFiltro('search', e.target.value);
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={status}
-                  label="Status"
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  fullWidth
+                  label="Buscar pedido"
+                  placeholder="Número, cliente..."
+                  value={search}
                   onChange={(e) => {
-                    atualizarFiltro('status', e.target.value);
+                    atualizarFiltro('search', e.target.value);
                   }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="PENDENTE">Pendente</MenuItem>
-                  <MenuItem value="CONFIRMADO">Confirmado</MenuItem>
-                  <MenuItem value="FINALIZADO">Finalizado</MenuItem>
-                  <MenuItem value="CANCELADO">Cancelado</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Tipo</InputLabel>
-                <Select
-                  value={tipoAtendimento}
-                  label="Tipo"
-                  onChange={(e) => {
-                    atualizarFiltro('tipoAtendimento', e.target.value);
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search />
+                      </InputAdornment>
+                    ),
                   }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="ENTRADA">ENTRADA</MenuItem>
-                  <MenuItem value="SAIDA">SAÍDA</MenuItem>
-                  <MenuItem value="ORÇAMENTO">ORÇAMENTO</MenuItem>
-                  <MenuItem value="S/MOVIMENTO">S/MOVIMENTO</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Forma Pgto.</InputLabel>
-                <Select
-                  value={formaPagamento}
-                  label="Forma Pgto."
-                  onChange={(e) => {
-                    atualizarFiltro('formaPagamento', e.target.value);
-                  }}
-                  startAdornment={
-                    <InputAdornment position="start">
-                      <AttachMoney fontSize="small" />
-                    </InputAdornment>
-                  }
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  {(formasPagamento as any)?.map((forma: any) => (
-                    <MenuItem key={forma.id} value={forma.id}>
-                      {forma.nome}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Data Início"
-                value={dataInicio}
-                onChange={(e) => {
-                  atualizarFiltro('dataInicio', e.target.value);
-                }}
-                InputLabelProps={{ shrink: true }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <CalendarToday fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Data Fim"
-                value={dataFim}
-                onChange={(e) => {
-                  atualizarFiltro('dataFim', e.target.value);
-                }}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={3}>
-              <Autocomplete
-                options={clientes?.clientes || []}
-                getOptionLabel={(option) => option.nome || ''}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                value={clienteSelecionado}
-                onChange={(_, newValue) => {
-                  atualizarFiltro('clienteSelecionado', newValue);
-                }}
-                onInputChange={(_, value) => setSearchCliente(value)}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Cliente"
-                    placeholder="Selecione um cliente"
-                    InputProps={{
-                      ...params.InputProps,
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Person fontSize="small" />
-                        </InputAdornment>
-                      ),
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={2}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={status}
+                    label="Status"
+                    onChange={(e) => {
+                      atualizarFiltro('status', e.target.value);
                     }}
-                  />
-                )}
-              />
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    <MenuItem value="PENDENTE">Pendente</MenuItem>
+                    <MenuItem value="CONFIRMADO">Confirmado</MenuItem>
+                    <MenuItem value="FINALIZADO">Finalizado</MenuItem>
+                    <MenuItem value="CANCELADO">Cancelado</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={2}>
+                <FormControl fullWidth>
+                  <InputLabel>Tipo</InputLabel>
+                  <Select
+                    value={tipoAtendimento}
+                    label="Tipo"
+                    onChange={(e) => {
+                      atualizarFiltro('tipoAtendimento', e.target.value);
+                    }}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    <MenuItem value="ENTRADA">ENTRADA</MenuItem>
+                    <MenuItem value="SAIDA">SAÍDA</MenuItem>
+                    <MenuItem value="ORÇAMENTO">ORÇAMENTO</MenuItem>
+                    <MenuItem value="S/MOVIMENTO">S/MOVIMENTO</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={2}>
+                <FormControl fullWidth>
+                  <InputLabel>Forma Pgto.</InputLabel>
+                  <Select
+                    value={formaPagamento}
+                    label="Forma Pgto."
+                    onChange={(e) => {
+                      atualizarFiltro('formaPagamento', e.target.value);
+                    }}
+                    startAdornment={
+                      <InputAdornment position="start">
+                        <AttachMoney fontSize="small" />
+                      </InputAdornment>
+                    }
+                  >
+                    <MenuItem value="">Todas</MenuItem>
+                    {(formasPagamento as any)?.map((forma: any) => (
+                      <MenuItem key={forma.id} value={forma.id}>
+                        {forma.nome}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Data Início"
+                  value={dataInicio}
+                  onChange={(e) => {
+                    atualizarFiltro('dataInicio', e.target.value);
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <CalendarToday fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Data Fim"
+                  value={dataFim}
+                  onChange={(e) => {
+                    atualizarFiltro('dataFim', e.target.value);
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={3}>
+                <Autocomplete
+                  options={clientes?.clientes || []}
+                  getOptionLabel={(option) => option.nome || ''}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  value={clienteSelecionado}
+                  onChange={(_, newValue) => {
+                    atualizarFiltro('clienteSelecionado', newValue);
+                  }}
+                  onInputChange={(_, value) => setSearchCliente(value)}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Cliente"
+                      placeholder="Selecione um cliente"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Person fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  )}
+                />
+              </Grid>
             </Grid>
-          </Grid>
           </AccordionDetails>
         </Accordion>
 
@@ -1068,7 +1083,7 @@ function PedidosPageContent() {
                       transition={{ delay: index * 0.05 }}
                       hover
                       onClick={() => handleVisualizarPedido(pedido)}
-                      sx={{ 
+                      sx={{
                         cursor: 'pointer',
                         '&:hover': {
                           bgcolor: 'action.hover',
@@ -1101,7 +1116,7 @@ function PedidosPageContent() {
                           size="small"
                           color={getTipoChipColor(pedido.tipo_atendimento_nome)}
                           variant="filled"
-                          sx={{ 
+                          sx={{
                             fontWeight: 600,
                             color: 'white',
                           }}
@@ -1115,7 +1130,7 @@ function PedidosPageContent() {
                             variant="outlined"
                             color="default"
                             icon={<AttachMoney />}
-                            sx={{ 
+                            sx={{
                               maxWidth: '120px',
                               '& .MuiChip-label': {
                                 overflow: 'hidden',
@@ -1138,7 +1153,9 @@ function PedidosPageContent() {
                           {formatCurrency(pedido.total)}
                         </Box>
                       </TableCell>
-                      <TableCell align="center">{getStatusChip(pedido.status)}</TableCell>
+                      <TableCell align="center">
+                        <StatusBadge status={pedido.status} />
+                      </TableCell>
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                           <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
@@ -1256,18 +1273,18 @@ function PedidosPageContent() {
           <ListItemIcon>
             <Delete fontSize="small" sx={{ color: 'error.main' }} />
           </ListItemIcon>
-          <ListItemText 
-            primary="Excluir Pedido" 
+          <ListItemText
+            primary="Excluir Pedido"
             primaryTypographyProps={{ sx: { color: 'error.main' } }}
           />
         </MenuItem>
       </Menu>
-      
+
       {/* Dialog de Detalhes do Pedido */}
-      <Dialog 
-        open={dialogDetalhes} 
-        onClose={handleFecharDialogDetalhes} 
-        maxWidth="md" 
+      <Dialog
+        open={dialogDetalhes}
+        onClose={handleFecharDialogDetalhes}
+        maxWidth="md"
         fullWidth
         fullScreen={isMobile}
       >
@@ -1277,17 +1294,20 @@ function PedidosPageContent() {
             <Typography variant="h6" fontWeight="bold">
               Pedido #{pedidoDetalhes?.numero}
             </Typography>
-            {pedidoDetalhes && getStatusChip(pedidoDetalhes.status)}
+            {pedidoDetalhes && <StatusBadge status={pedidoDetalhes.status} />}
           </Box>
           <IconButton onClick={handleFecharDialogDetalhes}>
             <Close />
           </IconButton>
         </DialogTitle>
-        
+
         <DialogContent>
           {loadingDetalhes ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
+            <Box sx={{ pt: 2 }}>
+              <LoadingSkeleton type="form" rows={3} />
+              <Box sx={{ mt: 3 }}>
+                <LoadingSkeleton type="table" rows={2} />
+              </Box>
             </Box>
           ) : pedidoCompleto ? (
             <Box sx={{ pt: 2 }}>
@@ -1312,7 +1332,7 @@ function PedidosPageContent() {
                     </Box>
                   </Card>
                 </Grid>
-                
+
                 <Grid item xs={12} md={6}>
                   <Card variant="outlined" sx={{ p: 2 }}>
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
@@ -1338,7 +1358,7 @@ function PedidosPageContent() {
                   </Card>
                 </Grid>
               </Grid>
-              
+
               {/* Itens do Pedido */}
               <Box sx={{ mt: 3 }}>
                 <Typography variant="h6" gutterBottom>Itens do Pedido</Typography>
@@ -1367,10 +1387,10 @@ function PedidosPageContent() {
                                 </Typography>
                               )}
                               {item.cor_descricao && (
-                                <Chip 
-                                  label={item.cor_descricao} 
-                                  size="small" 
-                                  variant="outlined" 
+                                <Chip
+                                  label={item.cor_descricao}
+                                  size="small"
+                                  variant="outlined"
                                   sx={{ ml: 1, height: 20 }}
                                 />
                               )}
@@ -1390,7 +1410,7 @@ function PedidosPageContent() {
                   </Table>
                 </TableContainer>
               </Box>
-              
+
               {/* Totais */}
               <Card variant="outlined" sx={{ mt: 3, p: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -1413,7 +1433,7 @@ function PedidosPageContent() {
                   </Typography>
                 </Box>
               </Card>
-              
+
               {/* Observações */}
               {pedidoCompleto.observacao && (
                 <Card variant="outlined" sx={{ mt: 2, p: 2 }}>
@@ -1428,57 +1448,57 @@ function PedidosPageContent() {
             <Alert severity="error">Erro ao carregar detalhes do pedido</Alert>
           )}
         </DialogContent>
-        
+
         <DialogActions sx={{ p: 3, justifyContent: 'space-between' }}>
           <Button onClick={handleFecharDialogDetalhes} variant="outlined">
             Fechar
           </Button>
-          
+
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button 
+            <Button
               onClick={() => {
                 setPrintDialog({ open: true, pedido: pedidoCompleto || pedidoDetalhes });
                 handleFecharDialogDetalhes();
-              }} 
+              }}
               variant="outlined"
               color="primary"
               startIcon={<Print />}
             >
               Imprimir
             </Button>
-            
+
             {pedidoDetalhes?.status !== 'CANCELADO' && (
-              <Button 
+              <Button
                 onClick={() => {
                   handleEditarPedido(pedidoDetalhes);
                   handleFecharDialogDetalhes();
-                }} 
+                }}
                 variant="outlined"
                 startIcon={<Edit />}
               >
                 Editar
               </Button>
             )}
-            
+
             {pedidoDetalhes?.status === 'PENDENTE' && (
               <>
-                <Button 
+                <Button
                   onClick={() => {
                     handleFinalizarPedido(pedidoDetalhes);
                     handleFecharDialogDetalhes();
-                  }} 
-                  variant="contained" 
+                  }}
+                  variant="contained"
                   color="success"
                   startIcon={<CheckCircle />}
                 >
                   Finalizar
                 </Button>
-                <Button 
+                <Button
                   onClick={() => {
                     handleCancelarPedido(pedidoDetalhes);
                     handleFecharDialogDetalhes();
-                  }} 
-                  variant="outlined" 
+                  }}
+                  variant="outlined"
                   color="error"
                   startIcon={<Cancel />}
                 >
@@ -1486,13 +1506,13 @@ function PedidosPageContent() {
                 </Button>
               </>
             )}
-            
-            <Button 
+
+            <Button
               onClick={() => {
                 handleExcluirPedido(pedidoDetalhes);
                 handleFecharDialogDetalhes();
-              }} 
-              variant="outlined" 
+              }}
+              variant="outlined"
               color="error"
               startIcon={<Delete />}
             >
@@ -1501,12 +1521,12 @@ function PedidosPageContent() {
           </Box>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog de Edição de Pedido */}
-      <Dialog 
-        open={dialogEditar} 
-        onClose={() => setDialogEditar(false)} 
-        maxWidth="sm" 
+      <Dialog
+        open={dialogEditar}
+        onClose={() => setDialogEditar(false)}
+        maxWidth="sm"
         fullWidth
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1520,7 +1540,7 @@ function PedidosPageContent() {
             <Close />
           </IconButton>
         </DialogTitle>
-        
+
         <DialogContent>
           {pedidoEditando && (
             <Box sx={{ pt: 2 }}>
@@ -1532,9 +1552,9 @@ function PedidosPageContent() {
                     <Select
                       value={pedidoEditando.tipo_atendimento_id || ''}
                       label="Tipo de Atendimento"
-                      onChange={(e) => setPedidoEditando({ 
-                        ...pedidoEditando, 
-                        tipo_atendimento_id: e.target.value 
+                      onChange={(e) => setPedidoEditando({
+                        ...pedidoEditando,
+                        tipo_atendimento_id: e.target.value
                       })}
                     >
                       <MenuItem value="">Nenhum</MenuItem>
@@ -1546,7 +1566,7 @@ function PedidosPageContent() {
                     </Select>
                   </FormControl>
                 </Grid>
-                
+
                 {/* Forma de Pagamento */}
                 <Grid item xs={12}>
                   <FormControl fullWidth>
@@ -1554,9 +1574,9 @@ function PedidosPageContent() {
                     <Select
                       value={pedidoEditando.forma_pagamento_id || ''}
                       label="Forma de Pagamento"
-                      onChange={(e) => setPedidoEditando({ 
-                        ...pedidoEditando, 
-                        forma_pagamento_id: e.target.value 
+                      onChange={(e) => setPedidoEditando({
+                        ...pedidoEditando,
+                        forma_pagamento_id: e.target.value
                       })}
                     >
                       <MenuItem value="">Nenhuma</MenuItem>
@@ -1568,7 +1588,7 @@ function PedidosPageContent() {
                     </Select>
                   </FormControl>
                 </Grid>
-                
+
                 {/* Desconto */}
                 <Grid item xs={12}>
                   <TextField
@@ -1576,9 +1596,9 @@ function PedidosPageContent() {
                     label="Desconto (R$)"
                     type="number"
                     value={pedidoEditando.desconto_valor}
-                    onChange={(e) => setPedidoEditando({ 
-                      ...pedidoEditando, 
-                      desconto_valor: parseFloat(e.target.value) || 0 
+                    onChange={(e) => setPedidoEditando({
+                      ...pedidoEditando,
+                      desconto_valor: parseFloat(e.target.value) || 0
                     })}
                     InputProps={{
                       startAdornment: (
@@ -1589,7 +1609,7 @@ function PedidosPageContent() {
                     }}
                   />
                 </Grid>
-                
+
                 {/* Status */}
                 <Grid item xs={12}>
                   <FormControl fullWidth>
@@ -1597,9 +1617,9 @@ function PedidosPageContent() {
                     <Select
                       value={pedidoEditando.status || 'PENDENTE'}
                       label="Status"
-                      onChange={(e) => setPedidoEditando({ 
-                        ...pedidoEditando, 
-                        status: e.target.value 
+                      onChange={(e) => setPedidoEditando({
+                        ...pedidoEditando,
+                        status: e.target.value
                       })}
                     >
                       <MenuItem value="PENDENTE">Pendente</MenuItem>
@@ -1609,7 +1629,7 @@ function PedidosPageContent() {
                     </Select>
                   </FormControl>
                 </Grid>
-                
+
                 {/* Observações */}
                 <Grid item xs={12}>
                   <TextField
@@ -1618,9 +1638,9 @@ function PedidosPageContent() {
                     rows={4}
                     label="Observações"
                     value={pedidoEditando.observacao}
-                    onChange={(e) => setPedidoEditando({ 
-                      ...pedidoEditando, 
-                      observacao: e.target.value 
+                    onChange={(e) => setPedidoEditando({
+                      ...pedidoEditando,
+                      observacao: e.target.value
                     })}
                     InputProps={{
                       startAdornment: (
@@ -1632,23 +1652,23 @@ function PedidosPageContent() {
                   />
                 </Grid>
               </Grid>
-              
+
               <Alert severity="info" sx={{ mt: 2 }}>
                 Para editar itens do pedido, use a página de PDV ou crie um novo pedido.
               </Alert>
             </Box>
           )}
         </DialogContent>
-        
+
         <DialogActions sx={{ p: 3 }}>
-          <Button 
-            onClick={() => setDialogEditar(false)} 
+          <Button
+            onClick={() => setDialogEditar(false)}
             variant="outlined"
           >
             Cancelar
           </Button>
-          <Button 
-            onClick={handleSalvarEdicao} 
+          <Button
+            onClick={handleSalvarEdicao}
             variant="contained"
             disabled={atualizarMutation.isPending}
             startIcon={atualizarMutation.isPending ? <CircularProgress size={20} /> : <Check />}
@@ -1659,14 +1679,14 @@ function PedidosPageContent() {
       </Dialog>
 
       {/* Dialog de Exportação Profissional */}
-      <Dialog 
-        open={dialogExportar} 
+      <Dialog
+        open={dialogExportar}
         onClose={() => setDialogExportar(false)}
         maxWidth="sm"
         fullWidth
         fullScreen={isMobile}
       >
-        <DialogTitle sx={{ 
+        <DialogTitle sx={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           color: 'white',
           fontWeight: 'bold',
@@ -1687,16 +1707,16 @@ function PedidosPageContent() {
             </IconButton>
           )}
         </DialogTitle>
-        
+
         <DialogContent sx={{ mt: 2 }}>
           <Typography variant="body2" color="text.secondary" gutterBottom>
             Selecione as colunas que deseja exportar:
           </Typography>
-          
-          <Box sx={{ 
-            mb: 2, 
-            p: 2, 
-            bgcolor: 'grey.50', 
+
+          <Box sx={{
+            mb: 2,
+            p: 2,
+            bgcolor: 'grey.50',
             borderRadius: 1,
             border: '1px solid',
             borderColor: 'grey.200',
@@ -1720,7 +1740,7 @@ function PedidosPageContent() {
                 Desmarcar Todas
               </Button>
             </Box>
-            
+
             <Box display="flex" flexDirection="column" gap={0.5}>
               {colunasExportacao.map((coluna) => (
                 <Box
@@ -1771,25 +1791,25 @@ function PedidosPageContent() {
                 {status && <Chip label={`Status: ${status}`} size="small" />}
                 {tipoAtendimento && <Chip label={`Tipo: ${tipoAtendimento}`} size="small" />}
                 {formaPagamento && (
-                  <Chip 
-                    label={`Pagamento: ${(formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome || formaPagamento}`} 
-                    size="small" 
+                  <Chip
+                    label={`Pagamento: ${(formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome || formaPagamento}`}
+                    size="small"
                   />
                 )}
                 {clienteSelecionado && <Chip label={`Cliente: ${clienteSelecionado.nome}`} size="small" />}
                 {(dataInicio || dataFim) && (
-                  <Chip 
-                    label={`Período: ${dataInicio ? formatDate(dataInicio) : '...'} - ${dataFim ? formatDate(dataFim) : '...'}`} 
-                    size="small" 
+                  <Chip
+                    label={`Período: ${dataInicio ? formatDate(dataInicio) : '...'} - ${dataFim ? formatDate(dataFim) : '...'}`}
+                    size="small"
                   />
                 )}
               </Box>
             </Alert>
           )}
         </DialogContent>
-        
+
         <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button 
+          <Button
             onClick={() => setDialogExportar(false)}
             variant="outlined"
             color="inherit"
@@ -1822,7 +1842,7 @@ function PedidosPageContent() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+
       {/* Dialog de Confirmação Personalizado */}
       <ConfirmDialog
         open={confirmDialog.open}
@@ -1834,7 +1854,7 @@ function PedidosPageContent() {
         confirmText="Confirmar"
         cancelText="Cancelar"
       />
-      
+
       {/* Dialog de Impressão */}
       <PrintConfirmDialog
         open={printDialog.open}
