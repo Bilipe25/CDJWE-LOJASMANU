@@ -152,6 +152,10 @@ export const usePDVStore = create<PDVStore>()(
           pedidoAtual: {
             ...pedidoInicial,
             data: new Date().toISOString().split('T')[0],
+            itens: [], // Garantir que a lista seja limpa
+            subtotal: 0,
+            total: 0,
+            desconto_valor: 0,
           },
         });
       },

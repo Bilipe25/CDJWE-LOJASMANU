@@ -501,6 +501,7 @@ function PDVPageContent() {
 
         toast.success('Pedido atualizado com sucesso!', { id: toastId });
         setDialogFinalizar(false);
+        novoPedido(); // Limpar PDV após edição e salvar
 
         // Verificar se há URL de retorno com filtros salvos
         const urlRetorno = sessionStorage.getItem('pedidos_url_retorno');
