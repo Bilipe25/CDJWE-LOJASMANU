@@ -22,6 +22,8 @@ const nextConfig = {
       },
     ],
   },
+  // Silence Turbopack warning as we rely on next-pwa (webpack)
+  turbopack: {},
 };
 
 const pwaConfig = withPWA({
