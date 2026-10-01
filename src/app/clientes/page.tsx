@@ -119,14 +119,14 @@ export default function ClientesPage() {
     setCep(endereco.cep);
   };
 
-  const { data, isLoading } = trpc.clientes.list.useQuery({
+  const { data, isLoading, error: erroLista, refetch: recarregarLista } = trpc.clientes.list.useQuery({
     limit: rowsPerPage,
     offset: page * rowsPerPage,
     search: search || undefined,
   });
 
   // Query para estatísticas
-  const { data: stats } = trpc.clientes.stats.useQuery();
+  const { data: stats, error: erroEstatisticas, refetch: recarregarEstatisticas } = trpc.clientes.stats.useQuery();
 
   // Query para pedidos do cliente (só busca quando dialog está aberto)
   const { data: pedidosCliente, isLoading: loadingPedidos } = trpc.pedidos.listByCliente.useQuery(
@@ -140,24 +140,13 @@ export default function ClientesPage() {
   // Mutations
   const utils = trpc.useUtils();
   const criarMutation = trpc.clientes.create.useMutation({
-    onSuccess: () => {
-      utils.clientes.list.invalidate();
-      utils.clientes.stats.invalidate();
-    },
+    onSuccess: async () => { await utils.invalidate(); },
   });
   const atualizarMutation = trpc.clientes.update.useMutation({
-    onSuccess: () => {
-      utils.clientes.list.invalidate();
-      utils.clientes.stats.invalidate();
-      utils.clientes.getById.invalidate();
-      utils.pedidos.getById.invalidate();
-    },
+    onSuccess: async () => { await utils.invalidate(); },
   });
   const deletarMutation = trpc.clientes.delete.useMutation({
-    onSuccess: () => {
-      utils.clientes.list.invalidate();
-      utils.clientes.stats.invalidate();
-    },
+    onSuccess: async () => { await utils.invalidate(); },
   });
 
   type Cliente = typeof clientes[number];
@@ -387,7 +376,8 @@ export default function ClientesPage() {
   return (
     <AppLayout>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+        {erroEstatisticas && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => recarregarEstatisticas()}>Tentar novamente</Button>}>Indicadores indisponíveis. Tente novamente.</Alert>}
+      <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
           <Link underline="hover" color="inherit" href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
             Dashboard
           </Link>
@@ -413,7 +403,7 @@ export default function ClientesPage() {
                 <Person sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
-                <Box sx={{ fontSize: 24, fontWeight: 700 }}>{stats?.total || 0}</Box>
+                <Box sx={{ fontSize: 24, fontWeight: 700 }}>{erroEstatisticas ? '—' : stats?.total ?? '—'}</Box>
                 <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Total de Clientes</Box>
               </Box>
             </Box>
@@ -427,7 +417,7 @@ export default function ClientesPage() {
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>
-                  {stats?.ativos || 0}
+                  {erroEstatisticas ? '—' : stats?.ativos ?? '—'}
                 </Box>
                 <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Clientes Ativos</Box>
               </Box>
@@ -442,7 +432,7 @@ export default function ClientesPage() {
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>
-                  {stats?.totalPedidos || 0}
+                  {erroEstatisticas ? '—' : stats?.totalPedidos ?? '—'}
                 </Box>
                 <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Total de Pedidos</Box>
               </Box>
@@ -457,7 +447,7 @@ export default function ClientesPage() {
               </Box>
               <Box>
                 <Box sx={{ fontSize: 24, fontWeight: 700 }}>
-                  {formatCurrency(stats?.valorTotalCompras || 0)}
+                  {erroEstatisticas || !stats ? '—' : formatCurrency(stats.valorTotalCompras)}
                 </Box>
                 <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Total em Compras</Box>
               </Box>
@@ -471,6 +461,7 @@ export default function ClientesPage() {
         <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid', borderColor: 'divider' }}>
           <TextField
             fullWidth
+            label="Buscar cliente"
             placeholder="Buscar por nome, CPF ou telefone..."
             value={search}
             onChange={(e) => {
@@ -488,7 +479,7 @@ export default function ClientesPage() {
         </Box>
 
         {/* Tabela */}
-        {isLoading ? (
+        {erroLista ? <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarLista()}>Tentar novamente</Button>}>Não foi possível carregar os clientes. Confira a conexão e tente novamente.</Alert> : isLoading ? (
           <Box sx={{ p: 2 }}>
             <LoadingSkeleton type="table" rows={5} />
           </Box>

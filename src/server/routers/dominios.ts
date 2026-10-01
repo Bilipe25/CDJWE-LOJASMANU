@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '@/lib/trpc/server';
+import { router, protectedProcedure } from '@/lib/trpc/server';
 
 // Router para tabelas de domínio (categorias, cores, formas_pagamento, tipos_atendimento)
 export const dominiosRouter = router({
@@ -7,7 +7,7 @@ export const dominiosRouter = router({
   // CATEGORIAS
   // ============================================
   categorias: router({
-    list: publicProcedure.query(async ({ ctx }) => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const { data, error } = await ctx.supabase
         .from('categorias')
         .select('*')
@@ -18,7 +18,7 @@ export const dominiosRouter = router({
       return data;
     }),
 
-    create: publicProcedure
+    create: protectedProcedure
       .input(
         z.object({
           nome: z.string().min(1).max(100),
@@ -36,7 +36,7 @@ export const dominiosRouter = router({
         return data;
       }),
 
-    update: publicProcedure
+    update: protectedProcedure
       .input(
         z.object({
           id: z.string().uuid(),
@@ -57,7 +57,7 @@ export const dominiosRouter = router({
         return data;
       }),
 
-    delete: publicProcedure
+    delete: protectedProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         const { error } = await ctx.supabase
@@ -74,7 +74,7 @@ export const dominiosRouter = router({
   // CORES
   // ============================================
   cores: router({
-    list: publicProcedure.query(async ({ ctx }) => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const { data, error } = await ctx.supabase
         .from('cores')
         .select('*')
@@ -85,7 +85,7 @@ export const dominiosRouter = router({
       return data;
     }),
 
-    create: publicProcedure
+    create: protectedProcedure
       .input(
         z.object({
           codigo: z.string().max(20).optional(),
@@ -104,7 +104,7 @@ export const dominiosRouter = router({
         return data;
       }),
 
-    update: publicProcedure
+    update: protectedProcedure
       .input(
         z.object({
           id: z.string().uuid(),
@@ -126,7 +126,7 @@ export const dominiosRouter = router({
         return data;
       }),
 
-    delete: publicProcedure
+    delete: protectedProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         const { error } = await ctx.supabase
@@ -143,7 +143,7 @@ export const dominiosRouter = router({
   // FORMAS DE PAGAMENTO
   // ============================================
   formasPagamento: router({
-    list: publicProcedure.query(async ({ ctx }) => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const { data, error } = await ctx.supabase
         .from('formas_pagamento')
         .select('*')
@@ -154,7 +154,7 @@ export const dominiosRouter = router({
       return data;
     }),
 
-    create: publicProcedure
+    create: protectedProcedure
       .input(
         z.object({
           nome: z.string().min(1).max(50),
@@ -176,7 +176,7 @@ export const dominiosRouter = router({
   // TIPOS DE ATENDIMENTO
   // ============================================
   tiposAtendimento: router({
-    list: publicProcedure.query(async ({ ctx }) => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const { data, error } = await ctx.supabase
         .from('tipos_atendimento')
         .select('*')
@@ -187,7 +187,7 @@ export const dominiosRouter = router({
       return data;
     }),
 
-    create: publicProcedure
+    create: protectedProcedure
       .input(
         z.object({
           nome: z.string().min(1).max(50),

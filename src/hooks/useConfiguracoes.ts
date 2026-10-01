@@ -1,9 +1,12 @@
+import { useAuth } from '@/contexts/AuthContext';
 import { trpc } from '@/lib/trpc/client';
 
 export function useConfiguracoes() {
+  const { isAuthenticated } = useAuth();
   const { data: config, isLoading, error, refetch } = trpc.configuracoes.get.useQuery(
     undefined,
     {
+      enabled: isAuthenticated,
       staleTime: 5 * 60 * 1000, // 5 minutos
       gcTime: 10 * 60 * 1000, // 10 minutos
     }

@@ -1,4 +1,5 @@
 'use client';
+import { useRef, useState } from 'react';
 
 import {
   Dialog,
@@ -15,7 +16,7 @@ import { Warning, Delete, Cancel, CheckCircle } from '@mui/icons-material';
 interface ConfirmDialogProps {
   open: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   title: string;
   message: string;
   confirmText?: string;
@@ -35,6 +36,14 @@ export default function ConfirmDialog({
   severity = 'warning',
   loading = false,
 }: ConfirmDialogProps) {
+  const bloqueio = useRef(false);
+  const [processando, setProcessando] = useState(false);
+  const ocupado = loading || processando;
+  const confirmar = async () => {
+    if (bloqueio.current || loading) return;
+    bloqueio.current = true; setProcessando(true);
+    try { await onConfirm(); } finally { bloqueio.current = false; setProcessando(false); }
+  };
   const getIcon = () => {
     switch (severity) {
       case 'error':
@@ -64,7 +73,7 @@ export default function ConfirmDialog({
   return (
     <Dialog
       open={open}
-      onClose={loading ? undefined : onClose}
+      onClose={ocupado ? undefined : onClose}
       maxWidth="sm"
       fullWidth
       PaperProps={{
@@ -96,16 +105,16 @@ export default function ConfirmDialog({
         <Button
           onClick={onClose}
           variant="outlined"
-          disabled={loading}
+          disabled={ocupado}
           size="large"
         >
           {cancelText}
         </Button>
         <Button
-          onClick={onConfirm}
+          onClick={confirmar}
           variant="contained"
           color={getColor()}
-          disabled={loading}
+          disabled={ocupado}
           size="large"
           autoFocus
         >

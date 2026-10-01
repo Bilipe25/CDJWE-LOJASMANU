@@ -163,30 +163,21 @@ function PedidosPageContent() {
     }
   }, [searchParams, temFiltrosAtivos]);
 
-  const { data, isLoading } = trpc.pedidos.list.useQuery({
-    limit: rowsPerPage,
-    offset: page * rowsPerPage,
+  const filtrosConsulta = {
+    search: search || undefined,
     status: status as any,
     dataInicio: dataInicio || undefined,
     dataFim: dataFim || undefined,
     tipoAtendimento: tipoAtendimento || undefined,
     formaPagamentoId: formaPagamento || undefined,
     clienteId: clienteSelecionado?.id,
-  });
+  };
+  const { data, isLoading, error: erroLista, refetch: recarregarLista } = trpc.pedidos.list.useQuery({ ...filtrosConsulta, limit: rowsPerPage, offset: page * rowsPerPage });
 
-  // Query para total geral de vendas (sem filtros) - usar limite alto
-  const { data: dadosGerais } = trpc.pedidos.list.useQuery(
-    {
-      limit: 10000,
-      offset: 0,
-    },
-    {
-      staleTime: 5 * 60 * 1000, // Cache de 5 minutos
-    }
-  );
+  const { data: dadosEstatisticas, error: erroEstatisticas, refetch: recarregarEstatisticas } = trpc.pedidos.estatisticas.useQuery(filtrosConsulta);
 
   // Query para buscar pedido específico da URL
-  const { data: pedidoUrl, isLoading: loadingPedidoUrl } = trpc.pedidos.getById.useQuery(
+  const { data: pedidoUrl, isLoading: loadingPedidoUrl, error: erroPedidoUrl, refetch: recarregarPedidoUrl } = trpc.pedidos.getById.useQuery(
     { id: pedidoIdUrl || '' },
     { enabled: !!pedidoIdUrl }
   );
@@ -205,7 +196,7 @@ function PedidosPageContent() {
     search: searchCliente || undefined,
   });
 
-  const { data: pedidoCompleto, isLoading: loadingDetalhes } = trpc.pedidos.getById.useQuery(
+  const { data: pedidoCompleto, isLoading: loadingDetalhes, error: erroDetalhes, refetch: recarregarDetalhes } = trpc.pedidos.getById.useQuery(
     { id: pedidoDetalhes?.id || '' },
     { enabled: !!pedidoDetalhes?.id }
   );
@@ -222,26 +213,14 @@ function PedidosPageContent() {
 
   const pedidos = data?.pedidos || [];
   const total = data?.total || 0;
-  const pedidosGerais = dadosGerais?.pedidos || [];
-  const totalGeral = dadosGerais?.total || 0;
 
   type Pedido = typeof pedidos[number];
 
-  // Calcular estatísticas usando os dados corretos
   const estatisticas = {
-    totalPedidos: total, // Total de pedidos filtrados
-    pedidosPendentes: pedidos.filter((p: any) => p.status === 'PENDENTE').length,
-    // Total de vendas: soma de TODOS os pedidos (dados gerais)
-    totalVendas: pedidosGerais.length > 0
-      ? pedidosGerais.reduce((acc: number, p: any) => acc + (p.total || 0), 0)
-      : pedidos.reduce((acc: number, p: any) => acc + (p.total || 0), 0), // Fallback para filtrados
-    // Pedidos finalizados hoje de TODOS os pedidos
-    finalizadosHoje: (pedidosGerais.length > 0 ? pedidosGerais : pedidos).filter((p: any) => {
-      if (!p.data) return false;
-      const hoje = new Date().toISOString().split('T')[0];
-      const dataPedido = p.data.split('T')[0];
-      return dataPedido === hoje && p.status === 'FINALIZADO';
-    }).length,
+    totalPedidos: dadosEstatisticas?.total,
+    pedidosPendentes: dadosEstatisticas?.pendentes,
+    totalVendas: dadosEstatisticas?.valorTotal,
+    finalizadosHoje: dadosEstatisticas?.finalizadosHoje,
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -276,7 +255,7 @@ function PedidosPageContent() {
 
   // Função para atualizar a lista de pedidos sem reload
   const atualizarListaPedidos = async () => {
-    await utils.pedidos.list.invalidate();
+    await utils.invalidate();
   };
 
   // Função para obter cor do chip de tipo de atendimento
@@ -374,6 +353,7 @@ function PedidosPageContent() {
   };
 
   const handleEditarPedido = (pedido: any) => {
+    if (['CANCELADO','FINALIZADO'].includes(pedido.status)) { toast.error('Este pedido está encerrado e não pode ser editado.'); return; }
     // Redirecionar para PDV com o ID do pedido para edição
     // Salvar URL de retorno com filtros no sessionStorage
     const urlRetorno = getUrlComFiltros('/pedidos');
@@ -382,20 +362,21 @@ function PedidosPageContent() {
   };
 
   const handleSalvarEdicao = async () => {
-    if (!pedidoEditando) return;
+    if (!pedidoEditando || atualizarMutation.isPending) return;
 
     const toastId = toast.loading('Salvando alterações...');
 
     try {
       await atualizarMutation.mutateAsync({
         id: pedidoEditando.id,
+        versao: pedidoEditando.versao,
         cliente_id: pedidoEditando.cliente_id || undefined,
         endereco_id: pedidoEditando.endereco_id || undefined,
         tipo_atendimento_id: pedidoEditando.tipo_atendimento_id || undefined,
         forma_pagamento_id: pedidoEditando.forma_pagamento_id || undefined,
         desconto_valor: pedidoEditando.desconto_valor,
         observacao: pedidoEditando.observacao,
-        status: pedidoEditando.status,
+        status: pedidoEditando.status === 'CONFIRMADO' ? 'CONFIRMADO' : 'PENDENTE',
       });
 
       toast.success('Pedido atualizado com sucesso!', { id: toastId });
@@ -405,7 +386,7 @@ function PedidosPageContent() {
       // Atualizar lista sem reload
       await atualizarListaPedidos();
     } catch (error) {
-      toast.error('Erro ao atualizar pedido. Tente novamente.', { id: toastId });
+      toast.error(error instanceof Error ? error.message : 'Erro ao atualizar pedido. Tente novamente.', { id: toastId });
     }
   };
 
@@ -416,15 +397,15 @@ function PedidosPageContent() {
       message: `Deseja realmente cancelar o pedido #${pedido.numero}?\n\nO pedido ficará com status CANCELADO.`,
       severity: 'warning',
       onConfirm: async () => {
-        setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Cancelando pedido...');
 
         try {
-          await cancelarMutation.mutateAsync({ id: pedido.id });
+          await cancelarMutation.mutateAsync({ id: pedido.id, versao: pedido.versao });
+          setConfirmDialog(atual => ({ ...atual, open: false }));
           toast.success(`Pedido #${pedido.numero} cancelado com sucesso!`, { id: toastId });
           await atualizarListaPedidos();
         } catch (error) {
-          toast.error('Erro ao cancelar pedido. Tente novamente.', { id: toastId });
+          toast.error(error instanceof Error ? error.message : 'Erro ao cancelar pedido. Tente novamente.', { id: toastId });
         }
       },
     });
@@ -437,36 +418,37 @@ function PedidosPageContent() {
       message: `Deseja finalizar o pedido #${pedido.numero}?\n\nO pedido ficará com status FINALIZADO.`,
       severity: 'success',
       onConfirm: async () => {
-        setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Finalizando pedido...');
 
         try {
-          await finalizarMutation.mutateAsync({ id: pedido.id });
+          await finalizarMutation.mutateAsync({ id: pedido.id, versao: pedido.versao });
+          setConfirmDialog(atual => ({ ...atual, open: false }));
           toast.success(`Pedido #${pedido.numero} finalizado com sucesso!`, { id: toastId });
           await atualizarListaPedidos();
         } catch (error) {
-          toast.error('Erro ao finalizar pedido. Tente novamente.', { id: toastId });
+          toast.error(error instanceof Error ? error.message : 'Erro ao finalizar pedido. Tente novamente.', { id: toastId });
         }
       },
     });
   };
 
   const handleDuplicarPedido = async (pedido: any) => {
+    const chave = crypto.randomUUID();
     setConfirmDialog({
       open: true,
       title: 'Duplicar Pedido',
       message: `Deseja duplicar o pedido #${pedido.numero}?\n\nUma cópia do pedido será criada com todos os itens.`,
       severity: 'info',
       onConfirm: async () => {
-        setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Duplicando pedido...');
 
         try {
-          await duplicarMutation.mutateAsync({ id: pedido.id });
+          await duplicarMutation.mutateAsync({ id: pedido.id, versao: pedido.versao, chave_requisicao: chave });
+          setConfirmDialog(atual => ({ ...atual, open: false }));
           toast.success('Pedido duplicado com sucesso!', { id: toastId });
           await atualizarListaPedidos();
         } catch (error) {
-          toast.error('Erro ao duplicar pedido. Tente novamente.', { id: toastId });
+          toast.error(error instanceof Error ? error.message : 'Erro ao duplicar pedido. Tente novamente.', { id: toastId });
         }
       },
     });
@@ -479,15 +461,15 @@ function PedidosPageContent() {
       message: `⚠️ ATENÇÃO: Deseja realmente EXCLUIR o pedido #${pedido.numero}?\n\n✗ Esta ação NÃO pode ser desfeita!\n✗ Todos os itens do pedido também serão excluídos.\n✗ Não será possível recuperar os dados.`,
       severity: 'error',
       onConfirm: async () => {
-        setConfirmDialog({ ...confirmDialog, open: false });
         const toastId = toast.loading('Excluindo pedido...');
 
         try {
-          await deletarMutation.mutateAsync({ id: pedido.id });
+          await deletarMutation.mutateAsync({ id: pedido.id, versao: pedido.versao });
+          setConfirmDialog(atual => ({ ...atual, open: false }));
           toast.success(`Pedido #${pedido.numero} excluído com sucesso!`, { id: toastId });
           await atualizarListaPedidos();
         } catch (error) {
-          toast.error('Erro ao excluir pedido. Tente novamente.', { id: toastId });
+          toast.error(error instanceof Error ? error.message : 'Erro ao excluir pedido. Tente novamente.', { id: toastId });
         }
       },
     });
@@ -594,7 +576,8 @@ function PedidosPageContent() {
   return (
     <AppLayout>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+        {erroEstatisticas && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => recarregarEstatisticas()}>Tentar novamente</Button>}>Indicadores indisponíveis. Tente novamente.</Alert>}
+      <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
           <Link underline="hover" color="inherit" href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
             Dashboard
           </Link>
@@ -643,7 +626,7 @@ function PedidosPageContent() {
                 </Box>
               </Box>
               <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
-                {total}
+                {erroEstatisticas ? '—' : estatisticas.totalPedidos ?? '—'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
                 Pedidos
@@ -683,7 +666,7 @@ function PedidosPageContent() {
                 </Box>
               </Box>
               <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
-                {estatisticas.pedidosPendentes}
+                {erroEstatisticas ? '—' : estatisticas.pedidosPendentes ?? '—'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
                 Pendentes
@@ -723,10 +706,10 @@ function PedidosPageContent() {
                 </Box>
               </Box>
               <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5, fontSize: '1.25rem' }}>
-                {formatCurrency(estatisticas.totalVendas)}
+                {erroEstatisticas || estatisticas.totalVendas === undefined ? '—' : formatCurrency(estatisticas.totalVendas)}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
-                Total Vendas
+                Vendas finalizadas
               </Typography>
             </Card>
           </motion.div>
@@ -763,10 +746,10 @@ function PedidosPageContent() {
                 </Box>
               </Box>
               <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
-                {estatisticas.finalizadosHoje}
+                {erroEstatisticas ? '—' : estatisticas.finalizadosHoje ?? '—'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
-                Hoje
+                Finalizados hoje
               </Typography>
             </Card>
           </motion.div>
@@ -876,8 +859,8 @@ function PedidosPageContent() {
 
               <Grid item xs={12} sm={6} md={2}>
                 <FormControl fullWidth>
-                  <InputLabel>Status</InputLabel>
-                  <Select
+                  <InputLabel id="pedidos-select-1">Status</InputLabel>
+                    <Select labelId="pedidos-select-1"
                     value={status}
                     label="Status"
                     onChange={(e) => {
@@ -887,16 +870,18 @@ function PedidosPageContent() {
                     <MenuItem value="">Todos</MenuItem>
                     <MenuItem value="PENDENTE">Pendente</MenuItem>
                     <MenuItem value="CONFIRMADO">Confirmado</MenuItem>
-                    <MenuItem value="FINALIZADO">Finalizado</MenuItem>
+
+
+                  <MenuItem value="FINALIZADO">Finalizado</MenuItem>
                     <MenuItem value="CANCELADO">Cancelado</MenuItem>
-                  </Select>
+</Select>
                 </FormControl>
               </Grid>
 
               <Grid item xs={12} sm={6} md={2}>
                 <FormControl fullWidth>
-                  <InputLabel>Tipo</InputLabel>
-                  <Select
+                  <InputLabel id="pedidos-select-2">Tipo</InputLabel>
+                    <Select labelId="pedidos-select-2"
                     value={tipoAtendimento}
                     label="Tipo"
                     onChange={(e) => {
@@ -914,8 +899,8 @@ function PedidosPageContent() {
 
               <Grid item xs={12} sm={6} md={2}>
                 <FormControl fullWidth>
-                  <InputLabel>Forma Pgto.</InputLabel>
-                  <Select
+                  <InputLabel id="pedidos-select-3">Forma Pgto.</InputLabel>
+                    <Select labelId="pedidos-select-3"
                     value={formaPagamento}
                     label="Forma Pgto."
                     onChange={(e) => {
@@ -1001,6 +986,7 @@ function PedidosPageContent() {
           </AccordionDetails>
         </Accordion>
 
+        {erroPedidoUrl && <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarPedidoUrl()}>Tentar novamente</Button>}>Não foi possível abrir o pedido solicitado.</Alert>}
         {/* Loading do pedido da URL */}
         {loadingPedidoUrl && pedidoIdUrl && (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4, gap: 2 }}>
@@ -1010,7 +996,7 @@ function PedidosPageContent() {
         )}
 
         {/* Tabela */}
-        {isLoading ? (
+        {erroLista ? <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarLista()}>Tentar novamente</Button>}>Não foi possível carregar os pedidos. Confira a conexão e tente novamente.</Alert> : isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
             <CircularProgress />
           </Box>
@@ -1194,7 +1180,7 @@ function PedidosPageContent() {
           },
         }}
       >
-        <MenuItem onClick={() => handleMenuAction(() => handleEditarPedido(pedidoSelecionado))} disabled={pedidoSelecionado?.status === 'CANCELADO'}>
+        <MenuItem onClick={() => handleMenuAction(() => handleEditarPedido(pedidoSelecionado))} disabled={['CANCELADO','FINALIZADO'].includes(pedidoSelecionado?.status)}>
           <ListItemIcon>
             <Edit fontSize="small" color={pedidoSelecionado?.status === 'CANCELADO' ? 'disabled' : 'primary'} />
           </ListItemIcon>
@@ -1217,7 +1203,7 @@ function PedidosPageContent() {
 
         <Divider />
 
-        {pedidoSelecionado?.status === 'PENDENTE' && (
+        {['PENDENTE','CONFIRMADO'].includes(pedidoSelecionado?.status) && (
           <>
             <MenuItem onClick={() => handleMenuAction(() => handleFinalizarPedido(pedidoSelecionado))}>
               <ListItemIcon>
@@ -1237,7 +1223,7 @@ function PedidosPageContent() {
           </>
         )}
 
-        <MenuItem onClick={() => handleMenuAction(() => handleExcluirPedido(pedidoSelecionado))}>
+        <MenuItem onClick={() => handleMenuAction(() => handleExcluirPedido(pedidoSelecionado))} disabled={['CANCELADO','FINALIZADO'].includes(pedidoSelecionado?.status)}>
           <ListItemIcon>
             <Delete fontSize="small" sx={{ color: 'error.main' }} />
           </ListItemIcon>
@@ -1270,7 +1256,7 @@ function PedidosPageContent() {
         </DialogTitle>
 
         <DialogContent>
-          {loadingDetalhes ? (
+          {erroDetalhes ? <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarDetalhes()}>Tentar novamente</Button>}>Não foi possível carregar os detalhes do pedido.</Alert> : loadingDetalhes ? (
             <Box sx={{ pt: 2 }}>
               <LoadingSkeleton type="form" rows={3} />
               <Box sx={{ mt: 3 }}>
@@ -1435,7 +1421,7 @@ function PedidosPageContent() {
               Imprimir
             </Button>
 
-            {pedidoDetalhes?.status !== 'CANCELADO' && (
+            {pedidoDetalhes && !['CANCELADO','FINALIZADO'].includes(pedidoDetalhes.status) && (
               <Button
                 onClick={() => {
                   handleEditarPedido(pedidoDetalhes);
@@ -1448,7 +1434,7 @@ function PedidosPageContent() {
               </Button>
             )}
 
-            {pedidoDetalhes?.status === 'PENDENTE' && (
+            {['PENDENTE','CONFIRMADO'].includes(pedidoDetalhes?.status) && (
               <>
                 <Button
                   onClick={() => {
@@ -1516,8 +1502,8 @@ function PedidosPageContent() {
                 {/* Tipo de Atendimento */}
                 <Grid item xs={12}>
                   <FormControl fullWidth>
-                    <InputLabel>Tipo de Atendimento</InputLabel>
-                    <Select
+                    <InputLabel id="pedidos-select-4">Tipo de Atendimento</InputLabel>
+                    <Select labelId="pedidos-select-4"
                       value={pedidoEditando.tipo_atendimento_id || ''}
                       label="Tipo de Atendimento"
                       onChange={(e) => setPedidoEditando({
@@ -1538,8 +1524,8 @@ function PedidosPageContent() {
                 {/* Forma de Pagamento */}
                 <Grid item xs={12}>
                   <FormControl fullWidth>
-                    <InputLabel>Forma de Pagamento</InputLabel>
-                    <Select
+                    <InputLabel id="pedidos-select-5">Forma de Pagamento</InputLabel>
+                    <Select labelId="pedidos-select-5"
                       value={pedidoEditando.forma_pagamento_id || ''}
                       label="Forma de Pagamento"
                       onChange={(e) => setPedidoEditando({
@@ -1581,8 +1567,8 @@ function PedidosPageContent() {
                 {/* Status */}
                 <Grid item xs={12}>
                   <FormControl fullWidth>
-                    <InputLabel>Status</InputLabel>
-                    <Select
+                    <InputLabel id="pedidos-select-6">Status</InputLabel>
+                    <Select labelId="pedidos-select-6"
                       value={pedidoEditando.status || 'PENDENTE'}
                       label="Status"
                       onChange={(e) => setPedidoEditando({
@@ -1592,8 +1578,8 @@ function PedidosPageContent() {
                     >
                       <MenuItem value="PENDENTE">Pendente</MenuItem>
                       <MenuItem value="CONFIRMADO">Confirmado</MenuItem>
-                      <MenuItem value="FINALIZADO">Finalizado</MenuItem>
-                      <MenuItem value="CANCELADO">Cancelado</MenuItem>
+
+
                     </Select>
                   </FormControl>
                 </Grid>
@@ -1815,6 +1801,7 @@ function PedidosPageContent() {
       <ConfirmDialog
         open={confirmDialog.open}
         onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}
+        loading={cancelarMutation.isPending || finalizarMutation.isPending || duplicarMutation.isPending || deletarMutation.isPending}
         onConfirm={confirmDialog.onConfirm}
         title={confirmDialog.title}
         message={confirmDialog.message}

@@ -65,8 +65,12 @@ export default function PrintConfirmDialog({
 
         {/* Opção Imprimir */}
         <Paper
+          component="button"
+          type="button"
           elevation={0}
           sx={{
+            width: '100%', textAlign: 'left', font: 'inherit', color: 'inherit',
+            '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.dark', outlineOffset: 3 },
             p: 2,
             mb: 2,
             border: '2px solid',
@@ -75,7 +79,7 @@ export default function PrintConfirmDialog({
             cursor: 'pointer',
             transition: 'all 0.2s',
             '&:hover': {
-              bgcolor: 'primary.50',
+              bgcolor: 'action.hover',
               transform: 'translateY(-2px)',
               boxShadow: 2,
             },
@@ -109,8 +113,12 @@ export default function PrintConfirmDialog({
 
         {/* Opção Baixar */}
         <Paper
+          component="button"
+          type="button"
           elevation={0}
           sx={{
+            width: '100%', textAlign: 'left', font: 'inherit', color: 'inherit',
+            '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.dark', outlineOffset: 3 },
             p: 2,
             border: '2px solid',
             borderColor: 'grey.300',

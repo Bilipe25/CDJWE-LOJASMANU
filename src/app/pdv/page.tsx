@@ -75,6 +75,7 @@ import { trpc } from '@/lib/trpc/client';
 import { usePDVStore } from '@/stores/pdv-store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
+import { arredondarMoeda } from '@/lib/utils/valores-pedido';
 import EnderecoFields from '@/components/common/EnderecoFields';
 import { EnderecoCliente, EnderecoFormulario, enderecoVazio, formatarEndereco, selecionarEndereco, temDadosEndereco } from '@/lib/utils/endereco';
 
@@ -84,6 +85,24 @@ function PDVPageContent() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const pedidoEditId = searchParams.get('edit');
+  const {
+    pedidoAtual,
+    adicionarItem,
+    atualizarItem: atualizarItemStore,
+    removerItem,
+    limparCarrinho,
+    setPedidoAtual,
+    novoPedido,
+  } = usePDVStore();
+  const [rascunhoPronto, setRascunhoPronto] = useState(false);
+  useEffect(() => { setRascunhoPronto(true); }, []);
+  const salvandoRef = useRef(false);
+  const [salvando, setSalvando] = useState(false);
+  const edicaoHidratada = useRef<string | null>(null);
+  const [falhaHidratacao, setFalhaHidratacao] = useState('');
+  const atualizarItem = (index: number, item: Parameters<typeof atualizarItemStore>[1]) => {
+    try { atualizarItemStore(index,item); } catch (erro) { toast.error((erro as Error).message); }
+  };
   const [modoEdicao, setModoEdicao] = useState(false);
   const [pedidoOriginalId, setPedidoOriginalId] = useState<string | null>(null);
 
@@ -93,7 +112,8 @@ function PDVPageContent() {
   const [descontoItem, setDescontoItem] = useState(0);
   const [tipoDescontoItem, setTipoDescontoItem] = useState<'valor' | 'percentual'>('valor');
   const [corSelecionada, setCorSelecionada] = useState<any>(null);
-  const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+  const clienteSelecionado = pedidoAtual.cliente ?? null;
+  const setClienteSelecionado = (cliente: any) => setPedidoAtual({ cliente: cliente ?? undefined, cliente_id: cliente?.id, cliente_nome: cliente?.nome });
   const [searchProduto, setSearchProduto] = useState('');
   const [searchCliente, setSearchCliente] = useState('');
   const [dialogFinalizar, setDialogFinalizar] = useState(false);
@@ -111,10 +131,14 @@ function PDVPageContent() {
   // Novos campos da venda
   const [enderecoSelecionado, setEnderecoSelecionado] = useState<EnderecoCliente | null>(null);
   const enderecoPedidoRestaurado = useRef<string | null>(null);
-  const [formaPagamentoId, setFormaPagamentoId] = useState('');
-  const [tipoAtendimentoId, setTipoAtendimentoId] = useState('');
-  const [telefoneContato, setTelefoneContato] = useState('');
-  const [observacoes, setObservacoes] = useState('');
+  const formaPagamentoId = pedidoAtual.forma_pagamento_id ?? '';
+  const setFormaPagamentoId = (valor: string) => setPedidoAtual({ forma_pagamento_id: valor });
+  const tipoAtendimentoId = pedidoAtual.tipo_atendimento_id ?? '';
+  const setTipoAtendimentoId = (valor: string) => setPedidoAtual({ tipo_atendimento_id: valor });
+  const telefoneContato = pedidoAtual.telefone_contato ?? '';
+  const setTelefoneContato = (valor: string) => setPedidoAtual({ telefone_contato: valor });
+  const observacoes = pedidoAtual.observacao ?? '';
+  const setObservacoes = (valor: string) => setPedidoAtual({ observacao: valor });
   const [dialogNovoCliente, setDialogNovoCliente] = useState(false);
   const [novoClienteNome, setNovoClienteNome] = useState('');
   const [novoClienteCPF, setNovoClienteCPF] = useState('');
@@ -137,20 +161,20 @@ function PDVPageContent() {
     }
   }, [isMobile]);
 
-  const { data: produtos } = trpc.produtos.list.useQuery({
+  const { data: produtos, error: erroProdutos, refetch: recarregarProdutos } = trpc.produtos.list.useQuery({
     limit: 100,
     offset: 0,
     search: searchProduto || undefined,
   });
 
-  const { data: clientes } = trpc.clientes.list.useQuery({
+  const { data: clientes, error: erroClientes, refetch: recarregarClientes } = trpc.clientes.list.useQuery({
     limit: 1000,
     offset: 0,
     search: searchCliente || undefined,
   });
 
-  const { data: tiposAtendimento } = trpc.dominios.tiposAtendimento.list.useQuery();
-  const { data: formasPagamento } = trpc.dominios.formasPagamento.list.useQuery();
+  const { data: tiposAtendimento, error: erroTipos, refetch: recarregarTipos } = trpc.dominios.tiposAtendimento.list.useQuery();
+  const { data: formasPagamento, error: erroPagamentos, refetch: recarregarPagamentos } = trpc.dominios.formasPagamento.list.useQuery();
   const { data: cores } = trpc.dominios.cores.list.useQuery();
 
   // Buscar endereços do cliente
@@ -160,7 +184,7 @@ function PDVPageContent() {
   );
 
   // Buscar pedido para edição
-  const { data: pedidoParaEditar, isLoading: loadingPedido } = trpc.pedidos.getById.useQuery(
+  const { data: pedidoParaEditar, isLoading: loadingPedido, error: erroPedido, refetch: recarregarPedido } = trpc.pedidos.getById.useQuery(
     { id: pedidoEditId || '' },
     { enabled: !!pedidoEditId }
   );
@@ -172,79 +196,32 @@ function PDVPageContent() {
   const criarProdutoMutation = trpc.produtos.create.useMutation();
   const criarPedidoMutation = trpc.pedidos.create.useMutation();
   const atualizarPedidoMutation = trpc.pedidos.update.useMutation();
-  const adicionarItemMutation = trpc.pedidos.addItem.useMutation();
-  const removerItemMutation = trpc.pedidos.removeItem.useMutation();
 
   // Hook para buscar configurações
   const { data: configuracoes } = trpc.configuracoes.get.useQuery();
 
-  const {
-    pedidoAtual,
-    adicionarItem,
-    atualizarItem,
-    removerItem,
-    limparCarrinho,
-    setPedidoAtual,
-    novoPedido,
-  } = usePDVStore();
+
 
   // useEffect para carregar dados do pedido em modo edição
   useEffect(() => {
-    if (pedidoEditId && pedidoParaEditar && !modoEdicao && clientes && produtos) {
-      setModoEdicao(true);
-      setPedidoOriginalId(pedidoEditId);
+    if (!pedidoEditId || !pedidoParaEditar || edicaoHidratada.current === pedidoEditId || ['CANCELADO','FINALIZADO'].includes(pedidoParaEditar.status ?? '')) return;
+    try {
+      const cliente = pedidoParaEditar.cliente_id ? { id: pedidoParaEditar.cliente_id, nome: pedidoParaEditar.cliente_nome ?? '', cpf: pedidoParaEditar.cliente_cpf, telefone: pedidoParaEditar.cliente_telefone } : undefined;
+      setPedidoAtual({
+        id: pedidoParaEditar.id ?? undefined, numero: pedidoParaEditar.numero ?? undefined, versao: pedidoParaEditar.versao,
+        data: pedidoParaEditar.data ?? dateToString(new Date()), cliente,
+        cliente_id: cliente?.id, cliente_nome: cliente?.nome, endereco_id: pedidoParaEditar.endereco_id ?? undefined,
+        tipo_atendimento_id: pedidoParaEditar.tipo_atendimento_id ?? undefined, forma_pagamento_id: pedidoParaEditar.forma_pagamento_id ?? undefined,
+        telefone_contato: pedidoParaEditar.telefone_contato ?? cliente?.telefone ?? '', observacao: pedidoParaEditar.observacao ?? '',
+        desconto_valor: pedidoParaEditar.desconto_valor ?? 0, status: pedidoParaEditar.status as 'PENDENTE' | 'CONFIRMADO',
+        itens: pedidoParaEditar.itens.map(item => ({ id: item.id ?? undefined, produto_id: item.produto_id!, produto_nome: item.produto_nome ?? 'Produto', produto_codigo: item.produto_codigo ?? undefined, cor_id: item.cor_id ?? undefined, cor_descricao: item.cor_descricao ?? undefined, quantidade: item.quantidade ?? 0, valor_unitario: item.valor_unitario ?? 0, desconto_valor: item.desconto_valor ?? 0, valor_total: item.valor_total ?? 0, ordem: item.ordem ?? 0 })),
+      });
+      setSearchCliente(cliente?.nome ?? '');
+      setModoEdicao(true); setPedidoOriginalId(pedidoEditId); edicaoHidratada.current = pedidoEditId; setFalhaHidratacao('');
+    } catch (erro) { setFalhaHidratacao('Pedido com valores inválidos: ' + (erro as Error).message); }
+  }, [pedidoEditId, pedidoParaEditar, setPedidoAtual]);
 
-      let telefoneClienteEncontrado = '';
-
-      // Buscar e carregar cliente
-      if (pedidoParaEditar.cliente_id) {
-        const cliente = clientes?.clientes?.find((c: any) => c.id === pedidoParaEditar.cliente_id);
-        if (cliente) {
-          setClienteSelecionado(cliente);
-          setSearchCliente(cliente.nome || '');
-          telefoneClienteEncontrado = cliente.telefone || '';
-        } else {
-          // Se não encontrou na lista, usar os dados que vêm do pedido
-          if (pedidoParaEditar.cliente_nome) {
-            setClienteSelecionado({
-              id: pedidoParaEditar.cliente_id,
-              nome: pedidoParaEditar.cliente_nome,
-              cpf: pedidoParaEditar.cliente_cpf,
-              telefone: pedidoParaEditar.cliente_telefone,
-            });
-            setSearchCliente(pedidoParaEditar.cliente_nome);
-            telefoneClienteEncontrado = pedidoParaEditar.cliente_telefone || '';
-          }
-        }
-      }
-
-      // Preencher campos
-      setTipoAtendimentoId(pedidoParaEditar.tipo_atendimento_id || '');
-      setFormaPagamentoId(pedidoParaEditar.forma_pagamento_id || '');
-      setTelefoneContato((pedidoParaEditar as any).telefone_contato || telefoneClienteEncontrado || '');
-      setObservacoes(pedidoParaEditar.observacao || '');
-      setDescontoGeral(pedidoParaEditar.desconto_valor || 0);
-
-      // Carregar itens do pedido
-      if (pedidoParaEditar.itens && Array.isArray(pedidoParaEditar.itens)) {
-        limparCarrinho();
-        pedidoParaEditar.itens.forEach((item: any) => {
-          adicionarItem({
-            produto_id: item.produto_id,
-            produto_nome: item.produto_nome || 'Produto', // Vem da view vw_itens_pedido_completos
-            produto_codigo: item.produto_codigo || '', // Vem da view vw_itens_pedido_completos
-            cor_id: item.cor_id,
-            cor_descricao: item.cor_descricao || '', // Vem da view vw_itens_pedido_completos
-            quantidade: item.quantidade,
-            valor_unitario: item.valor_unitario,
-            desconto_valor: item.desconto_valor || 0,
-          });
-        });
-      }
-
-      toast.success(`Editando pedido #${pedidoParaEditar.numero}`);
-    }
-  }, [pedidoEditId, pedidoParaEditar, modoEdicao, clientes, produtos, clienteCompleto]);
+  useEffect(() => { setDescontoGeral(pedidoAtual.desconto_valor); setTipoDescontoGeral('valor'); }, [pedidoAtual.desconto_valor]);
 
   // Esperar o cliente correto antes de restaurar o endereço vinculado ao pedido.
   useEffect(() => {
@@ -261,7 +238,7 @@ function PDVPageContent() {
       pedidoParaEditar?.cliente_id === clienteSelecionado.id && !enderecoSelecionado;
     const endereco = restaurarPedido
       ? selecionarEndereco(clienteCompleto.enderecos, pedidoParaEditar?.endereco_id ?? null)
-      : semEnderecoNoPedido ? null : enderecoSelecionado && selecaoAtual ? selecaoAtual : selecionarEndereco(clienteCompleto.enderecos);
+      : semEnderecoNoPedido ? null : enderecoSelecionado && selecaoAtual ? selecaoAtual : selecionarEndereco(clienteCompleto.enderecos, pedidoAtual.endereco_id);
     if (restaurarPedido) enderecoPedidoRestaurado.current = pedidoEditId;
     setEnderecoSelecionado(endereco);
     setPedidoAtual({ endereco_id: endereco?.id });
@@ -299,30 +276,15 @@ function PDVPageContent() {
         }
       }
 
-      // ESC - Cancelar/Limpar busca
+      const alvo = e.target as HTMLElement | null;
+      const campoProduto = alvo === produtoInputRef.current || !!alvo?.closest('[data-pdv-item]');
+      if (e.key === 'Enter' && produtoSelecionado && !emDialog && campoProduto && !salvandoRef.current) {
+        e.preventDefault(); handleAdicionarProduto();
+      }
       if (e.key === 'Escape' && !emDialog) {
-        e.preventDefault();
-        setSearchProduto('');
-        setSearchCliente('');
-        setClienteSelecionado(null);
-        toast('Seleção limpa', { icon: '🧹' });
-      }
-
-      // Enter - Adicionar produto se estiver selecionado
-      if (e.key === 'Enter' && produtoSelecionado && !emDialog) {
-        e.preventDefault();
-        handleAdicionarProduto();
-      }
-
-      // Esc - Limpar seleção
-      if (e.key === 'Escape' && produtoSelecionado && !emDialog) {
-        setProdutoSelecionado(null);
-        setQuantidade(1);
-        setValorUnitario(0);
-        setDescontoItem(0);
-        setTipoDescontoItem('valor');
-        setCorSelecionada(null);
-        toast('Seleção cancelada', { icon: '❌' });
+        if (campoProduto) {
+          setProdutoSelecionado(null); setSearchProduto(''); setQuantidade(1); setValorUnitario(0); setDescontoItem(0); setTipoDescontoItem('valor'); setCorSelecionada(null);
+        } else if (alvo === clienteInputRef.current) { setSearchCliente(''); }
       }
 
       // Ctrl+P - Abrir dialog de novo produto
@@ -335,7 +297,7 @@ function PDVPageContent() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, dialogNovoProduto, dialogAtalhos, quantidade, pedidoAtual.itens.length]);
+  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, dialogNovoProduto, dialogAtalhos, quantidade, pedidoAtual.itens.length, valorUnitario, descontoItem, tipoDescontoItem, corSelecionada, tipoAtendimentoId, formaPagamentoId, pedidoAtual.desconto_valor, clienteSelecionado]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -348,7 +310,7 @@ function PDVPageContent() {
     if (!produtoSelecionado || quantidade <= 0) return;
 
     // Calcular desconto baseado no tipo
-    const valorUnitarioFinal = valorUnitario > 0 ? valorUnitario : produtoSelecionado.valor_base;
+    const valorUnitarioFinal = valorUnitario;
     const valorTotalItem = valorUnitarioFinal * quantidade;
     let descontoValor = 0;
 
@@ -360,7 +322,7 @@ function PDVPageContent() {
       descontoValor = descontoItem;
     }
 
-    adicionarItem({
+    try { adicionarItem({
       produto_id: produtoSelecionado.id,
       produto_nome: produtoSelecionado.nome,
       produto_codigo: produtoSelecionado.codigo,
@@ -368,8 +330,8 @@ function PDVPageContent() {
       cor_descricao: corSelecionada?.descricao,
       quantidade,
       valor_unitario: valorUnitarioFinal,
-      desconto_valor: descontoValor,
-    });
+      desconto_valor: arredondarMoeda(descontoValor),
+    }); } catch (erro) { toast.error((erro as Error).message); return; }
 
     // Toast de sucesso
     toast.success(
@@ -402,7 +364,7 @@ function PDVPageContent() {
       valorDesconto = (pedidoAtual.subtotal * descontoGeral) / 100;
     }
 
-    setPedidoAtual({ desconto_valor: valorDesconto });
+    try { setPedidoAtual({ desconto_valor: arredondarMoeda(valorDesconto) }); } catch (erro) { toast.error((erro as Error).message); }
   };
 
   // Duplicar linha do carrinho
@@ -426,6 +388,7 @@ function PDVPageContent() {
   };
 
   const handleFinalizarPedido = () => {
+    if (salvandoRef.current) return;
     if (pedidoAtual.itens.length === 0) {
       toast.error('Adicione pelo menos um item ao pedido');
       return;
@@ -447,6 +410,9 @@ function PDVPageContent() {
   };
 
   const handleConfirmarPedido = async () => {
+    if (salvandoRef.current || !rascunhoPronto) return;
+    if (pedidoEditId && (!modoEdicao || !pedidoAtual.versao)) { toast.error('Carregue o pedido antes de salvar.'); return; }
+    if (!pedidoAtual.itens.length || !tipoAtendimentoId || !formaPagamentoId) { toast.error('Confira os itens, tipo de atendimento e pagamento.'); return; }
     if (clienteSelecionado && (carregandoCliente || erroCliente || clienteCompleto?.id !== clienteSelecionado.id)) {
       toast.error('Aguarde o carregamento dos endereços do cliente ou tente novamente.');
       return;
@@ -459,6 +425,7 @@ function PDVPageContent() {
       toast.error('O endereço original não está disponível. Selecione um endereço para este pedido.');
       return;
     }
+    salvandoRef.current = true; setSalvando(true);
     const toastId = toast.loading(modoEdicao ? 'Atualizando pedido...' : 'Salvando pedido...');
 
     try {
@@ -473,45 +440,22 @@ function PDVPageContent() {
       }));
 
       if (modoEdicao && pedidoOriginalId) {
-        // Atualizar pedido existente
-        // 1. Remover todos os itens antigos do pedido
-        if (pedidoParaEditar?.itens && Array.isArray(pedidoParaEditar.itens)) {
-          for (const item of pedidoParaEditar.itens) {
-            if (item.id) {
-              await removerItemMutation.mutateAsync({ id: item.id });
-            }
-          }
-        }
-
-        // 2. Adicionar os novos itens
-        for (const item of itens) {
-          await adicionarItemMutation.mutateAsync({
-            pedido_id: pedidoOriginalId,
-            item: {
-              produto_id: item.produto_id,
-              quantidade: item.quantidade,
-              valor_unitario: item.valor_unitario,
-              cor_id: item.cor_id,
-              desconto_valor: item.desconto_valor,
-              ordem: item.ordem,
-            },
-          });
-        }
-
-        // 3. Atualizar dados principais do pedido
         await atualizarPedidoMutation.mutateAsync({
           id: pedidoOriginalId,
+          versao: pedidoAtual.versao!,
+          itens,
           cliente_id: clienteSelecionado?.id ?? null,
           endereco_id: enderecoSelecionado?.id ?? null,
           tipo_atendimento_id: tipoAtendimentoId,
           forma_pagamento_id: formaPagamentoId || undefined,
-          telefone_contato: telefoneContato || undefined,
+          telefone_contato: telefoneContato || null,
           desconto_valor: pedidoAtual.desconto_valor,
-          observacao: observacoes || undefined,
+          observacao: observacoes || null,
         });
 
         toast.success('Pedido atualizado com sucesso!', { id: toastId });
         setDialogFinalizar(false);
+        await utils.invalidate();
         novoPedido(); // Limpar PDV após edição e salvar
 
         // Verificar se há URL de retorno com filtros salvos
@@ -525,7 +469,8 @@ function PDVPageContent() {
       } else {
         // Criar pedido novo
         const pedidoCriado = await criarPedidoMutation.mutateAsync({
-          data: dateToString(new Date()),
+          chave_requisicao: pedidoAtual.chave_requisicao,
+          data: pedidoAtual.data,
           cliente_id: clienteSelecionado?.id ?? null,
           endereco_id: enderecoSelecionado?.id ?? null,
           tipo_atendimento_id: tipoAtendimentoId,
@@ -541,29 +486,21 @@ function PDVPageContent() {
 
         toast.success(`Pedido #${(pedidoCriado as any).numero} criado com sucesso!`, { id: toastId });
         setDialogFinalizar(false);
+        await utils.invalidate();
         novoPedido();
         limparCamposVenda();
       }
     } catch (error: any) {
       console.error('Erro ao salvar pedido:', error);
       toast.error(error?.message || 'Erro ao salvar pedido. Tente novamente.', { id: toastId });
-    }
+    } finally { salvandoRef.current = false; setSalvando(false); }
   };
 
   const limparCamposVenda = () => {
-    setClienteSelecionado(null);
-    setSearchCliente('');
-    setEnderecoSelecionado(null);
-    setFormaPagamentoId('');
-    setTipoAtendimentoId('');
-    setTelefoneContato('');
-    setObservacoes('');
-    setDescontoGeral(0);
-    setTipoDescontoGeral('valor');
-    setAccordionExpandido('cliente');
-    setPedidoOriginalId(null);
-    setModoEdicao(false);
-    enderecoPedidoRestaurado.current = null;
+    novoPedido(); setEnderecoSelecionado(null); setSearchCliente(''); setSearchProduto('');
+    setDescontoGeral(0); setTipoDescontoGeral('valor'); setAccordionExpandido('cliente'); setActiveStep(0);
+    setPedidoOriginalId(null); setModoEdicao(false); setProdutoSelecionado(null); setQuantidade(1); setValorUnitario(0);
+    setDescontoItem(0); setCorSelecionada(null); enderecoPedidoRestaurado.current = null;
   };
 
   const handleCriarCliente = async () => {
@@ -586,7 +523,7 @@ function PDVPageContent() {
         endereco: temDadosEndereco(novoClienteEndereco) ? { ...novoClienteEndereco, principal: true } : undefined,
       });
 
-      await utils.clientes.list.invalidate();
+      await utils.invalidate();
       setEnderecoSelecionado(null);
       setPedidoAtual({ cliente_id: novoCliente.id, cliente_nome: novoCliente.nome, endereco_id: undefined });
       setClienteSelecionado(novoCliente);
@@ -628,6 +565,8 @@ function PDVPageContent() {
         unidade: novoProdutoUnidade || 'UN',
       });
 
+      await utils.invalidate();
+
       // Adicionar o produto direto ao carrinho
       handleSelecionarProduto(novoProduto);
       setProdutoSelecionado(novoProduto);
@@ -657,7 +596,7 @@ function PDVPageContent() {
       numero: pedidoAtual.numero,
       data: pedidoAtual.data,
       cliente_nome: clienteSelecionado?.nome,
-      cliente_cpf: clienteSelecionado?.cpf,
+      cliente_cpf: clienteSelecionado?.cpf ?? undefined,
       cliente_telefone: telefoneContato,
       endereco: enderecoCompleto,
       tipo_atendimento: (tiposAtendimento as any)?.find((t: any) => t.id === tipoAtendimentoId)?.nome,
@@ -693,7 +632,10 @@ function PDVPageContent() {
     await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
   };
 
-  if (loadingPedido) {
+  if (falhaHidratacao || erroPedido || (pedidoEditId && pedidoParaEditar && ['CANCELADO','FINALIZADO'].includes(pedidoParaEditar.status ?? ''))) {
+    return <AppLayout><Alert severity="error">{falhaHidratacao || (erroPedido ? 'Não foi possível carregar o pedido. Seu rascunho foi preservado.' : 'Este pedido está encerrado e não pode ser editado.')}</Alert><Button onClick={() => recarregarPedido()}>Tentar novamente</Button><Button onClick={() => router.push('/pedidos')}>Voltar aos pedidos</Button></AppLayout>;
+  }
+  if (!rascunhoPronto || loadingPedido || (pedidoEditId && !modoEdicao)) {
     return (
       <AppLayout>
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
@@ -705,6 +647,7 @@ function PDVPageContent() {
 
   return (
     <AppLayout>
+      {(erroProdutos || erroClientes || erroTipos || erroPagamentos) && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => { void recarregarProdutos(); void recarregarClientes(); void recarregarTipos(); void recarregarPagamentos(); }}>Tentar novamente</Button>}>Não foi possível carregar os dados da venda. Confira a conexão e tente novamente.</Alert>}
       <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb" sx={{ mb: 3 }}>
         <Link underline="hover" color="inherit" href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
           Dashboard
@@ -847,6 +790,7 @@ function PDVPageContent() {
                       fullWidth
                       type="number"
                       label="Quantidade"
+                      data-pdv-item="true"
                       value={quantidade}
                       onChange={(e) => setQuantidade(Math.max(0.01, parseFloat(e.target.value) || 1))}
                       InputProps={{
@@ -865,6 +809,7 @@ function PDVPageContent() {
                       fullWidth
                       type="number"
                       label="Valor Unitário"
+                      data-pdv-item="true"
                       value={valorUnitario}
                       onChange={(e) => setValorUnitario(Math.max(0, parseFloat(e.target.value) || 0))}
                       InputProps={{
@@ -898,6 +843,7 @@ function PDVPageContent() {
                       fullWidth
                       type="number"
                       label={`Desconto (${tipoDescontoItem === 'percentual' ? '%' : 'R$'})`}
+                      data-pdv-item="true"
                       value={descontoItem}
                       onChange={(e) => setDescontoItem(Math.max(0, parseFloat(e.target.value) || 0))}
                       InputProps={{
@@ -949,7 +895,7 @@ function PDVPageContent() {
                   size="large"
                   startIcon={<Add />}
                   onClick={handleAdicionarProduto}
-                  disabled={!produtoSelecionado || quantidade <= 0 || valorUnitario <= 0}
+                  disabled={salvando || !produtoSelecionado || quantidade <= 0 || valorUnitario < 0}
                   sx={{
                     height: { xs: 48, sm: 56 },
                     fontWeight: 'bold',
@@ -1118,7 +1064,7 @@ function PDVPageContent() {
                                 />
                               ) : (
                                 <Box
-                                  onClick={() => setEditandoItem(index)}
+                                  role="button" tabIndex={0} aria-label="Editar preço do item" onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditandoItem(index); } }} onClick={() => setEditandoItem(index)}
                                   sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: 1, px: 1 }}
                                 >
                                   {formatCurrency(item.valor_unitario)}
@@ -1561,7 +1507,7 @@ function PDVPageContent() {
       </Grid>
 
       {/* Dialog de Finalização */}
-      <Dialog open={dialogFinalizar} onClose={() => setDialogFinalizar(false)} maxWidth="md" fullWidth fullScreen={isMobile}>
+      <Dialog open={dialogFinalizar} onClose={() => { if (!salvandoRef.current) setDialogFinalizar(false); }} maxWidth="md" fullWidth fullScreen={isMobile}>
         <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Receipt />
@@ -1571,7 +1517,7 @@ function PDVPageContent() {
         <DialogContent>
           <Box sx={{ pt: 3 }}>
             {/* Valor Total */}
-            <Box sx={{ bgcolor: 'primary.light', color: 'primary.contrastText', p: 3, borderRadius: 2, mb: 3, textAlign: 'center' }}>
+            <Box sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', p: 3, borderRadius: 2, mb: 3, textAlign: 'center' }}>
               <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>
                 Valor Total
               </Typography>
@@ -1726,10 +1672,11 @@ function PDVPageContent() {
             </Button>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button onClick={() => setDialogFinalizar(false)} variant="outlined" size="large">
+            <Button disabled={salvando} onClick={() => setDialogFinalizar(false)} variant="outlined" size="large">
               Voltar
             </Button>
             <Button
+              disabled={salvando}
               onClick={handleConfirmarPedido}
               variant="contained"
               size="large"

@@ -1,96 +1,43 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '@/lib/trpc/server';
+import { TRPCError } from '@trpc/server';
+import { executarRPC } from '@/server/rpc';
+import { totaisPedido } from '@/lib/utils/valores-pedido';
+import type { Database } from '@/types/supabase';
+import { router, protectedProcedure, adminProcedure } from '@/lib/trpc/server';
 
 const itemPedidoSchema = z.object({
   produto_id: z.string().uuid(),
   cor_id: z.string().uuid().optional(),
-  quantidade: z.number().min(0.001),
-  valor_unitario: z.number().min(0),
-  desconto_valor: z.number().min(0).default(0),
-  ordem: z.number().default(0),
-});
+  quantidade: z.number().finite().min(0.001),
+  valor_unitario: z.number().finite().min(0),
+  desconto_valor: z.number().finite().min(0).default(0),
+  ordem: z.number().int().min(0).default(0),
+}).refine(item => item.desconto_valor <= Math.round(item.quantidade * item.valor_unitario * 100) / 100, { message: 'O desconto do item não pode superar seu valor', path: ['desconto_valor'] });
 
-async function validarEnderecoPedido(
-  supabase: typeof import('@/lib/supabase/client').supabase,
-  clienteId: string | null | undefined,
-  enderecoId: string | null | undefined,
-) {
-  if (!enderecoId) return;
-  if (!clienteId) throw new Error('Selecione o cliente do endereço de entrega');
-  const { data: endereco, error } = await supabase.from('enderecos')
-    .select('cliente_id').eq('id', enderecoId).single();
-  if (error) throw new Error(error.message);
-  if (!endereco || endereco.cliente_id !== clienteId) {
-    throw new Error('O endereço de entrega não pertence ao cliente selecionado');
-  }
-}
+type PedidoRow = Database['public']['Tables']['pedidos']['Row'];
+const filtrosSchema = z.object({
+  limit: z.number().int().min(1).max(10000).default(50), offset: z.number().int().min(0).default(0),
+  search: z.string().trim().max(200).optional(),
+  status: z.enum(['PENDENTE','CONFIRMADO','CANCELADO','FINALIZADO']).optional().or(z.literal('')).transform(v => v || undefined),
+  dataInicio: z.string().optional().transform(v => v || undefined), dataFim: z.string().optional().transform(v => v || undefined),
+  tipoAtendimento: z.string().optional().transform(v => v || undefined),
+  formaPagamentoId: z.string().uuid().optional(), clienteId: z.string().uuid().optional(),
+});
+const identidadeSchema = z.object({ id: z.string().uuid(), versao: z.number().int().positive() });
 
 export const pedidosRouter = router({
   // Listar pedidos
-  list: publicProcedure
-    .input(
-      z.object({
-        limit: z.number().min(1).max(10000).default(50),
-        offset: z.number().min(0).default(0),
-        status: z.enum(['PENDENTE', 'CONFIRMADO', 'CANCELADO', 'FINALIZADO']).optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
-        dataInicio: z.string().optional().transform(val => val === '' ? undefined : val),
-        dataFim: z.string().optional().transform(val => val === '' ? undefined : val),
-        tipoAtendimento: z.string().optional().transform(val => val === '' ? undefined : val),
-        formaPagamentoId: z.string().uuid().optional().transform(val => val === '' ? undefined : val),
-        clienteId: z.string().uuid().optional(),
-      })
-    )
+  list: protectedProcedure
+    .input(filtrosSchema)
     .query(async ({ ctx, input }) => {
-      let query = ctx.supabase
-        .from('vw_pedidos_completos')
-        .select('*', { count: 'exact' })
-        .range(input.offset, input.offset + input.limit - 1)
-        .order('data', { ascending: false });
-
-      if (input.status) {
-        query = query.eq('status', input.status);
-      }
-
-      if (input.dataInicio) {
-        query = query.gte('data', input.dataInicio);
-      }
-
-      if (input.dataFim) {
-        query = query.lte('data', input.dataFim);
-      }
-
-      if (input.tipoAtendimento) {
-        if (input.tipoAtendimento === 'SEM_TIPO') {
-          query = query.is('tipo_atendimento_tipo', null);
-        } else {
-          query = query.eq('tipo_atendimento_tipo', input.tipoAtendimento);
-        }
-      } else {
-        // Por padrão, não listar registros de SAÍDA na listagem geral de pedidos
-        // (a página de Saídas envia explicitamente tipoAtendimento='SAIDA')
-        query = query.neq('tipo_atendimento_tipo', 'SAIDA');
-      }
-
-      if (input.formaPagamentoId) {
-        query = query.eq('forma_pagamento_id', input.formaPagamentoId);
-      }
-
-      if (input.clienteId) {
-        query = query.eq('cliente_id', input.clienteId);
-      }
-
-      const { data, error, count } = await query;
-
-      if (error) throw new Error(error.message);
-
-      return {
-        pedidos: data || [],
-        total: count || 0,
-      };
+      const { limit, offset, ...filtros } = input;
+      return await executarRPC(ctx.supabase, 'pdv_listar_pedidos', {
+        p_filtros: filtros, p_limite: limit, p_offset: offset,
+      }) as { pedidos: Database['public']['Views']['vw_pedidos_completos']['Row'][]; total: number };
     }),
 
   // Listar pedidos por cliente
-  listByCliente: publicProcedure
+  listByCliente: protectedProcedure
     .input(
       z.object({
         clienteId: z.string().uuid(),
@@ -109,7 +56,7 @@ export const pedidosRouter = router({
     }),
 
   // Buscar pedido por ID
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const { data: pedido, error: pedidoError } = await ctx.supabase
@@ -120,6 +67,8 @@ export const pedidosRouter = router({
 
       if (pedidoError) throw new Error(pedidoError.message);
 
+      const { data: meta, error: metaError } = await ctx.supabase.from('pedidos').select('versao, finalizado_em, telefone_contato').eq('id', input.id).single();
+      if (metaError) throw new Error(metaError.message);
       // Consultar o endereço vinculado ao pedido, sem depender dos campos da view.
       const { data: endereco, error: enderecoError } = pedido.endereco_id
         ? await ctx.supabase.from('enderecos').select('*').eq('id', pedido.endereco_id).single()
@@ -136,296 +85,57 @@ export const pedidosRouter = router({
 
       return {
         ...pedido,
+        ...meta,
         endereco,
         itens: itens || [],
       };
     }),
 
-  // Obter próximo número de pedido
-  getProximoNumero: publicProcedure.query(async ({ ctx }) => {
-    const { data, error } = await ctx.supabase.rpc('obter_proximo_numero_pedido');
-
-    if (error) throw new Error(error.message);
-    return data;
+  // A numeração é atribuída somente na gravação transacional.
+  create: protectedProcedure.input(z.object({
+    chave_requisicao: z.string().uuid(),
+    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    cliente_id: z.string().uuid().nullable().optional(), endereco_id: z.string().uuid().nullable().optional(),
+    tipo_atendimento_id: z.string().uuid(), forma_pagamento_id: z.string().uuid().nullable().optional(),
+    telefone_contato: z.string().max(20).nullable().optional(), desconto_valor: z.number().finite().min(0).default(0),
+    subtotal: z.number().finite().min(0).optional(), total: z.number().finite().min(0).optional(),
+    descricao: z.string().optional(), observacao: z.string().nullable().optional(),
+    status: z.enum(['PENDENTE','CONFIRMADO']).default('PENDENTE'), itens: z.array(itemPedidoSchema).default([]),
+  })).mutation(async ({ ctx, input }) => {
+    const { chave_requisicao, ...dados } = input;
+    if (dados.itens.length) {
+      try { Object.assign(dados, totaisPedido(dados.itens, dados.desconto_valor)); }
+      catch (erro) { throw new TRPCError({ code: 'BAD_REQUEST', message: (erro as Error).message }); }
+    }
+    return await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'criar', p_dados: dados, p_chave: chave_requisicao }) as PedidoRow;
   }),
-
-  // Criar pedido
-  create: publicProcedure
-    .input(
-      z.object({
-        data: z.string(),
-        cliente_id: z.string().uuid().nullable().optional(),
-        endereco_id: z.string().uuid().nullable().optional(),
-        tipo_atendimento_id: z.string().uuid(),
-        forma_pagamento_id: z.string().uuid().optional(),
-        telefone_contato: z.string().max(20).optional(),
-        desconto_valor: z.number().min(0).default(0),
-        subtotal: z.number().optional(),
-        total: z.number().optional(),
-        descricao: z.string().optional(),
-        observacao: z.string().optional(),
-        status: z.enum(['PENDENTE', 'CONFIRMADO', 'CANCELADO', 'FINALIZADO']).default('PENDENTE'),
-        itens: z.array(itemPedidoSchema).optional().default([]),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { itens, ...pedidoData } = input;
-      await validarEnderecoPedido(ctx.supabase, input.cliente_id, input.endereco_id);
-
-      // Obter próximo número
-      const { data: numero } = await ctx.supabase.rpc('obter_proximo_numero_pedido');
-
-      // Criar pedido
-      const { data: pedido, error: pedidoError } = await ctx.supabase
-        .from('pedidos')
-        .insert({
-          ...pedidoData,
-          numero,
-        })
-        .select()
-        .single();
-
-      if (pedidoError) throw new Error(pedidoError.message);
-
-      // Criar itens (somente se houver)
-      if (itens && itens.length > 0) {
-        const itensParaInserir = itens.map((item) => ({
-          ...item,
-          pedido_id: pedido.id,
-        }));
-
-        const { error: itensError } = await ctx.supabase
-          .from('itens_pedido')
-          .insert(itensParaInserir);
-
-        if (itensError) throw new Error(itensError.message);
-      }
-
-      return pedido;
-    }),
-
-  // Atualizar pedido
-  update: publicProcedure
-    .input(
-      z.object({
-        id: z.string().uuid(),
-        cliente_id: z.string().uuid().nullable().optional(),
-        endereco_id: z.string().uuid().nullable().optional(),
-        tipo_atendimento_id: z.string().uuid().optional(),
-        forma_pagamento_id: z.string().uuid().optional(),
-        telefone_contato: z.string().max(20).optional(),
-        desconto_valor: z.number().min(0).optional(),
-        total: z.number().optional(),
-        subtotal: z.number().optional(),
-        data: z.string().optional(),
-        descricao: z.string().optional(),
-        observacao: z.string().optional(),
-        status: z.enum(['PENDENTE', 'CONFIRMADO', 'CANCELADO', 'FINALIZADO']).optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { id, ...updateData } = input;
-      if (input.cliente_id !== undefined || input.endereco_id !== undefined) {
-        const { data: atual, error: atualError } = await ctx.supabase.from('pedidos')
-          .select('cliente_id, endereco_id').eq('id', id).single();
-        if (atualError) throw new Error(atualError.message);
-        const clienteId = input.cliente_id !== undefined ? input.cliente_id : atual.cliente_id;
-        // A troca de cliente sem novo endereço também deve limpar o vínculo anterior.
-        if (input.endereco_id === undefined && clienteId !== atual.cliente_id) updateData.endereco_id = null;
-        const enderecoId = updateData.endereco_id !== undefined ? updateData.endereco_id : atual.endereco_id;
-        await validarEnderecoPedido(ctx.supabase, clienteId, enderecoId);
-      }
-      const { data, error } = await ctx.supabase
-        .from('pedidos')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw new Error(error.message);
-      return data;
-    }),
-
-  // Adicionar item ao pedido
-  addItem: publicProcedure
-    .input(
-      z.object({
-        pedido_id: z.string().uuid(),
-        item: itemPedidoSchema,
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
-        .from('itens_pedido')
-        .insert({
-          ...input.item,
-          pedido_id: input.pedido_id,
-        })
-        .select()
-        .single();
-
-      if (error) throw new Error(error.message);
-      return data;
-    }),
-
-  // Atualizar item do pedido
-  updateItem: publicProcedure
-    .input(
-      z.object({
-        id: z.string().uuid(),
-        quantidade: z.number().min(0.001).optional(),
-        valor_unitario: z.number().min(0).optional(),
-        desconto_valor: z.number().min(0).optional(),
-        cor_id: z.string().uuid().optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { id, ...updateData } = input;
-      const { data, error } = await ctx.supabase
-        .from('itens_pedido')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw new Error(error.message);
-      return data;
-    }),
-
-  // Remover item do pedido
-  removeItem: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
-      const { error } = await ctx.supabase
-        .from('itens_pedido')
-        .delete()
-        .eq('id', input.id);
-
-      if (error) throw new Error(error.message);
-      return { success: true };
-    }),
-
-  // Estatísticas agregadas (para cards totais sem buscar todos os registros)
-  estatisticas: publicProcedure
-    .input(
-      z.object({
-        tipoAtendimento: z.string().optional(),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      try {
-        // Buscar registros com limit
-        let query = ctx.supabase
-          .from('vw_pedidos_completos')
-          .select('status, total')
-          .limit(1000);
-
-        if (input.tipoAtendimento) {
-          query = query.eq('tipo_atendimento', input.tipoAtendimento);
-        }
-
-        const { data, error } = await query;
-
-        if (error) {
-          console.error('Erro ao buscar estatísticas:', error);
-          return {
-            total: 0,
-            valorTotal: 0,
-            pendentes: 0,
-            finalizadas: 0,
-            canceladas: 0,
-          };
-        }
-
-        const pedidos = data || [];
-        
-        // Calcular agregações
-        const valorTotal = pedidos.reduce((sum, p) => sum + (p.total || 0), 0);
-        const pendentes = pedidos.filter(p => p.status === 'PENDENTE').length;
-        const finalizadas = pedidos.filter(p => p.status === 'FINALIZADO').length;
-        const canceladas = pedidos.filter(p => p.status === 'CANCELADO').length;
-        
-        return {
-          total: pedidos.length,
-          valorTotal,
-          pendentes,
-          finalizadas,
-          canceladas,
-        };
-      } catch (err) {
-        console.error('Erro nas estatísticas:', err);
-        return {
-          total: 0,
-          valorTotal: 0,
-          pendentes: 0,
-          finalizadas: 0,
-          canceladas: 0,
-        };
-      }
-    }),
-
-  // Duplicar pedido
-  duplicar: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase.rpc('duplicar_pedido', {
-        pedido_original_id: input.id,
-      });
-
-      if (error) throw new Error(error.message);
-      return data;
-    }),
-
-  // Cancelar pedido
-  cancelar: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
-        .from('pedidos')
-        .update({ status: 'CANCELADO' })
-        .eq('id', input.id)
-        .select()
-        .single();
-
-      if (error) throw new Error(error.message);
-      return data;
-    }),
-
-  // Finalizar pedido
-  finalizar: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
-        .from('pedidos')
-        .update({ status: 'FINALIZADO' })
-        .eq('id', input.id)
-        .select()
-        .single();
-
-      if (error) throw new Error(error.message);
-      return data;
-    }),
-
-  // Excluir pedido
-  delete: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
-      // Primeiro, deletar os itens do pedido
-      const { error: itensError } = await ctx.supabase
-        .from('itens_pedido')
-        .delete()
-        .eq('pedido_id', input.id);
-
-      if (itensError) throw new Error(itensError.message);
-
-      // Depois, deletar o pedido
-      const { error: pedidoError } = await ctx.supabase
-        .from('pedidos')
-        .delete()
-        .eq('id', input.id);
-
-      if (pedidoError) throw new Error(pedidoError.message);
-
-      return { success: true };
-    }),
+  update: protectedProcedure.input(identidadeSchema.extend({
+    cliente_id: z.string().uuid().nullable().optional(), endereco_id: z.string().uuid().nullable().optional(),
+    tipo_atendimento_id: z.string().uuid().optional(), forma_pagamento_id: z.string().uuid().nullable().optional(),
+    telefone_contato: z.string().max(20).nullable().optional(), desconto_valor: z.number().finite().min(0).optional(),
+    total: z.number().finite().min(0).optional(), subtotal: z.number().finite().min(0).optional(),
+    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), descricao: z.string().optional(), observacao: z.string().nullable().optional(),
+    status: z.enum(['PENDENTE','CONFIRMADO']).optional(), itens: z.array(itemPedidoSchema).optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const { id, versao, ...dados } = input;
+    return await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'editar', p_id: id, p_versao: versao, p_dados: dados }) as PedidoRow;
+  }),
+  addItem: protectedProcedure.input(z.object({ pedido_id: z.string().uuid(), versao: z.number().int().positive(), item: itemPedidoSchema }))
+    .mutation(async ({ ctx, input }) => await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'adicionar_item', p_id: input.pedido_id, p_versao: input.versao, p_dados: { item: input.item } }) as Database['public']['Tables']['itens_pedido']['Row']),
+  updateItem: protectedProcedure.input(identidadeSchema.extend({ quantidade: z.number().finite().min(0.001).optional(), valor_unitario: z.number().finite().min(0).optional(), desconto_valor: z.number().finite().min(0).optional(), cor_id: z.string().uuid().nullable().optional() }))
+    .mutation(async ({ ctx, input }) => { const { id, versao, ...dados } = input; return await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'atualizar_item', p_item_id: id, p_versao: versao, p_dados: dados }) as Database['public']['Tables']['itens_pedido']['Row']; }),
+  removeItem: protectedProcedure.input(identidadeSchema).mutation(async ({ ctx, input }) => {
+    await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'remover_item', p_item_id: input.id, p_versao: input.versao }); return { success: true };
+  }),
+  estatisticas: protectedProcedure.input(filtrosSchema.omit({ limit: true, offset: true }))
+    .query(async ({ ctx, input }) => await executarRPC(ctx.supabase, 'pdv_estatisticas_pedidos', { p_filtros: input }) as { total: number; valorTotal: number; pendentes: number; finalizadas: number; canceladas: number; finalizadosHoje: number }),
+  duplicar: protectedProcedure.input(identidadeSchema.extend({ chave_requisicao: z.string().uuid() })).mutation(async ({ ctx, input }) => {
+    const pedido = await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'duplicar', p_id: input.id, p_versao: input.versao, p_chave: input.chave_requisicao }) as PedidoRow;
+    return pedido.id;
+  }),
+  cancelar: protectedProcedure.input(identidadeSchema).mutation(async ({ ctx, input }) => await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'cancelar', p_id: input.id, p_versao: input.versao }) as PedidoRow),
+  finalizar: protectedProcedure.input(identidadeSchema).mutation(async ({ ctx, input }) => await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'finalizar', p_id: input.id, p_versao: input.versao }) as PedidoRow),
+  delete: adminProcedure.input(identidadeSchema).mutation(async ({ ctx, input }) => {
+    await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'excluir', p_id: input.id, p_versao: input.versao }); return { success: true };
+  }),
 });

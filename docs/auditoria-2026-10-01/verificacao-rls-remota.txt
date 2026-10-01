@@ -1,0 +1,17 @@
+Browser tab: 1599828265, Title: "Untitled query | SQL Editor | lojasmanu | Supabase", URL: "https://supabase.com/dashboard/project/fuqycopmtebzypcsuzpa/sql/5d699bf0-761e-4d60-bdeb-43ea848cb1d3".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 314-315
+~				291 button Run
++						314 button 1 row
++							315 container
++								316 text 1  row
++					317 table
++						318 row verificacao resultado
++							319 cell (selectable) verificacao
++							320 cell (selectable) resultado
++						321 row APROVADO ADMIN lê views/lista/indicadores; conta não habilitada não lê dados; API não concede papéis nem executa escrita legada. Teste somente leitura. View full cell content
++							322 cell (selectable) APROVADO
++							323 cell (selectable) Description: View full cell content, Value: ADMIN lê views/lista/indicadores; conta não habilitada não lê dados; API não concede papéis nem executa escrita legada. Teste somente leitura.
+The focused UI element is 293 editor (settable) Description: Editor content, Value: END $$;
+ROLLBACK;
+SELECT 'APROVADO' AS verificacao,'ADMIN lê views/lista/indicadores; conta não habilitada não lê dados; API não concede papéis nem executa escrita legada. Teste somente leitura.' AS resultado;

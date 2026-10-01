@@ -83,7 +83,7 @@ export default function LoginPage() {
         router.push('/');
       }, 3500);
     } else {
-      setError('Usuário ou senha incorretos');
+      setError('Não foi possível entrar. Confira email, senha e acesso ao PDV.');
       setLoading(false);
     }
   };
@@ -834,7 +834,9 @@ export default function LoginPage() {
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <TextField
                     fullWidth
-                    label="Usuário"
+                    label="Email"
+                    type="email"
+                    autoComplete="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     variant="outlined"

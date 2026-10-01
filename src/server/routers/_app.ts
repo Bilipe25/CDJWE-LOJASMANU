@@ -1,4 +1,4 @@
-import { router } from '@/lib/trpc/server';
+import { router, protectedProcedure } from '@/lib/trpc/server';
 import { produtosRouter } from './produtos';
 import { clientesRouter } from './clientes';
 import { pedidosRouter } from './pedidos';
@@ -7,6 +7,7 @@ import { relatoriosRouter } from './relatorios';
 import { configuracoesRouter } from './configuracoes';
 
 export const appRouter = router({
+  auth: router({ me: protectedProcedure.query(({ ctx }) => ({ id: ctx.user.id, papel: ctx.role })) }),
   produtos: produtosRouter,
   clientes: clientesRouter,
   pedidos: pedidosRouter,

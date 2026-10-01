@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v16-appRouter';
 import { Providers } from './providers';
 import './globals.css';
 
@@ -30,8 +31,6 @@ export const viewport: Viewport = {
   themeColor: '#0ea5e9',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({
@@ -42,7 +41,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="antialiased">
-        <Providers>{children}</Providers>
+        <AppRouterCacheProvider><Providers>{children}</Providers></AppRouterCacheProvider>
       </body>
     </html>
   );

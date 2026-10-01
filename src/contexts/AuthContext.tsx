@@ -1,96 +1,66 @@
 'use client';
-
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase/client';
+import { usePDVStore } from '@/stores/pdv-store';
 interface AuthContextType {
-  isAuthenticated: boolean;
-  username: string | null;
-  login: (username: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  isLoading: boolean;
+  isAuthenticated: boolean; username: string | null; isLoading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
 }
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-
+  const queryClient = useQueryClient();
   useEffect(() => {
-    // Verificar se está no cliente (browser)
-    if (typeof window === 'undefined') {
-      setIsLoading(false);
-      return;
+    let active = true;
+    let revisao = 0;
+    const validarSessao = async (session: { access_token: string; user: { email?: string } } | null) => {
+      const atual = ++revisao;
+      try {
+        const autorizado = session && (await fetch('/api/trpc/auth.me', {
+          headers: { Authorization: 'Bearer ' + session.access_token }, cache: 'no-store',
+        })).ok;
+        if (active && atual === revisao) setUsername(autorizado ? session?.user.email ?? null : null);
+      } catch { if (active && atual === revisao) setUsername(null); }
+      finally { if (active && atual === revisao) setIsLoading(false); }
+    };
+    localStorage.removeItem('authenticated'); localStorage.removeItem('username');
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active) void validarSessao(data.session);
+    }).catch(() => { if (active) setIsLoading(false); });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      void validarSessao(session);
+      if (event === 'SIGNED_OUT') { queryClient.clear(); usePDVStore.getState().novoPedido(); }
+    });
+    return () => { active = false; subscription.unsubscribe(); };
+  }, [queryClient]);
+  const login = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error || !data.session) return false;
+      const response = await fetch('/api/trpc/auth.me', {
+        headers: { Authorization: 'Bearer ' + data.session.access_token }, cache: 'no-store',
+      });
+      if (!response.ok) { await supabase.auth.signOut({ scope: 'local' }); setUsername(null); return false; }
+      queryClient.clear(); setUsername(data.user.email ?? null); return true;
+    } catch {
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+      queryClient.clear(); setUsername(null); return false;
     }
-    
-    // Verificar se o usuário está autenticado no localStorage
-    const authenticated = localStorage.getItem('authenticated') === 'true';
-    const storedUsername = localStorage.getItem('username');
-    
-    if (authenticated && storedUsername) {
-      setIsAuthenticated(true);
-      setUsername(storedUsername);
-    }
-    
-    setIsLoading(false);
-  }, []);
-
-  const login = async (username: string, password: string): Promise<boolean> => {
-    // Aqui você pode adicionar sua lógica de autenticação
-    // Por enquanto, vamos usar uma validação simples
-    
-    // Exemplo: você pode adicionar múltiplos usuários aqui
-    const validUsers = [
-      { username: 'admin', password: 'admin123' },
-      { username: 'lojasmanu', password: '1987' },
-      { username: 'operador', password: 'operador123' },
-    ];
-
-    const user = validUsers.find(
-      (u) => u.username === username && u.password === password
-    );
-
-    if (user) {
-      localStorage.setItem('authenticated', 'true');
-      localStorage.setItem('username', username);
-      setIsAuthenticated(true);
-      setUsername(username);
-      return true;
-    }
-
-    return false;
   };
-
-  const logout = () => {
-    localStorage.removeItem('authenticated');
-    localStorage.removeItem('username');
-    setIsAuthenticated(false);
-    setUsername(null);
-    router.push('/login');
+  const logout = async () => {
+    await supabase.auth.signOut({ scope: 'local' }); queryClient.clear();
+    usePDVStore.getState().novoPedido(); setUsername(null); router.replace('/login');
   };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        isAuthenticated,
-        username,
-        login,
-        logout,
-        isLoading,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ isAuthenticated: !!username, username, isLoading, login, logout }}>{children}</AuthContext.Provider>;
 }
-
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
-  }
+  if (!context) throw new Error('useAuth deve ser usado dentro de um AuthProvider');
   return context;
 }

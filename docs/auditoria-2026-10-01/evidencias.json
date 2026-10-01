@@ -1,0 +1,152 @@
+[
+  {
+    "id": "R01",
+    "nome": "Cliente persiste após erro no endereço",
+    "evidencia": {
+      "erro": "Falha simulada no endereço",
+      "clientes": 1
+    }
+  },
+  {
+    "id": "R02",
+    "nome": "Pedido persiste após erro nos itens",
+    "evidencia": {
+      "erro": "Falha simulada nos itens",
+      "pedidos": 1
+    }
+  },
+  {
+    "id": "R03",
+    "nome": "Exclusão falha depois de remover os itens",
+    "evidencia": {
+      "erro": "Falha simulada na exclusão do cabeçalho",
+      "pedidos": 1,
+      "itens": 0
+    }
+  },
+  {
+    "id": "R04",
+    "nome": "Edição do PDV perde itens antigos em falha",
+    "evidencia": {
+      "erro": "Falha simulada na substituição dos itens",
+      "itensRestantes": 0
+    }
+  },
+  {
+    "id": "R05",
+    "nome": "Desconto acima do preço gera subtotal negativo",
+    "evidencia": {
+      "item": -10,
+      "subtotal": -10,
+      "total": 0
+    }
+  },
+  {
+    "id": "R06",
+    "nome": "Handler de teclado conserva preço do render anterior",
+    "evidencia": {
+      "precoDoHandler": 10,
+      "precoNoRenderPosterior": 20,
+      "observacao": "A dependência valorUnitario não está no useEffect; comparação de closures, sem gravar venda."
+    }
+  },
+  {
+    "id": "R07",
+    "nome": "Campos opcionais enviados como undefined não são limpos",
+    "evidencia": {
+      "email": "teste@example.invalid",
+      "telefone": "85999990000"
+    }
+  },
+  {
+    "id": "R08",
+    "nome": "Limpar todos os campos de endereço omite a atualização",
+    "evidencia": {
+      "enderecosRestantes": 1
+    }
+  },
+  {
+    "id": "R09",
+    "nome": "Busca de pedidos ignorada pelo contrato",
+    "evidencia": {
+      "busca": "999999",
+      "retornados": [
+        100
+      ]
+    }
+  },
+  {
+    "id": "R10",
+    "nome": "Reenvio do mesmo payload cria dois pedidos",
+    "evidencia": {
+      "pedidos": 2
+    }
+  },
+  {
+    "id": "R11",
+    "nome": "API permite finalizar pedido cancelado",
+    "evidencia": {
+      "status": "FINALIZADO"
+    }
+  },
+  {
+    "id": "R12",
+    "nome": "Servidor aceita total incompatível com os itens",
+    "evidencia": {
+      "totalAceito": 0.01,
+      "itens": 10,
+      "observacao": "Sem triggers no banco em memória; recálculo no PostgreSQL real precisa ser verificado."
+    }
+  },
+  {
+    "id": "R13",
+    "nome": "Impressão na edição lê número/data/desconto do store, sem hidratação do pedido",
+    "evidencia": {
+      "numero": null,
+      "desconto": 0,
+      "data": "2026-10-01"
+    }
+  },
+  {
+    "id": "R14",
+    "nome": "Endereços em lote ficam incompletos quando atingem o limite de retorno",
+    "evidencia": {
+      "limiteSimulado": 2,
+      "enderecoClienteB": "",
+      "observacao": "Confirmar max_rows configurado no Supabase real."
+    }
+  },
+  {
+    "id": "R15",
+    "nome": "Data DATE convertida como UTC pode retroceder um dia no PDF",
+    "evidencia": {
+      "timezone": "America/Fortaleza",
+      "dataEntrada": "2026-10-01",
+      "dataFormatada": "30/09/2026"
+    }
+  },
+  {
+    "id": "R16",
+    "nome": "Falha na RPC de numeração não impede insert pelo router",
+    "evidencia": {
+      "erro": null,
+      "numero": null,
+      "pedidos": 1
+    }
+  },
+  {
+    "id": "R17",
+    "nome": "Confirmação de evidência estática da data do PDF",
+    "evidencia": {
+      "expressaoUTC": true
+    }
+  },
+  {
+    "id": "R18",
+    "nome": "Limpar/cancelar carrinho deixa desconto anterior na próxima venda",
+    "evidencia": {
+      "desconto": 10,
+      "total": 40
+    }
+  }
+]

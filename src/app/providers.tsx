@@ -8,6 +8,7 @@ import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { ptBR } from '@mui/material/locale';
 import { Toaster } from 'react-hot-toast';
 import { InstallPWA } from '@/components/InstallPWA';
+import { AuthGate } from '@/components/auth/AuthGate';
 import { AuthProvider } from '@/contexts/AuthContext';
 
 const theme = createTheme(
@@ -15,13 +16,13 @@ const theme = createTheme(
     palette: {
       mode: 'light',
       primary: {
-        main: '#0ea5e9', // Sky blue 500
+        main: '#0369a1', // Contraste >= 4.5:1 com texto branco
         light: '#38bdf8', // Sky blue 400
         dark: '#0369a1', // Sky blue 700
         contrastText: '#ffffff',
       },
       secondary: {
-        main: '#0284c7', // Sky blue 600
+        main: '#0369a1', // Contraste para texto normal
         light: '#0ea5e9', // Sky blue 500
         dark: '#075985', // Sky blue 800
         contrastText: '#ffffff',
@@ -228,7 +229,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <ThemeProvider theme={theme}>
           <CssBaseline />
           <AuthProvider>
-            {children}
+            <AuthGate>{children}</AuthGate>
             <InstallPWA />
             <ReactQueryDevtools initialIsOpen={false} />
             <Toaster

@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      pdv_operadores: {
+        Row: { user_id: string; papel: string; ativo: boolean };
+        Insert: { user_id: string; papel: string; ativo?: boolean };
+        Update: { papel?: string; ativo?: boolean };
+        Relationships: [];
+      }
       categorias: {
         Row: {
           ativo: boolean | null
@@ -43,6 +49,7 @@ export type Database = {
       }
       clientes: {
         Row: {
+          email: string | null
           ativo: boolean | null
           cpf: string | null
           created_at: string | null
@@ -52,6 +59,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          email?: string | null
           ativo?: boolean | null
           cpf?: string | null
           created_at?: string | null
@@ -61,6 +69,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          email?: string | null
           ativo?: boolean | null
           cpf?: string | null
           created_at?: string | null
@@ -307,6 +316,9 @@ export type Database = {
       }
       pedidos: {
         Row: {
+          versao: number
+          finalizado_em: string | null
+          telefone_contato: string | null
           cliente_id: string | null
           created_at: string | null
           created_by: string | null
@@ -327,6 +339,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          telefone_contato?: string | null
           cliente_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -347,6 +360,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          telefone_contato?: string | null
           cliente_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -472,6 +486,7 @@ export type Database = {
       }
       vw_pedidos_completos: {
         Row: {
+          versao: number
           atualizado_em: string | null
           cliente_cpf: string | null
           cliente_id: string | null
@@ -520,6 +535,12 @@ export type Database = {
       }
     }
     Functions: {
+      pdv_listar_pedidos: { Args: { p_filtros?: Json; p_limite?: number; p_offset?: number }; Returns: Json };
+      pdv_totais_clientes: { Args: { p_ids: string[] }; Returns: { cliente_id: string; total_pedidos: number; valor_total_compras: number }[] };
+      pdv_salvar_cliente: { Args: { p_dados: Json; p_id?: string }; Returns: Json };
+      pdv_mutar_pedido: { Args: { p_acao: string; p_dados?: Json; p_id?: string; p_chave?: string; p_versao?: number; p_item_id?: string }; Returns: Json };
+      pdv_estatisticas_pedidos: { Args: { p_filtros?: Json }; Returns: Json };
+      pdv_estatisticas_clientes: { Args: Record<PropertyKey, never>; Returns: Json };
       converter_valor_monetario: {
         Args: { valor: string }
         Returns: number

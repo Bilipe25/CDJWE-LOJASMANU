@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '@/lib/trpc/server';
+import { router, protectedProcedure } from '@/lib/trpc/server';
 
 export const relatoriosRouter = router({
   // Relatório de vendas por período
-  vendasPeriodo: publicProcedure
+  vendasPeriodo: protectedProcedure
     .input(
       z.object({
         dataInicio: z.string(),
@@ -21,7 +21,7 @@ export const relatoriosRouter = router({
     }),
 
   // Top produtos mais vendidos
-  topProdutos: publicProcedure
+  topProdutos: protectedProcedure
     .input(
       z.object({
         dataInicio: z.string().optional(),
@@ -41,7 +41,7 @@ export const relatoriosRouter = router({
     }),
 
   // Dashboard - Estatísticas gerais
-  dashboard: publicProcedure
+  dashboard: protectedProcedure
     .input(
       z.object({
         dataInicio: z.string().optional(),
@@ -147,7 +147,7 @@ export const relatoriosRouter = router({
     }),
 
   // Relatório anual
-  relatorioAnual: publicProcedure
+  relatorioAnual: protectedProcedure
     .input(
       z.object({
         ano: z.number(),

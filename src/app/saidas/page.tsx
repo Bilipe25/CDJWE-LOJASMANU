@@ -240,6 +240,7 @@ export default function SaidasPage() {
   const handleEditarPedido = (pedido: any) => {
     setPedidoEditando({
       id: pedido.id,
+      versao: pedido.versao,
       cliente_id: pedido.cliente_id,
       destinatario_nome: pedido.cliente_nome || '',
       forma_pagamento_id: pedido.forma_pagamento_id,
@@ -283,10 +284,11 @@ export default function SaidasPage() {
 
       await atualizarMutation.mutateAsync({
         id: pedidoEditando.id,
+        versao: pedidoEditando.versao,
         cliente_id: clienteIdFinal || undefined,
         forma_pagamento_id: pedidoEditando.forma_pagamento_id || undefined,
         observacao: pedidoEditando.observacao,
-        status: pedidoEditando.status,
+        status: pedidoEditando.status === 'CONFIRMADO' ? 'CONFIRMADO' : 'PENDENTE',
         total: pedidoEditando.valor,
         subtotal: pedidoEditando.valor,
         data: pedidoEditando.data,
@@ -314,7 +316,7 @@ export default function SaidasPage() {
         const toastId = toast.loading('Cancelando saída...');
 
         try {
-          await cancelarMutation.mutateAsync({ id: pedido.id });
+          await cancelarMutation.mutateAsync({ id: pedido.id, versao: pedido.versao });
           toast.success(`Saída #${pedido.numero} cancelada com sucesso!`, { id: toastId });
           setTimeout(() => window.location.reload(), 500);
         } catch (error) {
@@ -335,7 +337,7 @@ export default function SaidasPage() {
         const toastId = toast.loading('Finalizando saída...');
 
         try {
-          await finalizarMutation.mutateAsync({ id: pedido.id });
+          await finalizarMutation.mutateAsync({ id: pedido.id, versao: pedido.versao });
           toast.success(`Saída #${pedido.numero} finalizada com sucesso!`, { id: toastId });
           setTimeout(() => window.location.reload(), 500);
         } catch (error) {
@@ -356,7 +358,7 @@ export default function SaidasPage() {
         const toastId = toast.loading('Duplicando saída...');
 
         try {
-          await duplicarMutation.mutateAsync({ id: pedido.id });
+          await duplicarMutation.mutateAsync({ id: pedido.id, versao: pedido.versao, chave_requisicao: crypto.randomUUID() });
           toast.success('Saída duplicada com sucesso!', { id: toastId });
           setTimeout(() => window.location.reload(), 500);
         } catch (error) {
@@ -377,7 +379,7 @@ export default function SaidasPage() {
         const toastId = toast.loading('Excluindo saída...');
 
         try {
-          await deletarMutation.mutateAsync({ id: pedido.id });
+          await deletarMutation.mutateAsync({ id: pedido.id, versao: pedido.versao });
           toast.success(`Saída #${pedido.numero} excluída com sucesso!`, { id: toastId });
           setTimeout(() => window.location.reload(), 500);
         } catch (error) {
@@ -511,6 +513,7 @@ export default function SaidasPage() {
       toast.loading('Salvando despesa...', { id: toastId });
 
       await criarPedidoMutation.mutateAsync({
+        chave_requisicao: crypto.randomUUID(),
         cliente_id: clienteIdFinal || undefined,
         tipo_atendimento_id: tipoSaida.id,
         forma_pagamento_id: novaSaida.forma_pagamento_id || undefined,

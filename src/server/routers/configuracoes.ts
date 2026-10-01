@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '@/lib/trpc/server';
+import { router, protectedProcedure } from '@/lib/trpc/server';
 
 export const configuracoesRouter = router({
   // Buscar configurações ativas da empresa
-  get: publicProcedure.query(async ({ ctx }) => {
+  get: protectedProcedure.query(async ({ ctx }) => {
     const { data, error } = await ctx.supabase
       .from('configuracoes_empresa')
       .select('*')
@@ -15,7 +15,7 @@ export const configuracoesRouter = router({
   }),
 
   // Atualizar configurações
-  update: publicProcedure
+  update: protectedProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -76,7 +76,7 @@ export const configuracoesRouter = router({
     }),
 
   // Upload de logo (placeholder - implementar com storage depois)
-  uploadLogo: publicProcedure
+  uploadLogo: protectedProcedure
     .input(
       z.object({
         tipo: z.enum(['logo', 'logo_pequeno']),

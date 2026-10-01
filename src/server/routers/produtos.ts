@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '@/lib/trpc/server';
+import { router, protectedProcedure } from '@/lib/trpc/server';
 
 export const produtosRouter = router({
   // Estatísticas gerais de produtos
-  stats: publicProcedure.query(async ({ ctx }) => {
+  stats: protectedProcedure.query(async ({ ctx }) => {
     const { data: todosProdutos, error: errorTodos } = await ctx.supabase
       .from('produtos')
       .select('*', { count: 'exact' });
@@ -31,7 +31,7 @@ export const produtosRouter = router({
   }),
 
   // Listar todos os produtos ativos
-  list: publicProcedure
+  list: protectedProcedure
     .input(
       z.object({
         limit: z.number().min(1).max(100).default(50),
@@ -67,7 +67,7 @@ export const produtosRouter = router({
     }),
 
   // Buscar produto por ID
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const { data, error } = await ctx.supabase
@@ -81,7 +81,7 @@ export const produtosRouter = router({
     }),
 
   // Criar produto
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
         nome: z.string().min(1).max(200),
@@ -105,7 +105,7 @@ export const produtosRouter = router({
     }),
 
   // Atualizar produto
-  update: publicProcedure
+  update: protectedProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -132,7 +132,7 @@ export const produtosRouter = router({
     }),
 
   // Desativar produto (soft delete)
-  delete: publicProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { error } = await ctx.supabase

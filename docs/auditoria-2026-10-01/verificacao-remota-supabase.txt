@@ -1,0 +1,39 @@
+Browser tab: 1599828265, Title: "Untitled query | SQL Editor | lojasmanu | Supabase", URL: "https://supabase.com/dashboard/project/fuqycopmtebzypcsuzpa/sql/5d699bf0-761e-4d60-bdeb-43ea848cb1d3".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 314
+~				291 button Run
++						314 button 9 rows(Limited to only 100 rows)
++							315 container
++								316 text 9  row s (Limited to only 100 rows)
++					317 table
++						318 row verificacao resultado
++							319 cell (selectable) verificacao
++							320 cell (selectable) resultado
++						321 row contagens_preservadas {"itens": 700, "pedidos": 1643, "clientes": 407, "enderecos": 204} View full cell content
++							322 cell (selectable) contagens_preservadas
++							323 cell (selectable) Description: View full cell content, Value: {"itens": 700, "pedidos": 1643, "clientes": 407, "enderecos": 204}
++						324 row operador_habilitado {"ativo": true, "email": "cdjweltda@gmail.com", "papel": "ADMIN"} View full cell content
++							325 cell (selectable) operador_habilitado
++							326 cell (selectable) Description: View full cell content, Value: {"ativo": true, "email": "cdjweltda@gmail.com", "papel": "ADMIN"}
++						327 row colunas_pedidos ["versao", "finalizado_em", "telefone_contato"]
++							328 cell (selectable) colunas_pedidos
++							329 cell (selectable) ["versao", "finalizado_em", "telefone_contato"]
++						330 row endereco_view ["versao", "endereco_numero", "endereco_complemento", "endereco_bairro", "endereco_cidade", "endereco_estado"] View full cell content
++							331 cell (selectable) endereco_view
++							332 cell (selectable) Description: View full cell content, Value: ["versao", "endereco_numero", "endereco_complemento", "endereco_bairro", "endereco_cidade", "endereco_estado"]
++						333 row acesso_anonimo_tabelas {"cores": false, "pedidos": false, "clientes": false, "produtos": false, "tblCores": false, "enderecos": false, "categorias": false, "tblPedidos": false, "tblClientes": false, "tblProdutos": false, "itens_pedido": false, "tblItensPedidos": false, "formas_pagamento": false, "tipos_atendimento": false, "configuracoes_empresa": false} View full cell content
++							334 cell (selectable) acesso_anonimo_tabelas
++							335 cell (selectable) Description: View full cell content, Value: {"cores": false, "pedidos": false, "clientes": false, "produtos": false, "tblCores": false, "enderecos": false, "categorias": false, "tblPedidos": false, "tblClientes": false, "tblProdutos": false, "itens_pedido": false, "tblItensPedidos": false, "formas_pagamento": false, "tipos_atendimento": false, "configuracoes_empresa": false}
++						336 row escrita_direta_auth {"pedidos": false, "clientes": false, "enderecos": false, "itens_pedido": false} View full cell content
++							337 cell (selectable) escrita_direta_auth
++							338 cell (selectable) Description: View full cell content, Value: {"pedidos": false, "clientes": false, "enderecos": false, "itens_pedido": false}
++						339 row views_protegidas {"vw_pedidos_completos": {"invoker": ["security_invoker=true"], "anon_select": false}, "vw_clientes_completos": {"invoker": ["security_invoker=true"], "anon_select": false}, "vw_produtos_completos": {"invoker": ["security_invoker=true"], "anon_select": false}, "vw_itens_pedido_completos": {"invoker": ["security_invoker=true"], "anon_select": false}} View full cell content
++							340 cell (selectable) views_protegidas
++							341 cell (selectable) Description: View full cell content, Value: {"vw_pedidos_completos": {"invoker": ["security_invoker=true"], "anon_select": false}, "vw_clientes_completos": {"invoker": ["security_invoker=true"], "anon_select": false}, "vw_produtos_completos": {"invoker": ["security_invoker=true"], "anon_select": false}, "vw_itens_pedido_completos": {"invoker": ["security_invoker=true"], "anon_select": false}}
++						342 row rls_tabelas {"pedidos": true, "clientes": true, "tblCores": true, "enderecos": true, "tblPedidos": true, "tblClientes": true, "tblProdutos": true, "itens_pedido": true, "pdv_operadores": true, "pdv_requisicoes": true, "tblItensPedidos": true} View full cell content
++							343 cell (selectable) rls_tabelas
++							344 cell (selectable) Description: View full cell content, Value: {"pedidos": true, "clientes": true, "tblCores": true, "enderecos": true, "tblPedidos": true, "tblClientes": true, "tblProdutos": true, "itens_pedido": true, "pdv_operadores": true, "pdv_requisicoes": true, "tblItensPedidos": true}
++						345 row rpc_anonima {"pdv_acesso": false, "duplicar_pedido": false, "pdv_mutar_pedido": false, "pdv_listar_pedidos": false, "pdv_salvar_cliente": false, "pdv_filtrar_pedidos": false, "pdv_totais_clientes": false, "top_produtos_vendidos": false, "relatorio_vendas_anual": false, "pdv_estatisticas_pedidos": false, "relatorio_vendas_periodo": false, "pdv_estatisticas_clientes": false, "obter_proximo_numero_pedido": false} View full cell content
++							346 cell (selectable) rpc_anonima
++							347 cell (selectable) Description: View full cell content, Value: {"pdv_acesso": false, "duplicar_pedido": false, "pdv_mutar_pedido": false, "pdv_listar_pedidos": false, "pdv_salvar_cliente": false, "pdv_filtrar_pedidos": false, "pdv_totais_clientes": false, "top_produtos_vendidos": false, "relatorio_vendas_anual": false, "pdv_estatisticas_pedidos": false, "relatorio_vendas_periodo": false, "pdv_estatisticas_clientes": false, "obter_proximo_numero_pedido": false}
+The focused UI element is 293 editor (settable) Description: Editor content, Value: 'relatorio_vendas_periodo','top_produtos_vendidos'));

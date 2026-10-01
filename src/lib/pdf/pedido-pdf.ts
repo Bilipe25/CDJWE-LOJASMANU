@@ -1,3 +1,4 @@
+import { formatDateBR, dateToString } from '@/lib/utils/dateUtils';
 import pdfMake from 'pdfmake/build/pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 
@@ -49,7 +50,7 @@ const formatCurrency = (value: number) => {
 
 const formatDate = (dateString: string) => {
   try {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+    return formatDateBR(dateString);
   } catch {
     return dateString;
   }
@@ -301,7 +302,7 @@ export const gerarPedidoPDF = async (
       return {
         columns: [
           { 
-            text: `Documento gerado em ${formatDate(new Date().toISOString())}`, 
+            text: `Documento gerado em ${formatDate(dateToString(new Date()))}`,
             fontSize: 7, 
             color: '#666',
             alignment: 'left',

@@ -1,48 +1,19 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '@/lib/trpc/server';
+import { router, protectedProcedure } from '@/lib/trpc/server';
 import { enderecoSchema } from '@/lib/schemas/endereco';
 import { formatarEndereco, selecionarEndereco } from '@/lib/utils/endereco';
+import { executarRPC } from '@/server/rpc';
 import type { Database } from '@/types/supabase';
 
 export const clientesRouter = router({
   // Estatísticas gerais de clientes
-  stats: publicProcedure.query(async ({ ctx }) => {
-    // Total de clientes (ativos e inativos)
-    const { count: total, error: errorTotal } = await ctx.supabase
-      .from('clientes')
-      .select('*', { count: 'exact', head: true });
-
-    if (errorTotal) throw new Error(errorTotal.message);
-
-    // Total de clientes ativos
-    const { count: ativos, error: errorAtivos } = await ctx.supabase
-      .from('clientes')
-      .select('*', { count: 'exact', head: true })
-      .eq('ativo', true);
-
-    if (errorAtivos) throw new Error(errorAtivos.message);
-
-    // Buscar estatísticas de pedidos
-    const { data: pedidos, error: errorPedidos } = await ctx.supabase
-      .from('pedidos')
-      .select('cliente_id, total')
-      .not('cliente_id', 'is', null);
-
-    if (errorPedidos) throw new Error(errorPedidos.message);
-
-    const totalPedidos = pedidos?.length || 0;
-    const valorTotalCompras = pedidos?.reduce((sum: number, p: any) => sum + (p.total || 0), 0) || 0;
-
-    return {
-      total: total || 0,
-      ativos: ativos || 0,
-      totalPedidos,
-      valorTotalCompras,
-    };
+  stats: protectedProcedure.query(async ({ ctx }) => {
+    const data = await executarRPC(ctx.supabase, 'pdv_estatisticas_clientes', {});
+    return data as { total: number; ativos: number; totalPedidos: number; valorTotalCompras: number };
   }),
 
   // Listar clientes
-  list: publicProcedure
+  list: protectedProcedure
     .input(
       z.object({
         limit: z.number().min(1).max(1000).default(50),
@@ -74,7 +45,9 @@ export const clientesRouter = router({
         : [];
 
       // Busca em lote: as views antigas podem expor somente o logradouro.
-      const ids = clientesUnicos.map((cliente) => cliente.id).filter(Boolean);
+      const ids = clientesUnicos.map((cliente) => cliente.id).filter((id): id is string => !!id);
+      const totais = ids.length ? await executarRPC(ctx.supabase, 'pdv_totais_clientes', { p_ids: ids }) as { cliente_id: string; total_pedidos: number; valor_total_compras: number }[] : [];
+      const totaisPorCliente = new Map(totais.map(item => [item.cliente_id,item]));
       const { data: enderecos, error: enderecosError } = ids.length
         ? await ctx.supabase.from('enderecos').select('*').in('cliente_id', ids).order('principal', { ascending: false })
         : { data: [], error: null };
@@ -89,14 +62,14 @@ export const clientesRouter = router({
       return {
         clientes: clientesUnicos.map((cliente) => {
           const enderecosCliente = enderecosPorCliente.get(cliente.id) || [];
-          return { ...cliente, endereco_principal_completo: formatarEndereco(selecionarEndereco(enderecosCliente)) };
+          return { ...cliente, total_pedidos: totaisPorCliente.get(cliente.id!)?.total_pedidos ?? 0, valor_total_compras: totaisPorCliente.get(cliente.id!)?.valor_total_compras ?? 0, endereco_principal_completo: formatarEndereco(selecionarEndereco(enderecosCliente)) };
         }),
         total: count || 0,
       };
     }),
 
   // Buscar cliente por ID
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       // Buscar dados do cliente
@@ -121,7 +94,7 @@ export const clientesRouter = router({
     }),
 
   // Criar cliente
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
         nome: z.string().min(1).max(200),
@@ -133,34 +106,11 @@ export const clientesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { endereco, ...clienteData } = input;
-
-      // Criar cliente
-      const { data: cliente, error: clienteError } = await ctx.supabase
-        .from('clientes')
-        .insert(clienteData)
-        .select()
-        .single();
-
-      if (clienteError) throw new Error(clienteError.message);
-
-      // Criar endereço se fornecido
-      if (endereco && cliente) {
-        const { error: enderecoError } = await ctx.supabase
-          .from('enderecos')
-          .insert({
-            cliente_id: cliente.id,
-            ...endereco,
-          });
-
-        if (enderecoError) throw new Error(enderecoError.message);
-      }
-
-      return cliente;
+      return await executarRPC(ctx.supabase, 'pdv_salvar_cliente', { p_dados: input }) as Database['public']['Tables']['clientes']['Row'];
     }),
 
   // Atualizar cliente
-  update: publicProcedure
+  update: protectedProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -173,63 +123,15 @@ export const clientesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, endereco, ...updateData } = input;
-      
-      // Atualizar dados do cliente
-      const { data: cliente, error: clienteError } = await ctx.supabase
-        .from('clientes')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (clienteError) throw new Error(clienteError.message);
-
-      // Atualizar ou criar endereço se fornecido
-      if (endereco && cliente) {
-        // Usar o mesmo endereço exibido na edição: principal, ou primeiro disponível.
-        const { data: enderecosExistentes, error: buscaError } = await ctx.supabase
-          .from('enderecos')
-          .select('*')
-          .eq('cliente_id', id)
-          .order('principal', { ascending: false });
-        if (buscaError) throw new Error(buscaError.message);
-        const enderecoExistente = selecionarEndereco(enderecosExistentes || []);
-
-        if (enderecoExistente) {
-          // Atualizar endereço existente
-          const { error: enderecoError } = await ctx.supabase
-            .from('enderecos')
-            .update(endereco)
-            .eq('id', enderecoExistente.id);
-
-          if (enderecoError) throw new Error(enderecoError.message);
-        } else {
-          // Criar novo endereço
-          const { error: enderecoError } = await ctx.supabase
-            .from('enderecos')
-            .insert({
-              cliente_id: id,
-              ...endereco,
-            });
-
-          if (enderecoError) throw new Error(enderecoError.message);
-        }
-      }
-
-      return cliente;
+      const { id, ...dados } = input;
+      return await executarRPC(ctx.supabase, 'pdv_salvar_cliente', { p_id: id, p_dados: dados }) as Database['public']['Tables']['clientes']['Row'];
     }),
 
   // Desativar cliente
-  delete: publicProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { error } = await ctx.supabase
-        .from('clientes')
-        .update({ ativo: false })
-        .eq('id', input.id);
-
-      if (error) throw new Error(error.message);
+      await executarRPC(ctx.supabase, 'pdv_salvar_cliente', { p_id: input.id, p_dados: { ativo: false } });
       return { success: true };
     }),
 });
