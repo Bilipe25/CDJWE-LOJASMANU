@@ -1,11 +1,11 @@
 -- =====================================================
 -- VIEWS NECESSÁRIAS PARA O SISTEMA PDV
--- Execute este SQL no Supabase SQL Editor
+-- Para instalações existentes, prefira ADD_CAMPOS_ENDERECO_MIGRATION.sql.
+-- Este arquivo define as views de uma instalação inicial.
 -- =====================================================
 
 -- 1. VIEW: vw_pedidos_completos
 -- Retorna pedidos com informações completas de cliente e outros dados
-DROP VIEW IF EXISTS vw_pedidos_completos CASCADE;
 
 CREATE OR REPLACE VIEW vw_pedidos_completos AS
 SELECT 
@@ -22,8 +22,8 @@ SELECT
   p.descricao,
   p.observacao,
   p.status,
-  p.criado_em,
-  p.atualizado_em,
+  p.created_at AS criado_em,
+  p.updated_at AS atualizado_em,
   
   -- Dados do cliente
   c.nome as cliente_nome,
@@ -60,11 +60,27 @@ LEFT JOIN formas_pagamento fp ON p.forma_pagamento_id = fp.id;
 COMMENT ON VIEW vw_pedidos_completos IS 'View com informações completas dos pedidos incluindo dados de cliente, endereço, tipo de atendimento e forma de pagamento';
 
 
-do com informações de produtos e cores
-DROP VIEW IF EXISTS vw_itens_pedido_completos CASCADE;
-
+-- 2. VIEW: vw_itens_pedido_completos
 CREATE OR REPLACE VIEW vw_itens_pedido_completos AS
-SELECT 
+SELECT
   ip.id,
   ip.pedido_id,
-  ip.
+  ip.produto_id,
+  ip.cor_id,
+  ip.quantidade,
+  ip.valor_unitario,
+  ip.desconto_valor,
+  ip.valor_total,
+  ip.ordem,
+  pr.nome AS produto_nome,
+  pr.codigo AS produto_codigo,
+  pr.unidade AS produto_unidade,
+  pr.valor_base AS produto_valor_base,
+  ca.nome AS categoria_nome,
+  co.descricao AS cor_descricao,
+  co.codigo AS cor_codigo,
+  co.linha AS cor_linha
+FROM itens_pedido ip
+LEFT JOIN produtos pr ON pr.id = ip.produto_id
+LEFT JOIN categorias ca ON ca.id = pr.categoria_id
+LEFT JOIN cores co ON co.id = ip.cor_id;

@@ -86,7 +86,7 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
 import { useQueryClient } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
+import { formatarEndereco } from '@/lib/utils/endereco';
 import { usePedidosFiltros } from '@/hooks/usePedidosFiltros';
 
 function PedidosPageContent() {
@@ -314,39 +314,7 @@ function PedidosPageContent() {
         throw new Error('Pedido não encontrado');
       }
 
-      // 2. Buscar endereço do cliente direto do Supabase
-      let enderecoCompleto = '';
-
-      if (pedidoCompleto.cliente_id) {
-        try {
-          const supabase = createClient();
-
-          // Buscar endereços do cliente direto
-          const { data: enderecos, error } = await supabase
-            .from('enderecos')
-            .select('*')
-            .eq('cliente_id', pedidoCompleto.cliente_id)
-            .order('principal', { ascending: false });
-
-          if (!error && enderecos && enderecos.length > 0) {
-            // Pegar o primeiro (que é o principal por causa do order)
-            const enderecoPrincipal = enderecos[0];
-
-            // Montar endereço completo com todos os campos
-            enderecoCompleto = [
-              enderecoPrincipal.logradouro,
-              enderecoPrincipal.numero,
-              enderecoPrincipal.complemento,
-              enderecoPrincipal.bairro,
-              enderecoPrincipal.cidade,
-              enderecoPrincipal.estado,
-              enderecoPrincipal.cep ? `CEP: ${enderecoPrincipal.cep}` : '',
-            ].filter(Boolean).join(', ');
-          }
-        } catch (error) {
-          console.error('Erro ao buscar endereço do cliente:', error);
-        }
-      }
+      const enderecoCompleto = formatarEndereco(pedidoCompleto.endereco);
 
       const dadosPedido = {
         numero: pedidoCompleto.numero ?? undefined,
@@ -1349,10 +1317,10 @@ function PedidosPageContent() {
                         <Typography>{pedidoCompleto.cliente_telefone}</Typography>
                       </Box>
                     )}
-                    {pedidoCompleto.endereco_logradouro && (
+                    {formatarEndereco(pedidoCompleto.endereco) && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">Endereço:</Typography>
-                        <Typography>{pedidoCompleto.endereco_logradouro}</Typography>
+                        <Typography>{formatarEndereco(pedidoCompleto.endereco)}</Typography>
                       </Box>
                     )}
                   </Card>

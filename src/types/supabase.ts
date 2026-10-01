@@ -483,6 +483,11 @@ export type Database = {
           descricao: string | null
           endereco_cep: string | null
           endereco_id: string | null
+          endereco_numero: string | null
+          endereco_complemento: string | null
+          endereco_bairro: string | null
+          endereco_cidade: string | null
+          endereco_estado: string | null
           endereco_logradouro: string | null
           forma_pagamento_id: string | null
           forma_pagamento_nome: string | null

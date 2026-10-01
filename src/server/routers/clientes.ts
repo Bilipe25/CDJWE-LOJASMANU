@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '@/lib/trpc/server';
+import { enderecoSchema } from '@/lib/schemas/endereco';
+import { formatarEndereco, selecionarEndereco } from '@/lib/utils/endereco';
+import type { Database } from '@/types/supabase';
 
 export const clientesRouter = router({
   // Estatísticas gerais de clientes
@@ -70,8 +73,24 @@ export const clientesRouter = router({
         Array.from(new Map(data.map((cliente: any) => [cliente.id, cliente])).values()) 
         : [];
 
+      // Busca em lote: as views antigas podem expor somente o logradouro.
+      const ids = clientesUnicos.map((cliente) => cliente.id).filter(Boolean);
+      const { data: enderecos, error: enderecosError } = ids.length
+        ? await ctx.supabase.from('enderecos').select('*').in('cliente_id', ids).order('principal', { ascending: false })
+        : { data: [], error: null };
+      if (enderecosError) throw new Error(enderecosError.message);
+      const enderecosPorCliente = new Map<string, Database['public']['Tables']['enderecos']['Row'][]>();
+      for (const endereco of enderecos || []) {
+        const grupo = enderecosPorCliente.get(endereco.cliente_id) || [];
+        grupo.push(endereco);
+        enderecosPorCliente.set(endereco.cliente_id, grupo);
+      }
+
       return {
-        clientes: clientesUnicos,
+        clientes: clientesUnicos.map((cliente) => {
+          const enderecosCliente = enderecosPorCliente.get(cliente.id) || [];
+          return { ...cliente, endereco_principal_completo: formatarEndereco(selecionarEndereco(enderecosCliente)) };
+        }),
         total: count || 0,
       };
     }),
@@ -96,10 +115,7 @@ export const clientesRouter = router({
         .eq('cliente_id', input.id)
         .order('principal', { ascending: false });
 
-      if (enderecosError) {
-        // Se houver erro ao buscar endereços, retorna só o cliente sem endereços
-        return { ...cliente, enderecos: [] };
-      }
+      if (enderecosError) throw new Error(enderecosError.message);
 
       return { ...cliente, enderecos: enderecos || [] };
     }),
@@ -113,13 +129,7 @@ export const clientesRouter = router({
         telefone: z.string().max(20).optional(),
         email: z.string().email().max(255).optional(),
         ativo: z.boolean().default(true),
-        endereco: z
-          .object({
-            logradouro: z.string().min(1),
-            cep: z.string().max(20).optional(),
-            principal: z.boolean().default(true),
-          })
-          .optional(),
+        endereco: enderecoSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -159,18 +169,7 @@ export const clientesRouter = router({
         telefone: z.string().max(20).optional(),
         email: z.string().email().max(255).optional(),
         ativo: z.boolean().optional(),
-        endereco: z
-          .object({
-            logradouro: z.string().min(1),
-            numero: z.string().optional(),
-            complemento: z.string().optional(),
-            bairro: z.string().optional(),
-            cidade: z.string().optional(),
-            estado: z.string().max(2).optional(),
-            cep: z.string().max(20).optional(),
-            principal: z.boolean().default(true),
-          })
-          .optional(),
+        endereco: enderecoSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -188,13 +187,14 @@ export const clientesRouter = router({
 
       // Atualizar ou criar endereço se fornecido
       if (endereco && cliente) {
-        // Verificar se já existe um endereço principal
-        const { data: enderecoExistente } = await ctx.supabase
+        // Usar o mesmo endereço exibido na edição: principal, ou primeiro disponível.
+        const { data: enderecosExistentes, error: buscaError } = await ctx.supabase
           .from('enderecos')
-          .select('id')
+          .select('*')
           .eq('cliente_id', id)
-          .eq('principal', true)
-          .single();
+          .order('principal', { ascending: false });
+        if (buscaError) throw new Error(buscaError.message);
+        const enderecoExistente = selecionarEndereco(enderecosExistentes || []);
 
         if (enderecoExistente) {
           // Atualizar endereço existente

@@ -10,6 +10,21 @@ const itemPedidoSchema = z.object({
   ordem: z.number().default(0),
 });
 
+async function validarEnderecoPedido(
+  supabase: typeof import('@/lib/supabase/client').supabase,
+  clienteId: string | null | undefined,
+  enderecoId: string | null | undefined,
+) {
+  if (!enderecoId) return;
+  if (!clienteId) throw new Error('Selecione o cliente do endereço de entrega');
+  const { data: endereco, error } = await supabase.from('enderecos')
+    .select('cliente_id').eq('id', enderecoId).single();
+  if (error) throw new Error(error.message);
+  if (!endereco || endereco.cliente_id !== clienteId) {
+    throw new Error('O endereço de entrega não pertence ao cliente selecionado');
+  }
+}
+
 export const pedidosRouter = router({
   // Listar pedidos
   list: publicProcedure
@@ -105,6 +120,12 @@ export const pedidosRouter = router({
 
       if (pedidoError) throw new Error(pedidoError.message);
 
+      // Consultar o endereço vinculado ao pedido, sem depender dos campos da view.
+      const { data: endereco, error: enderecoError } = pedido.endereco_id
+        ? await ctx.supabase.from('enderecos').select('*').eq('id', pedido.endereco_id).single()
+        : { data: null, error: null };
+      if (enderecoError) throw new Error(enderecoError.message);
+
       const { data: itens, error: itensError } = await ctx.supabase
         .from('vw_itens_pedido_completos')
         .select('*')
@@ -115,6 +136,7 @@ export const pedidosRouter = router({
 
       return {
         ...pedido,
+        endereco,
         itens: itens || [],
       };
     }),
@@ -132,8 +154,8 @@ export const pedidosRouter = router({
     .input(
       z.object({
         data: z.string(),
-        cliente_id: z.string().uuid().optional(),
-        endereco_id: z.string().uuid().optional(),
+        cliente_id: z.string().uuid().nullable().optional(),
+        endereco_id: z.string().uuid().nullable().optional(),
         tipo_atendimento_id: z.string().uuid(),
         forma_pagamento_id: z.string().uuid().optional(),
         telefone_contato: z.string().max(20).optional(),
@@ -148,6 +170,7 @@ export const pedidosRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { itens, ...pedidoData } = input;
+      await validarEnderecoPedido(ctx.supabase, input.cliente_id, input.endereco_id);
 
       // Obter próximo número
       const { data: numero } = await ctx.supabase.rpc('obter_proximo_numero_pedido');
@@ -186,8 +209,8 @@ export const pedidosRouter = router({
     .input(
       z.object({
         id: z.string().uuid(),
-        cliente_id: z.string().uuid().optional(),
-        endereco_id: z.string().uuid().optional(),
+        cliente_id: z.string().uuid().nullable().optional(),
+        endereco_id: z.string().uuid().nullable().optional(),
         tipo_atendimento_id: z.string().uuid().optional(),
         forma_pagamento_id: z.string().uuid().optional(),
         telefone_contato: z.string().max(20).optional(),
@@ -202,6 +225,16 @@ export const pedidosRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
+      if (input.cliente_id !== undefined || input.endereco_id !== undefined) {
+        const { data: atual, error: atualError } = await ctx.supabase.from('pedidos')
+          .select('cliente_id, endereco_id').eq('id', id).single();
+        if (atualError) throw new Error(atualError.message);
+        const clienteId = input.cliente_id !== undefined ? input.cliente_id : atual.cliente_id;
+        // A troca de cliente sem novo endereço também deve limpar o vínculo anterior.
+        if (input.endereco_id === undefined && clienteId !== atual.cliente_id) updateData.endereco_id = null;
+        const enderecoId = updateData.endereco_id !== undefined ? updateData.endereco_id : atual.endereco_id;
+        await validarEnderecoPedido(ctx.supabase, clienteId, enderecoId);
+      }
       const { data, error } = await ctx.supabase
         .from('pedidos')
         .update(updateData)

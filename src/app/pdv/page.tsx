@@ -75,6 +75,8 @@ import { trpc } from '@/lib/trpc/client';
 import { usePDVStore } from '@/stores/pdv-store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
+import EnderecoFields from '@/components/common/EnderecoFields';
+import { EnderecoCliente, EnderecoFormulario, enderecoVazio, formatarEndereco, selecionarEndereco, temDadosEndereco } from '@/lib/utils/endereco';
 
 function PDVPageContent() {
   const searchParams = useSearchParams();
@@ -107,7 +109,8 @@ function PDVPageContent() {
   const [novoProdutoUnidade, setNovoProdutoUnidade] = useState('UN');
 
   // Novos campos da venda
-  const [enderecoSelecionado, setEnderecoSelecionado] = useState<any>(null);
+  const [enderecoSelecionado, setEnderecoSelecionado] = useState<EnderecoCliente | null>(null);
+  const enderecoPedidoRestaurado = useRef<string | null>(null);
   const [formaPagamentoId, setFormaPagamentoId] = useState('');
   const [tipoAtendimentoId, setTipoAtendimentoId] = useState('');
   const [telefoneContato, setTelefoneContato] = useState('');
@@ -116,7 +119,7 @@ function PDVPageContent() {
   const [novoClienteNome, setNovoClienteNome] = useState('');
   const [novoClienteCPF, setNovoClienteCPF] = useState('');
   const [novoClienteTelefone, setNovoClienteTelefone] = useState('');
-  const [novoClienteEndereco, setNovoClienteEndereco] = useState('');
+  const [novoClienteEndereco, setNovoClienteEndereco] = useState<EnderecoFormulario>({ ...enderecoVazio });
   const [accordionExpandido, setAccordionExpandido] = useState<string | false>('cliente');
   const [dialogAtalhos, setDialogAtalhos] = useState(false);
 
@@ -151,7 +154,7 @@ function PDVPageContent() {
   const { data: cores } = trpc.dominios.cores.list.useQuery();
 
   // Buscar endereços do cliente
-  const { data: clienteCompleto } = trpc.clientes.getById.useQuery(
+  const { data: clienteCompleto, isFetching: carregandoCliente, error: erroCliente, refetch: recarregarCliente } = trpc.clientes.getById.useQuery(
     { id: clienteSelecionado?.id || '' },
     { enabled: !!clienteSelecionado?.id }
   );
@@ -161,6 +164,8 @@ function PDVPageContent() {
     { id: pedidoEditId || '' },
     { enabled: !!pedidoEditId }
   );
+
+  const utils = trpc.useUtils();
 
   // Mutations
   const criarClienteMutation = trpc.clientes.create.useMutation();
@@ -213,14 +218,6 @@ function PDVPageContent() {
         }
       }
 
-      // Buscar e carregar endereço se houver
-      if (pedidoParaEditar.endereco_id && clienteCompleto?.enderecos) {
-        const endereco = (clienteCompleto.enderecos as any[]).find((e: any) => e.id === pedidoParaEditar.endereco_id);
-        if (endereco) {
-          setEnderecoSelecionado(endereco);
-        }
-      }
-
       // Preencher campos
       setTipoAtendimentoId(pedidoParaEditar.tipo_atendimento_id || '');
       setFormaPagamentoId(pedidoParaEditar.forma_pagamento_id || '');
@@ -249,24 +246,26 @@ function PDVPageContent() {
     }
   }, [pedidoEditId, pedidoParaEditar, modoEdicao, clientes, produtos, clienteCompleto]);
 
-  // useEffect para selecionar endereço principal automaticamente
+  // Esperar o cliente correto antes de restaurar o endereço vinculado ao pedido.
   useEffect(() => {
-    if (clienteCompleto?.enderecos && Array.isArray(clienteCompleto.enderecos) && clienteCompleto.enderecos.length > 0) {
-      // Se não tem endereço selecionado ou se o endereço selecionado não pertence ao cliente atual
-      const enderecoPertenceAoCliente = enderecoSelecionado && clienteCompleto.enderecos.some((e: any) => e.id === enderecoSelecionado.id);
-
-      if (!enderecoSelecionado || !enderecoPertenceAoCliente) {
-        const enderecoPrincipal = clienteCompleto.enderecos.find((e: any) => e.principal) || clienteCompleto.enderecos[0];
-        setEnderecoSelecionado(enderecoPrincipal);
-        setPedidoAtual({ endereco_id: enderecoPrincipal.id });
-        toast.success('Endereço de entrega selecionado automaticamente', { icon: '📍', duration: 2000 });
-      }
-    } else if (clienteSelecionado && (!clienteCompleto?.enderecos || clienteCompleto.enderecos.length === 0)) {
-      // Se cliente não tem endereços, limpar seleção
+    if (!clienteSelecionado) {
       setEnderecoSelecionado(null);
       setPedidoAtual({ endereco_id: undefined });
+      return;
     }
-  }, [clienteCompleto, clienteSelecionado]);
+    if (!clienteCompleto || clienteCompleto.id !== clienteSelecionado.id || carregandoCliente || erroCliente) return;
+    const restaurarPedido = Boolean(pedidoEditId && pedidoParaEditar && modoEdicao &&
+      pedidoParaEditar.cliente_id === clienteSelecionado.id && enderecoPedidoRestaurado.current !== pedidoEditId);
+    const selecaoAtual = selecionarEndereco(clienteCompleto.enderecos, enderecoSelecionado?.id);
+    const semEnderecoNoPedido = pedidoEditId && enderecoPedidoRestaurado.current === pedidoEditId &&
+      pedidoParaEditar?.cliente_id === clienteSelecionado.id && !enderecoSelecionado;
+    const endereco = restaurarPedido
+      ? selecionarEndereco(clienteCompleto.enderecos, pedidoParaEditar?.endereco_id ?? null)
+      : semEnderecoNoPedido ? null : enderecoSelecionado && selecaoAtual ? selecaoAtual : selecionarEndereco(clienteCompleto.enderecos);
+    if (restaurarPedido) enderecoPedidoRestaurado.current = pedidoEditId;
+    setEnderecoSelecionado(endereco);
+    setPedidoAtual({ endereco_id: endereco?.id });
+  }, [clienteCompleto, clienteSelecionado, carregandoCliente, erroCliente, pedidoEditId, pedidoParaEditar, modoEdicao, enderecoSelecionado, setPedidoAtual]);
 
   // useEffect para atalhos de teclado
   useEffect(() => {
@@ -448,6 +447,18 @@ function PDVPageContent() {
   };
 
   const handleConfirmarPedido = async () => {
+    if (clienteSelecionado && (carregandoCliente || erroCliente || clienteCompleto?.id !== clienteSelecionado.id)) {
+      toast.error('Aguarde o carregamento dos endereços do cliente ou tente novamente.');
+      return;
+    }
+    if (enderecoSelecionado && !clienteCompleto?.enderecos.some((endereco) => endereco.id === enderecoSelecionado.id)) {
+      toast.error('Selecione um endereço do cliente atual.');
+      return;
+    }
+    if (modoEdicao && pedidoParaEditar?.cliente_id === clienteSelecionado?.id && pedidoParaEditar?.endereco_id && !enderecoSelecionado) {
+      toast.error('O endereço original não está disponível. Selecione um endereço para este pedido.');
+      return;
+    }
     const toastId = toast.loading(modoEdicao ? 'Atualizando pedido...' : 'Salvando pedido...');
 
     try {
@@ -490,8 +501,8 @@ function PDVPageContent() {
         // 3. Atualizar dados principais do pedido
         await atualizarPedidoMutation.mutateAsync({
           id: pedidoOriginalId,
-          cliente_id: clienteSelecionado?.id,
-          endereco_id: enderecoSelecionado?.id,
+          cliente_id: clienteSelecionado?.id ?? null,
+          endereco_id: enderecoSelecionado?.id ?? null,
           tipo_atendimento_id: tipoAtendimentoId,
           forma_pagamento_id: formaPagamentoId || undefined,
           telefone_contato: telefoneContato || undefined,
@@ -515,8 +526,8 @@ function PDVPageContent() {
         // Criar pedido novo
         const pedidoCriado = await criarPedidoMutation.mutateAsync({
           data: dateToString(new Date()),
-          cliente_id: clienteSelecionado?.id,
-          endereco_id: enderecoSelecionado?.id,
+          cliente_id: clienteSelecionado?.id ?? null,
+          endereco_id: enderecoSelecionado?.id ?? null,
           tipo_atendimento_id: tipoAtendimentoId,
           forma_pagamento_id: formaPagamentoId || undefined,
           telefone_contato: telefoneContato || undefined,
@@ -552,6 +563,7 @@ function PDVPageContent() {
     setAccordionExpandido('cliente');
     setPedidoOriginalId(null);
     setModoEdicao(false);
+    enderecoPedidoRestaurado.current = null;
   };
 
   const handleCriarCliente = async () => {
@@ -560,6 +572,10 @@ function PDVPageContent() {
       return;
     }
 
+    if (temDadosEndereco(novoClienteEndereco) && !novoClienteEndereco.logradouro.trim()) {
+      toast.error('Informe o logradouro para salvar o endereço');
+      return;
+    }
     const toastId = toast.loading('Criando cliente...');
 
     try {
@@ -567,12 +583,12 @@ function PDVPageContent() {
         nome: novoClienteNome,
         cpf: novoClienteCPF || undefined,
         telefone: novoClienteTelefone || undefined,
-        endereco: novoClienteEndereco ? {
-          logradouro: novoClienteEndereco,
-          principal: true
-        } : undefined,
+        endereco: temDadosEndereco(novoClienteEndereco) ? { ...novoClienteEndereco, principal: true } : undefined,
       });
 
+      await utils.clientes.list.invalidate();
+      setEnderecoSelecionado(null);
+      setPedidoAtual({ cliente_id: novoCliente.id, cliente_nome: novoCliente.nome, endereco_id: undefined });
       setClienteSelecionado(novoCliente);
       setSearchCliente(novoCliente.nome);
       // Atualizar o telefone de contato do pedido automaticamente
@@ -584,7 +600,7 @@ function PDVPageContent() {
       setNovoClienteNome('');
       setNovoClienteCPF('');
       setNovoClienteTelefone('');
-      setNovoClienteEndereco('');
+      setNovoClienteEndereco({ ...enderecoVazio });
 
       toast.success(`Cliente ${novoClienteNome} criado com sucesso!`, { id: toastId });
     } catch (error) {
@@ -630,16 +646,12 @@ function PDVPageContent() {
   };
 
   const handleImprimirPedido = async (acao: 'print' | 'download' = 'print') => {
+    if (clienteSelecionado && (carregandoCliente || erroCliente || clienteCompleto?.id !== clienteSelecionado.id)) {
+      toast.error('Aguarde o carregamento dos endereços do cliente ou tente novamente.');
+      return;
+    }
     // Montar endereço completo do cliente
-    const enderecoCompleto = enderecoSelecionado ? [
-      enderecoSelecionado.logradouro,
-      enderecoSelecionado.numero,
-      enderecoSelecionado.complemento,
-      enderecoSelecionado.bairro,
-      enderecoSelecionado.cidade,
-      enderecoSelecionado.estado,
-      enderecoSelecionado.cep ? `CEP: ${enderecoSelecionado.cep}` : '',
-    ].filter(Boolean).join(', ') : '';
+    const enderecoCompleto = formatarEndereco(enderecoSelecionado);
 
     const dadosPedido = {
       numero: pedidoAtual.numero,
@@ -1246,6 +1258,8 @@ function PDVPageContent() {
                         isOptionEqualToValue={(option, value) => option.id === value.id}
                         value={clienteSelecionado}
                         onChange={(_, newValue) => {
+                          setEnderecoSelecionado(null);
+                          setPedidoAtual({ endereco_id: undefined });
                           setClienteSelecionado(newValue);
                           setTelefoneContato((newValue as any)?.telefone || '');
                           setPedidoAtual({ cliente_id: newValue?.id, cliente_nome: newValue?.nome });
@@ -1274,6 +1288,8 @@ function PDVPageContent() {
 
                   {clienteSelecionado && (
                     <>
+                      {carregandoCliente && <Grid item xs={12}><Typography role="status">Carregando endereços...</Typography></Grid>}
+                      {erroCliente && <Grid item xs={12}><Alert severity="error" action={<Button color="inherit" onClick={() => recarregarCliente()}>Tentar novamente</Button>}>Não foi possível carregar os endereços do cliente.</Alert></Grid>}
                       <Grid item xs={12}>
                         <TextField
                           fullWidth
@@ -1291,16 +1307,17 @@ function PDVPageContent() {
                         />
                       </Grid>
 
-                      {(clienteCompleto as any)?.enderecos && (clienteCompleto as any).enderecos.length > 0 && (
+                      {clienteCompleto && clienteCompleto.id === clienteSelecionado.id && clienteCompleto.enderecos.length > 0 && (
                         <Grid item xs={12}>
                           <FormControl fullWidth size="small">
                             <InputLabel>Endereço de Entrega</InputLabel>
                             <Select
                               value={enderecoSelecionado?.id || ''}
                               label="Endereço de Entrega"
+                              sx={{ '& .MuiSelect-select': { whiteSpace: 'normal', overflowWrap: 'anywhere' } }}
                               onChange={(e) => {
-                                const endereco = (clienteCompleto as any).enderecos.find((end: any) => end.id === e.target.value);
-                                setEnderecoSelecionado(endereco);
+                                const endereco = clienteCompleto.enderecos.find((end) => end.id === e.target.value);
+                                setEnderecoSelecionado(endereco ?? null);
                                 setPedidoAtual({ endereco_id: e.target.value });
                               }}
                               startAdornment={
@@ -1309,9 +1326,9 @@ function PDVPageContent() {
                                 </InputAdornment>
                               }
                             >
-                              {(clienteCompleto as any).enderecos.map((endereco: any) => (
-                                <MenuItem key={endereco.id} value={endereco.id}>
-                                  {endereco.logradouro}
+                              {clienteCompleto.enderecos.map((endereco) => (
+                                <MenuItem key={endereco.id} value={endereco.id} sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
+                                  {formatarEndereco(endereco)}
                                   {endereco.principal && ' (Principal)'}
                                 </MenuItem>
                               ))}
@@ -1582,7 +1599,7 @@ function PDVPageContent() {
                   {enderecoSelecionado && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                       <LocationOn fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
-                      {enderecoSelecionado.logradouro}
+                      {formatarEndereco(enderecoSelecionado)}
                     </Typography>
                   )}
                 </Card>
@@ -1779,20 +1796,7 @@ function PDVPageContent() {
               </Grid>
 
               <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Endereço"
-                  value={novoClienteEndereco}
-                  onChange={(e) => setNovoClienteEndereco(e.target.value)}
-                  placeholder="Rua, Número, Bairro"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <LocationOn fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
+                <EnderecoFields value={novoClienteEndereco} onChange={setNovoClienteEndereco} />
               </Grid>
             </Grid>
           </Box>
@@ -1804,7 +1808,7 @@ function PDVPageContent() {
               setNovoClienteNome('');
               setNovoClienteCPF('');
               setNovoClienteTelefone('');
-              setNovoClienteEndereco('');
+              setNovoClienteEndereco({ ...enderecoVazio });
             }}
             variant="outlined"
           >

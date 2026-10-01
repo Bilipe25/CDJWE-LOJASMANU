@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { formatDateBR } from '@/lib/utils/dateUtils';
 import {
   Box,
@@ -33,6 +33,7 @@ import {
   Link,
   useTheme,
   Typography,
+  Alert,
 } from '@mui/material';
 import {
   Search,
@@ -62,6 +63,8 @@ import { trpc } from '@/lib/trpc/client';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+import EnderecoFields from '@/components/common/EnderecoFields';
+import { EnderecoFormulario, temDadosEndereco } from '@/lib/utils/endereco';
 
 export default function ClientesPage() {
   const router = useRouter();
@@ -102,6 +105,19 @@ export default function ClientesPage() {
   const [estado, setEstado] = useState('');
   const [cep, setCep] = useState('');
   const [loadingEndereco, setLoadingEndereco] = useState(false);
+  const [erroEndereco, setErroEndereco] = useState(false);
+  const consultaEnderecoAtual = useRef(0);
+
+  const enderecoFormulario: EnderecoFormulario = { logradouro, numero, complemento, bairro, cidade, estado, cep };
+  const atualizarEnderecoFormulario = (endereco: EnderecoFormulario) => {
+    setLogradouro(endereco.logradouro);
+    setNumero(endereco.numero);
+    setComplemento(endereco.complemento);
+    setBairro(endereco.bairro);
+    setCidade(endereco.cidade);
+    setEstado(endereco.estado);
+    setCep(endereco.cep);
+  };
 
   const { data, isLoading } = trpc.clientes.list.useQuery({
     limit: rowsPerPage,
@@ -133,6 +149,8 @@ export default function ClientesPage() {
     onSuccess: () => {
       utils.clientes.list.invalidate();
       utils.clientes.stats.invalidate();
+      utils.clientes.getById.invalidate();
+      utils.pedidos.getById.invalidate();
     },
   });
   const deletarMutation = trpc.clientes.delete.useMutation({
@@ -189,6 +207,8 @@ export default function ClientesPage() {
     setEmail(cliente.email || '');
     setAtivo(cliente.ativo);
 
+    atualizarEnderecoFormulario({ logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '', cep: '' });
+
     // Buscar endereço do cliente via query separada
     buscarEnderecoCliente(cliente.id);
 
@@ -196,9 +216,12 @@ export default function ClientesPage() {
   };
 
   const buscarEnderecoCliente = async (clienteId: string) => {
+    const consulta = ++consultaEnderecoAtual.current;
     setLoadingEndereco(true);
+    setErroEndereco(false);
     try {
       const clienteCompleto = await utils.clientes.getById.fetch({ id: clienteId });
+      if (consulta !== consultaEnderecoAtual.current) return;
       if (clienteCompleto?.enderecos && Array.isArray(clienteCompleto.enderecos) && clienteCompleto.enderecos.length > 0) {
         // Usar type assertion para garantir que TypeScript reconheça todos os campos
         const endereco: any = clienteCompleto.enderecos.find((e: any) => e.principal) || clienteCompleto.enderecos[0];
@@ -220,6 +243,8 @@ export default function ClientesPage() {
         setCep('');
       }
     } catch (error) {
+      if (consulta !== consultaEnderecoAtual.current) return;
+      setErroEndereco(true);
       console.error('Erro ao buscar endereço:', error);
       // Limpa campos de endereço em caso de erro
       setLogradouro('');
@@ -230,7 +255,7 @@ export default function ClientesPage() {
       setEstado('');
       setCep('');
     } finally {
-      setLoadingEndereco(false);
+      if (consulta === consultaEnderecoAtual.current) setLoadingEndereco(false);
     }
   };
 
@@ -254,9 +279,14 @@ export default function ClientesPage() {
       return;
     }
 
+    if (temDadosEndereco(enderecoFormulario) && !logradouro.trim()) {
+      toast.error('Informe o logradouro para salvar o endereço');
+      return;
+    }
+
     const toastId = toast.loading('Criando cliente...');
     try {
-      const novoClienteData: any = {
+      const novoClienteData: Parameters<typeof criarMutation.mutateAsync>[0] = {
         nome: nome.trim(),
         cpf: cpf.trim() || undefined,
         telefone: telefone.trim() || undefined,
@@ -268,12 +298,12 @@ export default function ClientesPage() {
       if (logradouro.trim()) {
         novoClienteData.endereco = {
           logradouro: logradouro.trim(),
-          numero: numero.trim() || undefined,
-          complemento: complemento.trim() || undefined,
-          bairro: bairro.trim() || undefined,
-          cidade: cidade.trim() || undefined,
-          estado: estado.trim() || undefined,
-          cep: cep.trim() || undefined,
+          numero: numero.trim(),
+          complemento: complemento.trim(),
+          bairro: bairro.trim(),
+          cidade: cidade.trim(),
+          estado: estado.trim(),
+          cep: cep.trim(),
           principal: true,
         };
       }
@@ -294,9 +324,15 @@ export default function ClientesPage() {
       return;
     }
 
+    if (temDadosEndereco(enderecoFormulario) && !logradouro.trim()) {
+      toast.error('Informe o logradouro para salvar o endereço');
+      return;
+    }
+    if (loadingEndereco || erroEndereco) return;
+
     const toastId = toast.loading('Atualizando cliente...');
     try {
-      const updateData: any = {
+      const updateData: Parameters<typeof atualizarMutation.mutateAsync>[0] = {
         id: clienteEditando.id,
         nome: nome.trim(),
         cpf: cpf.trim() || undefined,
@@ -309,12 +345,12 @@ export default function ClientesPage() {
       if (logradouro.trim()) {
         updateData.endereco = {
           logradouro: logradouro.trim(),
-          numero: numero.trim() || undefined,
-          complemento: complemento.trim() || undefined,
-          bairro: bairro.trim() || undefined,
-          cidade: cidade.trim() || undefined,
-          estado: estado.trim() || undefined,
-          cep: cep.trim() || undefined,
+          numero: numero.trim(),
+          complemento: complemento.trim(),
+          bairro: bairro.trim(),
+          cidade: cidade.trim(),
+          estado: estado.trim(),
+          cep: cep.trim(),
           principal: true,
         };
       }
@@ -532,7 +568,7 @@ export default function ClientesPage() {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <LocationOn fontSize="small" color="action" />
                           <Box sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {cliente.endereco_principal_logradouro || '-'}
+                            {cliente.endereco_principal_completo || '-'}
                           </Box>
                         </Box>
                       </TableCell>
@@ -672,78 +708,7 @@ export default function ClientesPage() {
               <Chip label="Endereço" size="small" />
             </Divider>
 
-            <TextField
-              label="Logradouro"
-              value={logradouro}
-              onChange={(e) => setLogradouro(e.target.value)}
-              fullWidth
-              placeholder="Ex: Rua das Flores"
-            />
-
-            <Grid container spacing={2}>
-              <Grid item xs={4}>
-                <TextField
-                  label="Número"
-                  value={numero}
-                  onChange={(e) => setNumero(e.target.value)}
-                  fullWidth
-                  placeholder="123"
-                />
-              </Grid>
-              <Grid item xs={8}>
-                <TextField
-                  label="Complemento"
-                  value={complemento}
-                  onChange={(e) => setComplemento(e.target.value)}
-                  fullWidth
-                  placeholder="Apto 45"
-                />
-              </Grid>
-            </Grid>
-
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <TextField
-                  label="Bairro"
-                  value={bairro}
-                  onChange={(e) => setBairro(e.target.value)}
-                  fullWidth
-                  placeholder="Centro"
-                />
-              </Grid>
-              <Grid item xs={6}>
-                <MaskedInput
-                  maskType="cep"
-                  label="CEP"
-                  value={cep}
-                  onChange={(val) => setCep(val)}
-                  fullWidth
-                  placeholder="00000-000"
-                />
-              </Grid>
-            </Grid>
-
-            <Grid container spacing={2}>
-              <Grid item xs={8}>
-                <TextField
-                  label="Cidade"
-                  value={cidade}
-                  onChange={(e) => setCidade(e.target.value)}
-                  fullWidth
-                  placeholder="São Paulo"
-                />
-              </Grid>
-              <Grid item xs={4}>
-                <TextField
-                  label="Estado"
-                  value={estado}
-                  onChange={(e) => setEstado(e.target.value)}
-                  fullWidth
-                  placeholder="SP"
-                  inputProps={{ maxLength: 2 }}
-                />
-              </Grid>
-            </Grid>
+            <EnderecoFields value={enderecoFormulario} onChange={atualizarEnderecoFormulario} />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -805,87 +770,18 @@ export default function ClientesPage() {
               <Box sx={{ py: 2 }}>
                 <LoadingSkeleton type="form" rows={4} />
               </Box>
+            ) : erroEndereco ? (
+              <Alert severity="error" action={<Button color="inherit" onClick={() => buscarEnderecoCliente(clienteEditando.id)}>Tentar novamente</Button>}>
+                Não foi possível carregar o endereço. Tente novamente antes de salvar.
+              </Alert>
             ) : (
-              <>
-                <TextField
-                  label="Logradouro"
-                  value={logradouro}
-                  onChange={(e) => setLogradouro(e.target.value)}
-                  fullWidth
-                  placeholder="Ex: Rua das Flores"
-                />
-
-                <Grid container spacing={2}>
-                  <Grid item xs={4}>
-                    <TextField
-                      label="Número"
-                      value={numero}
-                      onChange={(e) => setNumero(e.target.value)}
-                      fullWidth
-                      placeholder="123"
-                    />
-                  </Grid>
-                  <Grid item xs={8}>
-                    <TextField
-                      label="Complemento"
-                      value={complemento}
-                      onChange={(e) => setComplemento(e.target.value)}
-                      fullWidth
-                      placeholder="Apto 45"
-                    />
-                  </Grid>
-                </Grid>
-
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <TextField
-                      label="Bairro"
-                      value={bairro}
-                      onChange={(e) => setBairro(e.target.value)}
-                      fullWidth
-                      placeholder="Centro"
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <MaskedInput
-                      maskType="cep"
-                      label="CEP"
-                      value={cep}
-                      onChange={(val) => setCep(val)}
-                      fullWidth
-                      placeholder="00000-000"
-                    />
-                  </Grid>
-                </Grid>
-
-                <Grid container spacing={2}>
-                  <Grid item xs={8}>
-                    <TextField
-                      label="Cidade"
-                      value={cidade}
-                      onChange={(e) => setCidade(e.target.value)}
-                      fullWidth
-                      placeholder="São Paulo"
-                    />
-                  </Grid>
-                  <Grid item xs={4}>
-                    <TextField
-                      label="Estado"
-                      value={estado}
-                      onChange={(e) => setEstado(e.target.value)}
-                      fullWidth
-                      placeholder="SP"
-                      inputProps={{ maxLength: 2 }}
-                    />
-                  </Grid>
-                </Grid>
-              </>
+              <EnderecoFields value={enderecoFormulario} onChange={atualizarEnderecoFormulario} />
             )}
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogEditar(false)}>Cancelar</Button>
-          <Button onClick={handleSalvarEdicao} variant="contained" disabled={atualizarMutation.isPending}>
+          <Button onClick={handleSalvarEdicao} variant="contained" disabled={atualizarMutation.isPending || loadingEndereco || erroEndereco}>
             {atualizarMutation.isPending ? 'Salvando...' : 'Salvar'}
           </Button>
         </DialogActions>
@@ -939,11 +835,11 @@ export default function ClientesPage() {
                     {formatCurrency(clienteDetalhes.valor_total_compras)}
                   </Box>
                 </Grid>
-                {clienteDetalhes.endereco_principal_logradouro && (
+                {clienteDetalhes.endereco_principal_completo && (
                   <Grid item xs={12}>
                     <Box sx={{ color: 'text.secondary', fontSize: 12, mb: 0.5 }}>Endereço Principal</Box>
                     <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, fontSize: 14 }}>
-                      {clienteDetalhes.endereco_principal_logradouro}
+                      {clienteDetalhes.endereco_principal_completo}
                     </Box>
                   </Grid>
                 )}
