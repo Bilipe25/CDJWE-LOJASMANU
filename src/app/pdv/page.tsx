@@ -33,6 +33,8 @@ import {
   Select,
   Alert,
   CircularProgress,
+  FormHelperText,
+  Snackbar,
   Tooltip,
   useMediaQuery,
   useTheme,
@@ -119,8 +121,10 @@ function PDVPageContent() {
   const [searchCliente, setSearchCliente] = useState('');
   const [dialogFinalizar, setDialogFinalizar] = useState(false);
   const [editandoItem, setEditandoItem] = useState<number | null>(null);
-  const [descontoGeral, setDescontoGeral] = useState(0);
+  const [descontoGeral, setDescontoGeral] = useState(String(pedidoAtual.desconto_valor));
   const [tipoDescontoGeral, setTipoDescontoGeral] = useState<'valor' | 'percentual'>('valor');
+  const [campoPDVComErro, setCampoPDVComErro] = useState<'atendimento' | 'pagamento' | null>(null);
+  const [itemRemovido, setItemRemovido] = useState<{ item: typeof pedidoAtual.itens[number]; index: number } | null>(null);
 
   // Dialog e campos para cadastro rápido de produto
   const [dialogNovoProduto, setDialogNovoProduto] = useState(false);
@@ -156,6 +160,52 @@ function PDVPageContent() {
   // Refs para focar nos campos
   const produtoInputRef = useRef<HTMLInputElement>(null);
   const clienteInputRef = useRef<HTMLInputElement>(null);
+  const atendimentoSectionRef = useRef<HTMLDivElement>(null);
+  const pagamentoSectionRef = useRef<HTMLDivElement>(null);
+
+  const descontoGeralNumerico = descontoGeral.trim() === '' ? Number.NaN : Number(descontoGeral);
+  const limiteDescontoGeral = tipoDescontoGeral === 'percentual' ? 100 : pedidoAtual.subtotal;
+  const descontoGeralInvalido = !Number.isFinite(descontoGeralNumerico) || descontoGeralNumerico < 0 || descontoGeralNumerico > limiteDescontoGeral;
+
+  // Acompanhar o valor válido sem exigir um botão de aplicação. No modo percentual,
+  // recalcular também quando os itens alterarem o subtotal.
+  useEffect(() => {
+    if (descontoGeralInvalido) return;
+    const descontoAplicado = tipoDescontoGeral === 'percentual'
+      ? (pedidoAtual.subtotal * descontoGeralNumerico) / 100
+      : descontoGeralNumerico;
+    const valorArredondado = arredondarMoeda(descontoAplicado);
+    if (valorArredondado === pedidoAtual.desconto_valor) return;
+    try {
+      setPedidoAtual({ desconto_valor: valorArredondado });
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : 'Não foi possível atualizar o desconto.');
+    }
+  }, [descontoGeralInvalido, descontoGeralNumerico, tipoDescontoGeral, pedidoAtual.subtotal, pedidoAtual.desconto_valor, setPedidoAtual]);
+
+  const restaurarItemRemovido = () => {
+    if (!itemRemovido) return;
+    try {
+      const itens = [...pedidoAtual.itens];
+      itens.splice(Math.min(itemRemovido.index, itens.length), 0, itemRemovido.item);
+      setPedidoAtual({ itens });
+      setItemRemovido(null);
+      toast.success('Item restaurado.');
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : 'Não foi possível restaurar o item.');
+    }
+  };
+
+  const removerItemComDesfazer = (index: number) => {
+    const item = pedidoAtual.itens[index];
+    if (!item) return;
+    try {
+      removerItem(index);
+      setItemRemovido({ item, index });
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : 'Não foi possível remover o item.');
+    }
+  };
 
   // Abrir accordion cliente automaticamente em mobile
   useEffect(() => {
@@ -234,11 +284,11 @@ function PDVPageContent() {
         itens: pedidoParaEditar.itens.map(item => ({ id: item.id ?? undefined, produto_id: item.produto_id!, produto_nome: item.produto_nome ?? 'Produto', produto_codigo: item.produto_codigo ?? undefined, produto_unidade: item.produto_unidade ?? undefined, cor_id: item.cor_id ?? undefined, cor_descricao: item.cor_descricao ?? undefined, quantidade: item.quantidade ?? 0, valor_unitario: item.valor_unitario ?? 0, desconto_valor: item.desconto_valor ?? 0, valor_total: item.valor_total ?? 0, ordem: item.ordem ?? 0 })),
       });
       setSearchCliente(cliente?.nome ?? '');
+      setDescontoGeral(String(pedidoParaEditar.desconto_valor ?? 0));
+      setTipoDescontoGeral('valor');
       setModoEdicao(true); setPedidoOriginalId(pedidoEditId); edicaoHidratada.current = pedidoEditId; setFalhaHidratacao('');
     } catch (erro) { setFalhaHidratacao('Pedido com valores inválidos: ' + (erro as Error).message); }
   }, [pedidoEditId, pedidoParaEditar, setPedidoAtual]);
-
-  useEffect(() => { setDescontoGeral(pedidoAtual.desconto_valor); setTipoDescontoGeral('valor'); }, [pedidoAtual.desconto_valor]);
 
   // Esperar o cliente correto antes de restaurar o endereço vinculado ao pedido.
   useEffect(() => {
@@ -282,12 +332,12 @@ function PDVPageContent() {
         toast('Campo de clientes focado (F3)', { icon: <Person /> });
       }
 
-      // F10 or F12 - Finalizar pedido (se válido)
+      // F10 or F12 - Conferir e salvar o pedido como Pendente
       if ((e.key === 'F10' || e.key === 'F12') && !emDialog) {
         e.preventDefault();
         if (pedidoAtual.itens.length > 0) {
           handleFinalizarPedido();
-          toast('Conferência do pedido aberta (F10)');
+          toast('Conferência do pedido aberta');
         } else {
           toast.error('Adicione itens antes de salvar');
         }
@@ -304,12 +354,6 @@ function PDVPageContent() {
         } else if (alvo === clienteInputRef.current) { setSearchCliente(''); }
       }
 
-      // Ctrl+P - Abrir dialog de novo produto
-      if (e.ctrlKey && e.key === 'p' && !emDialog) {
-        e.preventDefault();
-        setDialogNovoProduto(true);
-        toast('Atalho: Cadastrar novo produto', { icon: <Add /> });
-      }
     };
 
     window.addEventListener('keydown', handleKeyPress);
@@ -376,17 +420,6 @@ function PDVPageContent() {
     setCorSelecionada(null);
   };
 
-  // Aplicar desconto geral
-  const handleAplicarDescontoGeral = () => {
-    let valorDesconto = descontoGeral;
-
-    if (tipoDescontoGeral === 'percentual') {
-      valorDesconto = (pedidoAtual.subtotal * descontoGeral) / 100;
-    }
-
-    try { setPedidoAtual({ desconto_valor: arredondarMoeda(valorDesconto) }); } catch (erro) { toast.error((erro as Error).message); }
-  };
-
   // Duplicar linha do carrinho
   const handleDuplicarLinha = (index: number) => {
     const item = pedidoAtual.itens[index];
@@ -410,6 +443,7 @@ function PDVPageContent() {
   const handleFinalizarPedido = () => {
     if (salvandoRef.current) return;
     if (redeDisponivel === false) { toast.error('Sem conexão. O rascunho foi preservado; reconecte para salvar.'); return; }
+    if (descontoGeralInvalido) { toast.error('Corrija o desconto geral antes de conferir o pedido.'); return; }
     if (pedidoAtual.itens.length === 0) {
       toast.error('Adicione pelo menos um item ao pedido');
       return;
@@ -418,22 +452,29 @@ function PDVPageContent() {
     if (!tipoAtendimentoId) {
       toast.error('Selecione o Tipo de Atendimento');
       setAccordionExpandido('atendimento');
+      setCampoPDVComErro('atendimento');
+      if (isMobile) setActiveStep(1);
+      requestAnimationFrame(() => atendimentoSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus());
       return;
     }
 
     if (!formaPagamentoId) {
       toast.error('Selecione a Forma de Pagamento');
       setAccordionExpandido('atendimento');
+      setCampoPDVComErro('pagamento');
+      if (isMobile) setActiveStep(1);
+      requestAnimationFrame(() => pagamentoSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus());
       return;
     }
 
+    setCampoPDVComErro(null);
     setDialogFinalizar(true);
   };
 
   const handleConfirmarPedido = async () => {
     if (salvandoRef.current || !rascunhoPronto) return;
     if (pedidoEditId && (!modoEdicao || !pedidoAtual.versao)) { toast.error('Carregue o pedido antes de salvar.'); return; }
-    if (!pedidoAtual.itens.length || !tipoAtendimentoId || !formaPagamentoId) { toast.error('Confira os itens, tipo de atendimento e pagamento.'); return; }
+    if (!pedidoAtual.itens.length || !tipoAtendimentoId || !formaPagamentoId || descontoGeralInvalido) { toast.error('Confira os itens, atendimento, pagamento e desconto geral.'); return; }
     if (clienteSelecionado && (carregandoCliente || erroCliente || clienteCompleto?.id !== clienteSelecionado.id)) {
       toast.error('Aguarde o carregamento dos endereços do cliente ou tente novamente.');
       return;
@@ -520,7 +561,7 @@ function PDVPageContent() {
 
   const limparCamposVenda = () => {
     novoPedido(); setEnderecoSelecionado(null); setSearchCliente(''); setSearchProduto('');
-    setDescontoGeral(0); setTipoDescontoGeral('valor'); setAccordionExpandido('cliente'); setActiveStep(0);
+    setDescontoGeral('0'); setTipoDescontoGeral('valor'); setCampoPDVComErro(null); setItemRemovido(null); setAccordionExpandido('cliente'); setActiveStep(0);
     setPedidoOriginalId(null); setModoEdicao(false); setProdutoSelecionado(null); setQuantidade(1); setValorUnitario(0);
     setDescontoItem(0); setCorSelecionada(null); enderecoPedidoRestaurado.current = null;
   };
@@ -903,44 +944,31 @@ function PDVPageContent() {
                 component={motion.div}
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
-                sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'primary.main', color: 'primary.contrastText', mb: 2, borderRadius: 2 }}
+                sx={{ display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 1.5, p: { xs: 1, sm: 1.25 }, bgcolor: 'action.hover', color: 'text.primary', borderLeft: '3px solid', borderColor: 'primary.main', mb: 1.5, borderRadius: 1.5 }}
               >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: { xs: 0.5, sm: 1 } }}>
-                  <Box>
-                    <Typography variant="body2" fontWeight="bold" sx={{ opacity: 0.9, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
-                      {produtoSelecionado.nome}
-                    </Typography>
-                    {corSelecionada && (
-                      <Chip
-                        label={corSelecionada.descricao}
-                        size="small"
-                        icon={<Palette />}
-                        sx={{ mt: 0.5, bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: { xs: 20, sm: 24 } }}
-                      />
-                    )}
-                  </Box>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 0.5, sm: 0 } }}>
-                  <Typography variant="body2" sx={{ opacity: 0.9, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                    {formatCurrency(valorUnitario)} × {quantidade} unid.
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" fontWeight="bold" noWrap>{produtoSelecionado.nome}</Typography>
+                  {corSelecionada && <Chip label={corSelecionada.descricao} size="small" icon={<Palette />} sx={{ mt: 0.25, height: 20 }} />}
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatCurrency(valorUnitario)} × {quantidade} {produtoSelecionado.unidade || 'unid.'}
                     {descontoItem > 0 && (() => {
                       const valorTotalPrevia = valorUnitario * quantidade;
                       const descontoCalculado = tipoDescontoItem === 'percentual'
                         ? (valorTotalPrevia * descontoItem) / 100
                         : descontoItem;
-                      return ` - ${formatCurrency(descontoCalculado)}`;
+                      return ` · Desconto ${formatCurrency(descontoCalculado)}`;
                     })()}
                   </Typography>
-                  <Typography variant="h6" fontWeight="bold" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
-                    = {formatCurrency((() => {
+                </Box>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary.main" sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                    {formatCurrency((() => {
                       const valorTotalPrevia = valorUnitario * quantidade;
                       const descontoCalculado = tipoDescontoItem === 'percentual'
                         ? (valorTotalPrevia * descontoItem) / 100
                         : descontoItem;
                       return valorTotalPrevia - descontoCalculado;
                     })())}
-                  </Typography>
-                </Box>
+                </Typography>
               </Box>
             )}
 
@@ -986,7 +1014,6 @@ function PDVPageContent() {
                           <TableCell>Produto</TableCell>
                           <TableCell align="center">Qtd</TableCell>
                           <TableCell align="right" sx={{ display: { xs: 'none', xl: 'table-cell' } }}>Valor Unit.</TableCell>
-<TableCell align="right" sx={{ display: 'none' }}>Desconto</TableCell>
                           <TableCell align="right">Total</TableCell>
                           <TableCell align="center">Ações</TableCell>
                         </TableRow>
@@ -1004,7 +1031,9 @@ function PDVPageContent() {
                               <Typography variant="body2" fontWeight={600}>
                                 {item.produto_nome}
                               </Typography>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', xl: 'none' } }}>{formatCurrency(item.valor_unitario)} por unidade{item.desconto_valor > 0 ? ' · Desconto ' + formatCurrency(item.desconto_valor) : ''}</Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', xl: 'none' }, fontVariantNumeric: 'tabular-nums' }}>
+                                {formatCurrency(item.valor_unitario)} por unidade{item.desconto_valor > 0 ? ` · Desconto ${formatCurrency(item.desconto_valor)}` : ''}
+                              </Typography>
                               <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
                                 {item.produto_codigo && (
                                   <Typography variant="caption" color="text.secondary">Cód: {item.produto_codigo}</Typography>
@@ -1014,7 +1043,7 @@ function PDVPageContent() {
                                     label={item.cor_descricao}
                                     size="small"
                                     icon={<Palette fontSize="small" />}
-                                    sx={{ height: 18, fontSize: '0.7rem' }}
+                                    sx={{ height: 22 }}
                                   />
                                 )}
                               </Box>
@@ -1066,22 +1095,9 @@ function PDVPageContent() {
                                 </Box>
                               )}
                             </TableCell>
-<TableCell align="right" sx={{ display: 'none' }}>
-                              <TextField
-                                size="small"
-                                type="number"
-                                value={item.desconto_valor}
-                                inputProps={{'aria-label': 'Desconto do item'}}
-                                onChange={(e) => atualizarItem(index, { desconto_valor: parseFloat(e.target.value) || 0 })}
-                                sx={{ width: 80 }}
-                                InputProps={{
-                                  inputProps: { min: 0, step: 0.01, 'aria-label': 'Desconto do item' },
-                                  startAdornment: <InputAdornment position="start">R$</InputAdornment>,
-                                }}
-                              />
-                            </TableCell>
                             <TableCell align="right">
-                              <Typography fontWeight="bold">{formatCurrency(item.valor_total)}</Typography>
+                              <Typography fontWeight="bold" sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(item.valor_total)}</Typography>
+                              {item.desconto_valor > 0 && <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', xl: 'block' }, fontVariantNumeric: 'tabular-nums' }}>Desconto: −{formatCurrency(item.desconto_valor)}</Typography>}
                             </TableCell>
                             <TableCell align="center">
                               <Box sx={{
@@ -1144,11 +1160,12 @@ function PDVPageContent() {
               </Button>
             )}
             {/* Dados do Cliente */}
-            <SaleSection compact={isMobile} expanded={accordionExpandido === 'cliente'} onChange={open => setAccordionExpandido(open ? 'cliente' : false)} title={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SaleSection compact={isMobile} expanded={accordionExpandido === 'cliente'} onChange={open => setAccordionExpandido(open ? 'cliente' : false)} title={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
                   <Person color="primary" />
                   <Typography fontWeight="bold">
                     Cliente
                   </Typography>
+                  {accordionExpandido !== 'cliente' && clienteSelecionado && <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: '100%' }}>{clienteSelecionado.nome}</Typography>}
                 </Box>}>
 
                 <Grid container spacing={1.5}>
@@ -1249,21 +1266,23 @@ function PDVPageContent() {
             </SaleSection>
 
             {/* Tipo de Atendimento e Pagamento */}
-            <SaleSection compact={isMobile} expanded={accordionExpandido === 'atendimento'} onChange={open => setAccordionExpandido(open ? 'atendimento' : false)} title={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SaleSection compact={isMobile} expanded={accordionExpandido === 'atendimento'} onChange={open => setAccordionExpandido(open ? 'atendimento' : false)} title={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
                   <Category color="primary" />
-                  <Typography fontWeight="bold">Tipo de Atendimento e Pagamento</Typography>
+                  <Typography fontWeight="bold">Atendimento e pagamento</Typography>
+                  {accordionExpandido !== 'atendimento' && <Typography variant="caption" color="text.secondary">{tiposAtendimento?.find(tipo => tipo.id === tipoAtendimentoId)?.nome || 'Selecione o atendimento'} · {formasPagamento?.find(forma => forma.id === formaPagamentoId)?.nome || 'Selecione o pagamento'}</Typography>}
                 </Box>}>
 
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
-                    <FormControl fullWidth size="small">
+                    <FormControl ref={atendimentoSectionRef} fullWidth size="small" error={campoPDVComErro === 'atendimento'}>
                       <InputLabel id="pdv-tipo-label">Tipo de Atendimento *</InputLabel>
                       <Select labelId="pdv-tipo-label"
+                        inputProps={{ 'aria-describedby': campoPDVComErro === 'atendimento' ? 'pdv-tipo-helper' : undefined }}
                         value={tipoAtendimentoId}
                         label="Tipo de Atendimento *"
                         onChange={(e) => {
                           setTipoAtendimentoId(e.target.value);
-                          setPedidoAtual({ tipo_atendimento_id: e.target.value });
+                          setCampoPDVComErro(null);
                         }}
                       >
                         {tiposAtendimento?.map((tipo) => (
@@ -1272,18 +1291,20 @@ function PDVPageContent() {
                           </MenuItem>
                         ))}
                       </Select>
+                      {campoPDVComErro === 'atendimento' && <FormHelperText id="pdv-tipo-helper">Selecione o tipo de atendimento para continuar.</FormHelperText>}
                     </FormControl>
                   </Grid>
 
                   <Grid item xs={12}>
-                    <FormControl fullWidth size="small">
+                    <FormControl ref={pagamentoSectionRef} fullWidth size="small" error={campoPDVComErro === 'pagamento'}>
                       <InputLabel id="pdv-pagamento-label">Forma de Pagamento *</InputLabel>
                       <Select labelId="pdv-pagamento-label"
+                        inputProps={{ 'aria-describedby': campoPDVComErro === 'pagamento' ? 'pdv-pagamento-helper' : undefined }}
                         value={formaPagamentoId}
                         label="Forma de Pagamento *"
                         onChange={(e) => {
                           setFormaPagamentoId(e.target.value);
-                          setPedidoAtual({ forma_pagamento_id: e.target.value });
+                          setCampoPDVComErro(null);
                         }}
                         startAdornment={
                           <InputAdornment position="start">
@@ -1297,6 +1318,7 @@ function PDVPageContent() {
                           </MenuItem>
                         ))}
                       </Select>
+                      {campoPDVComErro === 'pagamento' && <FormHelperText id="pdv-pagamento-helper">Selecione a forma de pagamento para continuar.</FormHelperText>}
                     </FormControl>
                   </Grid>
                 </Grid>
@@ -1330,12 +1352,12 @@ function PDVPageContent() {
                 <Percent /> Desconto Geral
               </Typography>
               <Grid container spacing={1}>
-                <Grid item xs={4}>
+                  <Grid item xs={4}>
                   <TextField
                     fullWidth
                     select
                     size="small"
-                    label="Tipo"
+                    label="Desconto em"
                     value={tipoDescontoGeral}
                     onChange={(e) => setTipoDescontoGeral(e.target.value === 'percentual' ? 'percentual' : 'valor')}
                   >
@@ -1343,26 +1365,22 @@ function PDVPageContent() {
                     <MenuItem value="percentual">%</MenuItem>
                   </TextField>
                 </Grid>
-                <Grid item xs={5}>
+                <Grid item xs={8}>
                   <TextField
                     fullWidth
                     size="small"
                     type="number"
-                    label="Desconto"
+                    label={tipoDescontoGeral === 'percentual' ? 'Desconto (%)' : 'Desconto (R$)'}
                     value={descontoGeral}
-                    onChange={(e) => setDescontoGeral(parseFloat(e.target.value) || 0)}
-                    InputProps={{ inputProps: { min: 0, step: 0.01 } }}
+                    error={descontoGeralInvalido}
+                    onChange={(e) => setDescontoGeral(e.target.value)}
+                    inputProps={{ min: 0, max: limiteDescontoGeral, step: '0.01', 'aria-label': tipoDescontoGeral === 'percentual' ? 'Desconto geral em porcentagem' : 'Desconto geral em reais' }}
+                    helperText={descontoGeralInvalido
+                      ? `${tipoDescontoGeral === 'percentual'
+                        ? 'Informe um percentual entre 0 e 100.'
+                        : `Informe um valor entre R$ 0,00 e ${formatCurrency(pedidoAtual.subtotal)}.`} O total mantém ${formatCurrency(pedidoAtual.desconto_valor)} até a correção.`
+                      : 'O total é atualizado automaticamente.'}
                   />
-                </Grid>
-                <Grid item xs={3}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    aria-label="Aplicar desconto geral" onClick={handleAplicarDescontoGeral}
-                  >
-                    OK
-                  </Button>
                 </Grid>
               </Grid>
             </Box>
@@ -1374,22 +1392,32 @@ function PDVPageContent() {
       <Box component="section" aria-label="Resumo financeiro e ações do pedido" sx={{ position: 'fixed', bottom: 0, left: { xs: 0, md: 240 }, right: 0, zIndex: theme.zIndex.appBar + 1, bgcolor: 'background.paper', borderTop: '1px solid', borderColor: 'divider', px: { xs: 2, sm: 3 }, py: 1.5, pb: 'max(12px, env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', boxShadow: '0 -4px 16px rgb(15 23 42 / 0.06)' }}>
         <Box sx={{ flex: 1, minWidth: 180 }}>
           <Typography variant="caption" color="text.secondary">{pedidoAtual.itens.length} itens · {pedidoAtual.itens.reduce((acc, item) => acc + item.quantidade, 0)} unidades</Typography>
-          <Typography variant="body2" color="text.secondary">Subtotal {formatCurrency(pedidoAtual.subtotal)} · Desconto geral {formatCurrency(pedidoAtual.desconto_valor)}</Typography>
+          <Typography variant="body2" color="text.secondary">Subtotal após descontos dos itens {formatCurrency(pedidoAtual.subtotal)} · Desconto geral {formatCurrency(pedidoAtual.desconto_valor)}</Typography>
         </Box>
         <Box sx={{ minWidth: 130 }}><Typography variant="caption" fontWeight={600}>Total</Typography><Typography variant="h5" color="primary.main" fontWeight={700} sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(pedidoAtual.total)}</Typography></Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' } }}>
-          <Button variant="contained" startIcon={<Check />} onClick={handleFinalizarPedido} disabled={salvando || redeDisponivel === false || pedidoAtual.itens.length === 0}>{modoEdicao ? 'Salvar alterações' : 'Salvar pedido'}</Button>
-          <Button sx={{ display: { xs: 'none', sm: 'inline-flex' } }} variant="outlined" startIcon={<Print />} onClick={() => { void handleImprimirPedido('print'); }} disabled={pedidoAtual.itens.length === 0}>{modoEdicao ? 'Imprimir prévia' : 'Imprimir rascunho'}</Button>
-          <Button sx={{ display: { xs: 'none', sm: 'inline-flex' } }} color="error" onClick={() => { if (confirm('Descartar o rascunho deste pedido?')) { limparCarrinho(); limparCamposVenda(); } }} disabled={salvando || pedidoAtual.itens.length === 0}>Descartar</Button>
-          <Tooltip title={modoEdicao ? 'Imprimir prévia' : 'Imprimir rascunho'}><span><IconButton sx={{ display: { xs: 'inline-flex', sm: 'none' } }} aria-label={modoEdicao ? 'Imprimir prévia' : 'Imprimir rascunho'} onClick={() => { void handleImprimirPedido('print'); }} disabled={pedidoAtual.itens.length === 0}><Print /></IconButton></span></Tooltip>
-          <Tooltip title="Descartar rascunho"><span><IconButton color="error" sx={{ display: { xs: 'inline-flex', sm: 'none' } }} aria-label="Descartar rascunho" onClick={() => { if (confirm('Descartar o rascunho deste pedido?')) { limparCarrinho(); limparCamposVenda(); } }} disabled={salvando || pedidoAtual.itens.length === 0}><Delete /></IconButton></span></Tooltip>
+          <Button variant="contained" startIcon={<Check />} onClick={handleFinalizarPedido} disabled={salvando || redeDisponivel === false || pedidoAtual.itens.length === 0 || descontoGeralInvalido}>{modoEdicao ? 'Salvar alterações' : 'Salvar pedido'}</Button>
+          <Button sx={{ display: { xs: 'none', sm: 'inline-flex' } }} variant="outlined" startIcon={<Print />} onClick={() => { void handleImprimirPedido('print'); }} disabled={pedidoAtual.itens.length === 0 || descontoGeralInvalido}>{modoEdicao ? 'Imprimir prévia' : 'Imprimir rascunho'}</Button>
+          <Button sx={{ display: { xs: 'none', sm: 'inline-flex' } }} color="error" onClick={() => { if (confirm('Descartar o rascunho deste pedido?')) { setItemRemovido(null); limparCarrinho(); limparCamposVenda(); } }} disabled={salvando || pedidoAtual.itens.length === 0}>Descartar</Button>
+          <Tooltip title={modoEdicao ? 'Imprimir prévia' : 'Imprimir rascunho'}><span><IconButton sx={{ display: { xs: 'inline-flex', sm: 'none' } }} aria-label={modoEdicao ? 'Imprimir prévia' : 'Imprimir rascunho'} onClick={() => { void handleImprimirPedido('print'); }} disabled={pedidoAtual.itens.length === 0 || descontoGeralInvalido}><Print /></IconButton></span></Tooltip>
+          <Tooltip title="Descartar rascunho"><span><IconButton color="error" sx={{ display: { xs: 'inline-flex', sm: 'none' } }} aria-label="Descartar rascunho" onClick={() => { if (confirm('Descartar o rascunho deste pedido?')) { setItemRemovido(null); limparCarrinho(); limparCamposVenda(); } }} disabled={salvando || pedidoAtual.itens.length === 0}><Delete /></IconButton></span></Tooltip>
         </Box>
       </Box>
 
       <Menu anchorEl={itemMenu?.anchor} open={!!itemMenu} onClose={() => setItemMenu(null)}>
         <MenuItem onClick={() => { if (itemMenu) handleDuplicarLinha(itemMenu.index); setItemMenu(null); }}><ContentCopy fontSize="small" sx={{ mr: 1 }} />Duplicar item</MenuItem>
-        <MenuItem sx={{ color: 'error.main' }} onClick={() => { if (itemMenu) removerItem(itemMenu.index); setItemMenu(null); }}><Delete fontSize="small" sx={{ mr: 1 }} />Remover item</MenuItem>
+        <MenuItem sx={{ color: 'error.main' }} onClick={() => { if (itemMenu) removerItemComDesfazer(itemMenu.index); setItemMenu(null); }}><Delete fontSize="small" sx={{ mr: 1 }} />Remover item</MenuItem>
       </Menu>
+
+      <Snackbar
+        open={Boolean(itemRemovido)}
+        autoHideDuration={6000}
+        onClose={(_, reason) => { if (reason !== 'clickaway') setItemRemovido(null); }}
+        message={itemRemovido ? `${itemRemovido.item.produto_nome} removido do pedido.` : ''}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ bottom: { xs: 'calc(88px + env(safe-area-inset-bottom))', md: 88 } }}
+        action={<Button color="secondary" size="small" onClick={restaurarItemRemovido}>Desfazer</Button>}
+      />
       <Dialog open={!!pedidoSalvo} onClose={() => setPedidoSalvo(null)} fullWidth maxWidth="sm" aria-labelledby="pdv-pedido-salvo-titulo">
         <DialogTitle id="pdv-pedido-salvo-titulo">Pedido #{pedidoSalvo?.numero} salvo</DialogTitle>
         <DialogContent><Alert severity="success">Pedido salvo como Pendente. A finalização está disponível em Pedidos.</Alert></DialogContent>
@@ -1499,6 +1527,7 @@ function PDVPageContent() {
                               <Typography variant="body2" fontWeight="bold">
                                 {formatCurrency(item.valor_total)}
                               </Typography>
+                              {item.desconto_valor > 0 && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontVariantNumeric: 'tabular-nums' }}>Desconto: −{formatCurrency(item.desconto_valor)}</Typography>}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1637,7 +1666,7 @@ function PDVPageContent() {
       <Dialog open={dialogNovoProduto} onClose={() => setDialogNovoProduto(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Category color="primary" />
-          Cadastrar Novo Produto (Ctrl+P)
+          Cadastrar Novo Produto
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2 }}>
@@ -1765,7 +1794,7 @@ function PDVPageContent() {
                 <Chip
                   label="F2"
                   color="primary"
-                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                  sx={{ fontWeight: 'bold', width: '100%' }}
                 />
               </Grid>
               <Grid item xs={8}>
@@ -1782,7 +1811,7 @@ function PDVPageContent() {
                 <Chip
                   label="F3"
                   color="primary"
-                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                  sx={{ fontWeight: 'bold', width: '100%' }}
                 />
               </Grid>
               <Grid item xs={8}>
@@ -1794,19 +1823,19 @@ function PDVPageContent() {
                 </Typography>
               </Grid>
 
-              {/* F12 */}
+              {/* F10 e F12 */}
               <Grid item xs={4}>
                 <Chip
-                  label="F12"
+                  label="F10 / F12"
                   color="success"
-                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                  sx={{ fontWeight: 'bold', width: '100%' }}
                 />
               </Grid>
               <Grid item xs={8}>
                 <Typography variant="body2">
-                  <strong>Salvar pedido</strong><br />
+                  <strong>Conferir pedido</strong><br />
                   <Typography variant="caption" color="text.secondary">
-                    Abre a tela de finalização
+                    Abre a conferência; o pedido será salvo como Pendente.
                   </Typography>
                 </Typography>
               </Grid>
@@ -1820,7 +1849,7 @@ function PDVPageContent() {
                 <Chip
                   label="Enter"
                   color="default"
-                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                  sx={{ fontWeight: 'bold', width: '100%' }}
                 />
               </Grid>
               <Grid item xs={8}>
@@ -1837,7 +1866,7 @@ function PDVPageContent() {
                 <Chip
                   label="Esc"
                   color="default"
-                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
+                  sx={{ fontWeight: 'bold', width: '100%' }}
                 />
               </Grid>
               <Grid item xs={8}>
@@ -1849,22 +1878,6 @@ function PDVPageContent() {
                 </Typography>
               </Grid>
 
-              {/* Ctrl+P */}
-              <Grid item xs={4}>
-                <Chip
-                  label="Ctrl+P"
-                  color="secondary"
-                  sx={{ fontWeight: 'bold', fontSize: '0.9rem', width: '100%' }}
-                />
-              </Grid>
-              <Grid item xs={8}>
-                <Typography variant="body2">
-                  <strong>Novo Produto</strong><br />
-                  <Typography variant="caption" color="text.secondary">
-                    Abre cadastro rápido de produto
-                  </Typography>
-                </Typography>
-              </Grid>
             </Grid>
           </Box>
         </DialogContent>

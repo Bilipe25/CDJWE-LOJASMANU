@@ -33,24 +33,47 @@ export function InstallPWA() {
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
   const updateRequested = useRef(false);
+  const installHintTimer = useRef<number | null>(null);
+  const installAvailable = useRef(false);
 
   useEffect(() => {
-    const installed = () => { setPrompt(null); setInstallVisible(false); setInstructions(false); };
+    const scheduleInstallHint = () => {
+      if (wasDismissed() || !installAvailable.current) return;
+      window.clearTimeout(installHintTimer.current ?? undefined);
+      installHintTimer.current = window.setTimeout(() => {
+        installHintTimer.current = null;
+        setInstallVisible(true);
+      }, 20000);
+    };
+    const installed = () => {
+      installAvailable.current = false;
+      window.clearTimeout(installHintTimer.current ?? undefined);
+      setPrompt(null); setInstallVisible(false); setInstructions(false);
+    };
     const beforeInstall = (event: Event) => {
       if (isStandalone()) return;
       event.preventDefault();
       setPrompt(event as BeforeInstallPromptEvent);
-      if (!wasDismissed()) setInstallVisible(true);
+      installAvailable.current = true;
+      scheduleInstallHint();
+    };
+    const activity = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-pwa-install-notice]')) return;
+      if (installHintTimer.current === null) setInstallVisible(false);
+      scheduleInstallHint();
     };
     // iPadOS can identify itself as a Mac. Only Safari uses this manual installation flow.
     const appleDevice = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const safari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
     if (appleDevice && safari && !isStandalone() && !wasDismissed()) {
-      setIos(true); setInstallVisible(true);
+      setIos(true); installAvailable.current = true; scheduleInstallHint();
     }
     window.addEventListener('beforeinstallprompt', beforeInstall);
     window.addEventListener('appinstalled', installed);
+    document.addEventListener('pointerdown', activity, { passive: true });
+    document.addEventListener('keydown', activity);
     const changed = () => {
       if (updateRequested.current) window.location.reload();
     };
@@ -59,13 +82,20 @@ export function InstallPWA() {
       ? registrarPWA(setUpdate) : undefined;
     return () => {
       dispose?.();
+      window.clearTimeout(installHintTimer.current ?? undefined);
       window.removeEventListener('beforeinstallprompt', beforeInstall);
       window.removeEventListener('appinstalled', installed);
+      document.removeEventListener('pointerdown', activity);
+      document.removeEventListener('keydown', activity);
       navigator.serviceWorker?.removeEventListener('controllerchange', changed);
     };
   }, []);
 
-  const closeInstall = () => { setInstallVisible(false); rememberDismissal(); };
+  const closeInstall = () => {
+    window.clearTimeout(installHintTimer.current ?? undefined);
+    setInstallVisible(false);
+    rememberDismissal();
+  };
   const install = async () => {
     if (ios && !prompt) { setInstructions(true); return; }
     if (!prompt || installing) return;
@@ -86,7 +116,7 @@ export function InstallPWA() {
 
   return <>
     <Snackbar open={!!update || (installVisible && (!!prompt || ios))} anchorOrigin={{ vertical: 'top', horizontal: 'center' }} sx={{ top: { xs: 72, sm: 80 }, maxWidth: 620 }}>
-      <Alert severity="info" variant="filled" action={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <Alert data-pwa-install-notice severity="info" variant="filled" action={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         {update ? <Button color="inherit" size="small" disabled={updating} onClick={() => setConfirmUpdate(true)}>{updating ? 'Atualizando…' : 'Atualizar'}</Button> : <>
           <Button color="inherit" size="small" startIcon={<GetAppIcon />} disabled={installing} onClick={() => { void install(); }}>{installing ? 'Aguarde…' : 'Instalar'}</Button>
           <IconButton size="small" color="inherit" aria-label="Dispensar sugestão de instalação" onClick={closeInstall}><CloseIcon fontSize="small" /></IconButton>

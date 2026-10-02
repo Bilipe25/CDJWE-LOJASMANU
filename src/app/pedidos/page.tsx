@@ -518,7 +518,7 @@ function PedidosPageContent() {
         <Button variant="contained" startIcon={<Receipt />} onClick={() => router.push('/pdv')}>Novo pedido</Button>
       </>} />
       {erroEstatisticas && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => recarregarEstatisticas()}>Tentar novamente</Button>}>Indicadores indisponíveis.</Alert>}
-      <OperationalSummary label="Indicadores da consulta" items={[
+      <OperationalSummary label="Indicadores da consulta" variant="cards" items={[
         { label: 'Pedidos na consulta', value: erroEstatisticas ? '—' : estatisticas.totalPedidos ?? '—' },
         { label: 'Pendentes', value: erroEstatisticas ? '—' : estatisticas.pedidosPendentes ?? '—' },
         { label: 'Vendas finalizadas na consulta', value: erroEstatisticas || estatisticas.totalVendas === undefined ? '—' : formatCurrency(estatisticas.totalVendas) },
