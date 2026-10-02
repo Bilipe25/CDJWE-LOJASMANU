@@ -68,7 +68,6 @@ import { trpc } from '@/lib/trpc/client';
 import { usePDVStore } from '@/stores/pdv-store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { OperationalHeader, operationalSurface, operationalTable } from '@/components/common/OperationalPage';
-import { comJanelaImpressao } from '@/lib/pdf/impressao-browser';
 import { arredondarMoeda } from '@/lib/utils/valores-pedido';
 import SaleSection from '@/components/common/SaleSection';
 import EnderecoFields from '@/components/common/EnderecoFields';
@@ -639,10 +638,8 @@ function PDVPageContent() {
     const dadosEmpresa = empresaParaDocumento(configuracoes);
 
     try {
-      await comJanelaImpressao(acao, async janela => {
-        const { gerarPedidoPDF } = await import('@/lib/pdf/pedido-pdf');
-        await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao, janela);
-      });
+      const { gerarPedidoPDF } = await import('@/lib/pdf/pedido-pdf');
+      await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
     } catch (erro) { toast.error(erro instanceof Error ? erro.message : 'Não foi possível preparar a impressão. Tente novamente.'); }
   };
 

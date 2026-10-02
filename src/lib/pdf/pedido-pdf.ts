@@ -1,5 +1,6 @@
 import { formatDateBR } from '@/lib/utils/dateUtils';
 import pdfMake from './fontes';
+import { imprimirPDFNaPagina } from '@/lib/pdf/impressao-browser';
 import type { Content, ContentColumns, ContentText, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
 import type { DadosPedidoDocumento as DadosPedido, DadosEmpresaDocumento as DadosEmpresa } from '@/lib/utils/documentos';
 
@@ -115,13 +116,12 @@ async function carregarLogo(url: string): Promise<string | undefined> {
   } catch { return; } finally { clearTimeout(timeout); }
 }
 
-export async function gerarPedidoPDF(pedido: DadosPedido, empresa: DadosEmpresa, acao: 'download' | 'print' = 'print', janelaImpressao?: Window) {
+export async function gerarPedidoPDF(pedido: DadosPedido, empresa: DadosEmpresa, acao: 'download' | 'print' = 'print') {
   validarPedido(pedido);
-  if (janelaImpressao?.closed) throw new Error('A janela de impressão foi fechada. Clique em imprimir novamente.');
   const logo = await carregarLogo(empresa.logo_url || '/icon-192x192.png');
   const doc = criarDefinicaoPedido(pedido, empresa, logo);
   if (acao === 'print') {
-    if (janelaImpressao?.closed) throw new Error('A janela de impressão foi fechada. Clique em imprimir novamente.');
-    pdfMake.createPdf(doc).print({}, janelaImpressao);
+    const pdf = await new Promise<Blob>(resolve => pdfMake.createPdf(doc).getBlob(resolve));
+    await imprimirPDFNaPagina(pdf);
   } else pdfMake.createPdf(doc).download(`pedido-${pedido.numero ?? 'rascunho'}.pdf`);
 }
