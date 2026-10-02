@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '@/lib/trpc/server';
+import { executarRPC } from '@/server/rpc';
+import type { Tables } from '@/types/supabase';
 
 export const produtosRouter = router({
   // Estatísticas gerais de produtos
@@ -34,37 +36,15 @@ export const produtosRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
+        limit: z.number().int().min(1).max(100).default(50),
+        offset: z.number().int().min(0).default(0),
         search: z.string().optional(),
         categoriaId: z.string().uuid().optional(),
       })
     )
-    .query(async ({ ctx, input }) => {
-      let query = ctx.supabase
-        .from('produtos')
-        .select('*', { count: 'exact' })
-        .eq('ativo', true)
-        .range(input.offset, input.offset + input.limit - 1)
-        .order('nome');
-
-      if (input.search) {
-        query = query.ilike('nome', `%${input.search}%`);
-      }
-
-      if (input.categoriaId) {
-        query = query.eq('categoria_id', input.categoriaId);
-      }
-
-      const { data, error, count } = await query;
-
-      if (error) throw new Error(error.message);
-
-      return {
-        produtos: data || [],
-        total: count || 0,
-      };
-    }),
+    .query(async ({ ctx, input }) => await executarRPC(ctx.supabase, 'pdv_listar_produtos', {
+      p_busca: input.search ?? '', p_categoria: input.categoriaId, p_limite: input.limit, p_offset: input.offset,
+    }) as { produtos: Tables<'produtos'>[]; total: number }),
 
   // Buscar produto por ID
   getById: protectedProcedure

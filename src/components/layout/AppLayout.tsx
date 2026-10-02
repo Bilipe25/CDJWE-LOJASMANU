@@ -1,4 +1,5 @@
 'use client';
+import ConnectionStatus from '@/components/common/ConnectionStatus';
 
 import { useState, useEffect } from 'react';
 import {
@@ -299,24 +300,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Typography>
             </Box>
             <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-                Sistema Online
-              </Typography>
-              <Box
-                sx={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  bgcolor: 'success.main',
-                  animation: 'pulse 2s infinite',
-                  '@keyframes pulse': {
-                    '0%, 100%': { opacity: 1 },
-                    '50%': { opacity: 0.5 },
-                  },
-                }}
-              />
-            </Box>
+            <ConnectionStatus />
           </Box>
         </Toolbar>
       </AppBar>

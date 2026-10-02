@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
@@ -42,6 +42,7 @@ import {
   useMediaQuery,
   useTheme,
   Checkbox,
+  FormControlLabel,
   Breadcrumbs,
   Link,
 } from '@mui/material';
@@ -55,18 +56,14 @@ import {
   CheckCircle,
   Receipt,
   FilterList,
-  CalendarToday,
   Person,
   Edit,
   Close,
-  Download,
   AttachMoney,
   Notes,
   Check,
   Delete,
   TrendingUp,
-  Schedule,
-  ShoppingBag,
   Timer,
   MoreVert,
   ExpandMore,
@@ -75,7 +72,6 @@ import {
   PictureAsPdf,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
-import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import PrintConfirmDialog from '@/components/common/PrintConfirmDialog';
@@ -83,15 +79,16 @@ import StatusBadge from '@/components/common/StatusBadge';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import { trpc } from '@/lib/trpc/client';
 import { motion } from 'framer-motion';
-import { format } from 'date-fns';
 import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
-import { useQueryClient } from '@tanstack/react-query';
+import type { PedidoListado as Pedido } from '@/server/routers/pedidos';
+import { empresaParaDocumento, pedidoParaDocumento, buscarTodosFiltrados } from '@/lib/utils/documentos';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { validarFiltrosPedidos } from '@/lib/schemas/filtros-pedidos';
 import { formatarEndereco } from '@/lib/utils/endereco';
 import { usePedidosFiltros } from '@/hooks/usePedidosFiltros';
 
 function PedidosPageContent() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const utils = trpc.useUtils();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -99,6 +96,7 @@ function PedidosPageContent() {
   // Hook customizado para gerenciar filtros com persistência
   const {
     filtros,
+    pronto,
     atualizarFiltro,
     limparFiltros: limparFiltrosHook,
     getUrlComFiltros,
@@ -119,7 +117,7 @@ function PedidosPageContent() {
     clienteSelecionado,
     filtrosExpanded
   } = filtros;
-  const [pedidoDetalhes, setPedidoDetalhes] = useState<any>(null);
+  const [pedidoDetalhes, setPedidoDetalhes] = useState<Pedido | null>(null);
   const [dialogDetalhes, setDialogDetalhes] = useState(false);
   const [dialogEditar, setDialogEditar] = useState(false);
   const [searchCliente, setSearchCliente] = useState('');
@@ -133,11 +131,17 @@ function PedidosPageContent() {
   }>({ open: false, title: '', message: '', onConfirm: () => { }, severity: 'warning' });
   const [printDialog, setPrintDialog] = useState<{
     open: boolean;
-    pedido: any;
+    pedido: Pedido | null;
   }>({ open: false, pedido: null });
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<any>(null);
   const [dialogExportar, setDialogExportar] = useState(false);
+  const [escopoExportacao, setEscopoExportacao] = useState<'pagina' | 'todos'>('pagina');
+  const [exportando, setExportando] = useState(false);
+  const [progressoExportacao, setProgressoExportacao] = useState('');
+  const exportacaoEmCurso = useRef(false);
+  const buscaClienteDebounced = useDebouncedValue(searchCliente);
+  const buscaDebounced = useDebouncedValue(search);
   const [colunasExportacao, setColunasExportacao] = useState([
     { id: 'numero', label: 'Número', selecionada: true },
     { id: 'data', label: 'Data', selecionada: true },
@@ -164,17 +168,23 @@ function PedidosPageContent() {
   }, [searchParams, temFiltrosAtivos]);
 
   const filtrosConsulta = {
-    search: search || undefined,
-    status: status as any,
+    search: buscaDebounced || undefined,
+    status,
     dataInicio: dataInicio || undefined,
     dataFim: dataFim || undefined,
     tipoAtendimento: tipoAtendimento || undefined,
     formaPagamentoId: formaPagamento || undefined,
     clienteId: clienteSelecionado?.id,
   };
-  const { data, isLoading, error: erroLista, refetch: recarregarLista } = trpc.pedidos.list.useQuery({ ...filtrosConsulta, limit: rowsPerPage, offset: page * rowsPerPage });
+  const { data, isLoading, error: erroLista, isFetching: atualizandoLista, refetch: recarregarLista } = trpc.pedidos.list.useQuery({ ...filtrosConsulta, limit: rowsPerPage, offset: page * rowsPerPage }, { enabled: pronto });
 
-  const { data: dadosEstatisticas, error: erroEstatisticas, refetch: recarregarEstatisticas } = trpc.pedidos.estatisticas.useQuery(filtrosConsulta);
+  const { data: dadosEstatisticas, error: erroEstatisticas, refetch: recarregarEstatisticas } = trpc.pedidos.estatisticas.useQuery(filtrosConsulta, { enabled: pronto });
+
+  useEffect(() => {
+    if (data && page > Math.max(0, Math.ceil(data.total / rowsPerPage) - 1)) atualizarFiltro('page', Math.max(0, Math.ceil(data.total / rowsPerPage) - 1));
+  }, [data, page, rowsPerPage, atualizarFiltro]);
+  const { data: clienteDoFiltro } = trpc.clientes.getById.useQuery({ id: clienteSelecionado?.id || '' }, { enabled: pronto && !!clienteSelecionado?.id && !clienteSelecionado.nome });
+  const nomeClienteFiltro = clienteSelecionado?.nome || clienteDoFiltro?.nome || 'Cliente selecionado';
 
   // Query para buscar pedido específico da URL
   const { data: pedidoUrl, isLoading: loadingPedidoUrl, error: erroPedidoUrl, refetch: recarregarPedidoUrl } = trpc.pedidos.getById.useQuery(
@@ -191,9 +201,10 @@ function PedidosPageContent() {
   }, [pedidoUrl, pedidoIdUrl]);
 
   const { data: clientes } = trpc.clientes.list.useQuery({
-    limit: 1000,
+    limit: 50,
+    ativo: null,
     offset: 0,
-    search: searchCliente || undefined,
+    search: buscaClienteDebounced || undefined,
   });
 
   const { data: pedidoCompleto, isLoading: loadingDetalhes, error: erroDetalhes, refetch: recarregarDetalhes } = trpc.pedidos.getById.useQuery(
@@ -209,12 +220,11 @@ function PedidosPageContent() {
 
   const { data: tiposAtendimento } = trpc.dominios.tiposAtendimento.list.useQuery();
   const { data: formasPagamento } = trpc.dominios.formasPagamento.list.useQuery();
-  const { data: configuracoes } = trpc.configuracoes.get.useQuery();
+  const { data: configuracoes, error: erroEmpresa, isLoading: carregandoEmpresa } = trpc.configuracoes.get.useQuery();
 
   const pedidos = data?.pedidos || [];
   const total = data?.total || 0;
 
-  type Pedido = typeof pedidos[number];
 
   const estatisticas = {
     totalPedidos: dadosEstatisticas?.total,
@@ -282,7 +292,9 @@ function PedidosPageContent() {
     }
   };
 
-  const handleImprimirPedido = async (pedido: any, acao: 'print' | 'download' = 'print') => {
+  const handleImprimirPedido = async (pedido: Pedido | null, acao: 'print' | 'download' = 'print') => {
+    if (!pedido) return;
+    if (erroEmpresa || carregandoEmpresa) { toast.error('Aguarde os dados da empresa ou tente novamente antes de imprimir.'); return; }
     const toastId = toast.loading('Gerando documento...');
 
     try {
@@ -293,51 +305,8 @@ function PedidosPageContent() {
         throw new Error('Pedido não encontrado');
       }
 
-      const enderecoCompleto = formatarEndereco(pedidoCompleto.endereco);
-
-      const dadosPedido = {
-        numero: pedidoCompleto.numero ?? undefined,
-        data: pedidoCompleto.data || new Date().toISOString(),
-        cliente_nome: pedidoCompleto.cliente_nome ?? undefined,
-        cliente_cpf: pedidoCompleto.cliente_cpf ?? undefined,
-        cliente_telefone: (pedidoCompleto as any).telefone_contato || pedidoCompleto.cliente_telefone || undefined,
-        endereco: enderecoCompleto,
-        tipo_atendimento: pedidoCompleto.tipo_atendimento_nome ?? undefined,
-        forma_pagamento: pedidoCompleto.forma_pagamento_nome ?? undefined,
-        observacoes: pedidoCompleto.observacao ?? undefined,
-        itens: (pedidoCompleto.itens || []).map((item: any) => ({
-          ...item,
-          produto_nome: item.produto_nome || '',
-          cor_descricao: item.cor_descricao || '',
-          cor_codigo: item.cor_codigo || '',
-          categoria_nome: item.categoria_nome || '',
-          cor_linha: item.cor_linha || '',
-        })),
-        subtotal: pedidoCompleto.subtotal || 0,
-        desconto_valor: pedidoCompleto.desconto_valor || 0,
-        total: pedidoCompleto.total || 0,
-      };
-
-      // Montar endereço completo da empresa
-      const enderecoEmpresa = [
-        (configuracoes as any)?.logradouro,
-        (configuracoes as any)?.numero,
-        (configuracoes as any)?.bairro,
-        (configuracoes as any)?.cidade,
-        (configuracoes as any)?.estado,
-        (configuracoes as any)?.cep ? `CEP: ${(configuracoes as any)?.cep}` : '',
-      ].filter(Boolean).join(', ');
-
-      const dadosEmpresa = {
-        nome_empresa: (configuracoes as any)?.nome_empresa,
-        razao_social: (configuracoes as any)?.razao_social,
-        cnpj: (configuracoes as any)?.cnpj,
-        telefone: (configuracoes as any)?.telefone,
-        endereco: enderecoEmpresa || (configuracoes as any)?.endereco,
-        logo_url: (configuracoes as any)?.logo_url,
-        instagram: (configuracoes as any)?.instagram,
-        site: (configuracoes as any)?.site,
-      };
+      const dadosPedido = pedidoParaDocumento(pedidoCompleto);
+      const dadosEmpresa = empresaParaDocumento(configuracoes);
 
       await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
       toast.dismiss(toastId);
@@ -347,13 +316,15 @@ function PedidosPageContent() {
     }
   };
 
-  const handleVisualizarPedido = (pedido: any) => {
+  const handleVisualizarPedido = (pedido: Pedido | null) => {
+    if (!pedido) return;
     setPedidoDetalhes(pedido);
     setDialogDetalhes(true);
   };
 
-  const handleEditarPedido = (pedido: any) => {
-    if (['CANCELADO','FINALIZADO'].includes(pedido.status)) { toast.error('Este pedido está encerrado e não pode ser editado.'); return; }
+  const handleEditarPedido = (pedido: Pedido | null) => {
+    if (!pedido) return;
+    if (['CANCELADO','FINALIZADO'].includes(pedido.status || '')) { toast.error('Este pedido está encerrado e não pode ser editado.'); return; }
     // Redirecionar para PDV com o ID do pedido para edição
     // Salvar URL de retorno com filtros no sessionStorage
     const urlRetorno = getUrlComFiltros('/pedidos');
@@ -374,7 +345,7 @@ function PedidosPageContent() {
         endereco_id: pedidoEditando.endereco_id || undefined,
         tipo_atendimento_id: pedidoEditando.tipo_atendimento_id || undefined,
         forma_pagamento_id: pedidoEditando.forma_pagamento_id || undefined,
-        desconto_valor: pedidoEditando.desconto_valor,
+        desconto_valor: pedidoEditando.desconto_valor ?? 0,
         observacao: pedidoEditando.observacao,
         status: pedidoEditando.status === 'CONFIRMADO' ? 'CONFIRMADO' : 'PENDENTE',
       });
@@ -390,7 +361,8 @@ function PedidosPageContent() {
     }
   };
 
-  const handleCancelarPedido = async (pedido: any) => {
+  const handleCancelarPedido = async (pedido: Pedido | null) => {
+    if (!pedido) return;
     setConfirmDialog({
       open: true,
       title: 'Cancelar Pedido',
@@ -411,7 +383,8 @@ function PedidosPageContent() {
     });
   };
 
-  const handleFinalizarPedido = async (pedido: any) => {
+  const handleFinalizarPedido = async (pedido: Pedido | null) => {
+    if (!pedido) return;
     setConfirmDialog({
       open: true,
       title: 'Finalizar Pedido',
@@ -432,7 +405,8 @@ function PedidosPageContent() {
     });
   };
 
-  const handleDuplicarPedido = async (pedido: any) => {
+  const handleDuplicarPedido = async (pedido: Pedido | null) => {
+    if (!pedido) return;
     const chave = crypto.randomUUID();
     setConfirmDialog({
       open: true,
@@ -454,7 +428,8 @@ function PedidosPageContent() {
     });
   };
 
-  const handleExcluirPedido = async (pedido: any) => {
+  const handleExcluirPedido = async (pedido: Pedido | null) => {
+    if (!pedido) return;
     setConfirmDialog({
       open: true,
       title: 'Excluir Pedido Permanentemente',
@@ -479,67 +454,35 @@ function PedidosPageContent() {
     limparFiltrosHook();
   };
 
-  // Funções de Exportação
-  const handleExportarPDF = async () => {
+  const exportar = async (formato: 'pdf' | 'excel') => {
+    if (erroEmpresa || carregandoEmpresa) { toast.error('Dados da empresa indisponíveis. Tente novamente antes de exportar.'); return; }
+    if (search !== buscaDebounced || atualizandoLista || exportacaoEmCurso.current || erroLista || !data || !colunasExportacao.some(c => c.selecionada)) return;
+    exportacaoEmCurso.current = true; setExportando(true); setProgressoExportacao('Preparando exportação…');
+    // Congelar filtros, colunas e empresa antes de aguardar as consultas.
+    const consulta = { ...filtrosConsulta }, colunas = colunasExportacao.map(c => ({ ...c }));
+    const empresa = empresaParaDocumento(configuracoes);
+    const filtrosTexto = [escopoExportacao === 'todos' ? 'Todos os pedidos filtrados' : 'Página atual'];
+    if (search) filtrosTexto.push('Busca: ' + search);
+    if (status) filtrosTexto.push('Status: ' + status);
+    if (tipoAtendimento) filtrosTexto.push('Tipo: ' + tipoAtendimento);
+    if (formaPagamento) filtrosTexto.push('Pagamento: ' + (formasPagamento?.find(f => f.id === formaPagamento)?.nome || formaPagamento));
+    if (clienteSelecionado) filtrosTexto.push('Cliente: ' + nomeClienteFiltro);
+    if (dataInicio || dataFim) filtrosTexto.push('Período: ' + (dataInicio ? formatDate(dataInicio) : 'Início') + ' até ' + (dataFim ? formatDate(dataFim) : 'Fim'));
     try {
-      const { exportarPedidosParaPDF } = await import('@/lib/pdf/pedidos-export-pdf');
-
-      const filtrosTexto: string[] = [];
-      if (status) filtrosTexto.push(`Status: ${status}`);
-      if (tipoAtendimento) filtrosTexto.push(`Tipo: ${tipoAtendimento}`);
-      if (formaPagamento) {
-        const formaNome = (formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome;
-        if (formaNome) filtrosTexto.push(`Pagamento: ${formaNome}`);
+      const registros = escopoExportacao === 'todos'
+        ? await buscarTodosFiltrados((offset, limit) => utils.pedidos.list.fetch({ ...consulta, offset, limit }), (quantidade, total) => setProgressoExportacao(quantidade + ' de ' + total + ' pedidos carregados'))
+        : [...pedidos];
+      if (!registros.length) throw new Error('Nenhum pedido para exportar com estes filtros.');
+      if (formato === 'pdf') {
+        const { exportarPedidosParaPDF } = await import('@/lib/pdf/pedidos-export-pdf');
+        await exportarPedidosParaPDF(registros, colunas, empresa, filtrosTexto);
+      } else {
+        const { exportarPedidosParaExcel } = await import('@/lib/excel/pedidos-export-excel');
+        exportarPedidosParaExcel(registros, colunas, empresa, filtrosTexto);
       }
-      if (clienteSelecionado) filtrosTexto.push(`Cliente: ${clienteSelecionado.nome}`);
-      if (dataInicio || dataFim) {
-        filtrosTexto.push(`Período: ${dataInicio ? formatDate(dataInicio) : 'Início'} até ${dataFim ? formatDate(dataFim) : 'Fim'}`);
-      }
-
-      await exportarPedidosParaPDF(
-        pedidos as any,
-        colunasExportacao,
-        configuracoes as any || {},
-        filtrosTexto.length > 0 ? filtrosTexto : undefined
-      );
-
-      toast.success('PDF gerado com sucesso!');
-      setDialogExportar(false);
-    } catch (error) {
-      console.error('Erro ao exportar PDF:', error);
-      toast.error('Erro ao gerar PDF. Tente novamente.');
-    }
-  };
-
-  const handleExportarExcel = async () => {
-    try {
-      const { exportarPedidosParaExcel } = await import('@/lib/excel/pedidos-export-excel');
-
-      const filtrosTexto: string[] = [];
-      if (status) filtrosTexto.push(`Status: ${status}`);
-      if (tipoAtendimento) filtrosTexto.push(`Tipo: ${tipoAtendimento}`);
-      if (formaPagamento) {
-        const formaNome = (formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome;
-        if (formaNome) filtrosTexto.push(`Pagamento: ${formaNome}`);
-      }
-      if (clienteSelecionado) filtrosTexto.push(`Cliente: ${clienteSelecionado.nome}`);
-      if (dataInicio || dataFim) {
-        filtrosTexto.push(`Período: ${dataInicio ? formatDate(dataInicio) : 'Início'} até ${dataFim ? formatDate(dataFim) : 'Fim'}`);
-      }
-
-      exportarPedidosParaExcel(
-        pedidos as any,
-        colunasExportacao,
-        configuracoes as any || {},
-        filtrosTexto.length > 0 ? filtrosTexto : undefined
-      );
-
-      toast.success('Excel exportado com sucesso!');
-      setDialogExportar(false);
-    } catch (error) {
-      console.error('Erro ao exportar Excel:', error);
-      toast.error('Erro ao exportar Excel. Tente novamente.');
-    }
+      toast.success('Documento exportado com sucesso!'); setDialogExportar(false);
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Erro ao exportar. Tente novamente.'); }
+    finally { exportacaoEmCurso.current = false; setExportando(false); setProgressoExportacao(''); }
   };
 
   const toggleColuna = (colunaId: string) => {
@@ -558,7 +501,8 @@ function PedidosPageContent() {
     setColunasExportacao(prev => prev.map(col => ({ ...col, selecionada: false })));
   };
 
-  const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, pedido: any) => {
+  const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, pedido: Pedido | null) => {
+    if (!pedido) return;
     setMenuAnchor(event.currentTarget);
     setPedidoSelecionado(pedido);
   };
@@ -597,7 +541,7 @@ function PedidosPageContent() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={6} md={3}>
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
           >
@@ -618,7 +562,7 @@ function PedidosPageContent() {
                   sx={{
                     p: 1,
                     borderRadius: 1.5,
-                    bgcolor: 'primary.50',
+                    bgcolor: 'action.selected',
                     display: 'flex',
                   }}
                 >
@@ -637,7 +581,7 @@ function PedidosPageContent() {
 
         <Grid item xs={6} sm={6} md={3}>
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: 0.05 }}
           >
@@ -658,7 +602,7 @@ function PedidosPageContent() {
                   sx={{
                     p: 1,
                     borderRadius: 1.5,
-                    bgcolor: 'warning.50',
+                    bgcolor: 'warning.light',
                     display: 'flex',
                   }}
                 >
@@ -677,7 +621,7 @@ function PedidosPageContent() {
 
         <Grid item xs={6} sm={6} md={3}>
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: 0.1 }}
           >
@@ -698,7 +642,7 @@ function PedidosPageContent() {
                   sx={{
                     p: 1,
                     borderRadius: 1.5,
-                    bgcolor: 'success.50',
+                    bgcolor: 'success.light',
                     display: 'flex',
                   }}
                 >
@@ -717,7 +661,7 @@ function PedidosPageContent() {
 
         <Grid item xs={6} sm={6} md={3}>
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: 0.15 }}
           >
@@ -738,7 +682,7 @@ function PedidosPageContent() {
                   sx={{
                     p: 1,
                     borderRadius: 1.5,
-                    bgcolor: 'info.50',
+                    bgcolor: 'info.light',
                     display: 'flex',
                   }}
                 >
@@ -798,7 +742,7 @@ function PedidosPageContent() {
                     {status && <Chip label={`Status: ${status}`} size="small" color="primary" />}
                     {tipoAtendimento && <Chip label={`Tipo: ${tipoAtendimento}`} size="small" color="secondary" />}
                     {formaPagamento && <Chip label="Forma Pgto." size="small" color="warning" />}
-                    {clienteSelecionado && <Chip label={`Cliente: ${clienteSelecionado.nome.substring(0, 15)}${clienteSelecionado.nome.length > 15 ? '...' : ''}`} size="small" color="success" />}
+                    {clienteSelecionado && <Chip label={`Cliente: ${nomeClienteFiltro.substring(0, 15)}${nomeClienteFiltro.length > 15 ? '...' : ''}`} size="small" color="success" />}
                     {(dataInicio || dataFim) && <Chip label="Período" size="small" color="info" />}
                   </>
                 )}
@@ -864,7 +808,7 @@ function PedidosPageContent() {
                     value={status}
                     label="Status"
                     onChange={(e) => {
-                      atualizarFiltro('status', e.target.value);
+                      atualizarFiltro('status', validarFiltrosPedidos({ status: e.target.value }).status);
                     }}
                   >
                     <MenuItem value="">Todos</MenuItem>
@@ -885,7 +829,7 @@ function PedidosPageContent() {
                     value={tipoAtendimento}
                     label="Tipo"
                     onChange={(e) => {
-                      atualizarFiltro('tipoAtendimento', e.target.value);
+                      atualizarFiltro('tipoAtendimento', validarFiltrosPedidos({ tipoAtendimento: e.target.value }).tipoAtendimento);
                     }}
                   >
                     <MenuItem value="">Todos</MenuItem>
@@ -913,7 +857,7 @@ function PedidosPageContent() {
                     }
                   >
                     <MenuItem value="">Todas</MenuItem>
-                    {(formasPagamento as any)?.map((forma: any) => (
+                    {formasPagamento?.map((forma) => (
                       <MenuItem key={forma.id} value={forma.id}>
                         {forma.nome}
                       </MenuItem>
@@ -932,13 +876,7 @@ function PedidosPageContent() {
                     atualizarFiltro('dataInicio', e.target.value);
                   }}
                   InputLabelProps={{ shrink: true }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <CalendarToday fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
+
                 />
               </Grid>
 
@@ -957,10 +895,11 @@ function PedidosPageContent() {
 
               <Grid item xs={12} md={3}>
                 <Autocomplete
-                  options={clientes?.clientes || []}
+                  options={(clientes?.clientes || []).map(c => ({ id: c.id, nome: c.nome }))}
+                  filterOptions={(options) => options}
                   getOptionLabel={(option) => option.nome || ''}
                   isOptionEqualToValue={(option, value) => option.id === value.id}
-                  value={clienteSelecionado}
+                  value={clienteSelecionado ? { ...clienteSelecionado, nome: nomeClienteFiltro } : null}
                   onChange={(_, newValue) => {
                     atualizarFiltro('clienteSelecionado', newValue);
                   }}
@@ -1028,13 +967,13 @@ function PedidosPageContent() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {pedidos.map((pedido: any, index) => (
+                  {pedidos.map((pedido, index) => (
                     <TableRow
                       key={pedido.id}
                       component={motion.tr}
-                      initial={{ opacity: 0, x: -20 }}
+                      initial={false}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
+                      transition={{ duration: 0.15, delay: Math.min(index, 4) * 0.02 }}
                       hover
                       onClick={() => handleVisualizarPedido(pedido)}
                       sx={{
@@ -1108,7 +1047,7 @@ function PedidosPageContent() {
                         </Box>
                       </TableCell>
                       <TableCell align="center">
-                        <StatusBadge status={pedido.status} />
+                        <StatusBadge status={pedido.status || 'Não informado'} />
                       </TableCell>
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
@@ -1180,7 +1119,7 @@ function PedidosPageContent() {
           },
         }}
       >
-        <MenuItem onClick={() => handleMenuAction(() => handleEditarPedido(pedidoSelecionado))} disabled={['CANCELADO','FINALIZADO'].includes(pedidoSelecionado?.status)}>
+        <MenuItem onClick={() => handleMenuAction(() => handleEditarPedido(pedidoSelecionado))} disabled={['CANCELADO','FINALIZADO'].includes(pedidoSelecionado?.status || '')}>
           <ListItemIcon>
             <Edit fontSize="small" color={pedidoSelecionado?.status === 'CANCELADO' ? 'disabled' : 'primary'} />
           </ListItemIcon>
@@ -1248,9 +1187,9 @@ function PedidosPageContent() {
             <Typography variant="h6" fontWeight="bold">
               Pedido #{pedidoDetalhes?.numero}
             </Typography>
-            {pedidoDetalhes && <StatusBadge status={pedidoDetalhes.status} />}
+            {pedidoDetalhes && <StatusBadge status={pedidoDetalhes.status || 'Não informado'} />}
           </Box>
-          <IconButton onClick={handleFecharDialogDetalhes}>
+          <IconButton aria-label="Fechar detalhes do pedido" onClick={handleFecharDialogDetalhes}>
             <Close />
           </IconButton>
         </DialogTitle>
@@ -1421,7 +1360,7 @@ function PedidosPageContent() {
               Imprimir
             </Button>
 
-            {pedidoDetalhes && !['CANCELADO','FINALIZADO'].includes(pedidoDetalhes.status) && (
+            {pedidoDetalhes && !['CANCELADO','FINALIZADO'].includes(pedidoDetalhes.status || '') && (
               <Button
                 onClick={() => {
                   handleEditarPedido(pedidoDetalhes);
@@ -1434,7 +1373,7 @@ function PedidosPageContent() {
               </Button>
             )}
 
-            {['PENDENTE','CONFIRMADO'].includes(pedidoDetalhes?.status) && (
+            {['PENDENTE','CONFIRMADO'].includes(pedidoDetalhes?.status || '') && (
               <>
                 <Button
                   onClick={() => {
@@ -1490,7 +1429,7 @@ function PedidosPageContent() {
               Editar Pedido
             </Typography>
           </Box>
-          <IconButton onClick={() => setDialogEditar(false)}>
+          <IconButton aria-label="Fechar edição do pedido" onClick={() => setDialogEditar(false)}>
             <Close />
           </IconButton>
         </DialogTitle>
@@ -1512,7 +1451,7 @@ function PedidosPageContent() {
                       })}
                     >
                       <MenuItem value="">Nenhum</MenuItem>
-                      {(tiposAtendimento as any)?.map((tipo: any) => (
+                      {tiposAtendimento?.map((tipo) => (
                         <MenuItem key={tipo.id} value={tipo.id}>
                           {tipo.nome}
                         </MenuItem>
@@ -1534,7 +1473,7 @@ function PedidosPageContent() {
                       })}
                     >
                       <MenuItem value="">Nenhuma</MenuItem>
-                      {(formasPagamento as any)?.map((forma: any) => (
+                      {formasPagamento?.map((forma) => (
                         <MenuItem key={forma.id} value={forma.id}>
                           {forma.nome}
                         </MenuItem>
@@ -1635,7 +1574,7 @@ function PedidosPageContent() {
       {/* Dialog de Exportação Profissional */}
       <Dialog
         open={dialogExportar}
-        onClose={() => setDialogExportar(false)}
+        onClose={() => { if (!exportando) setDialogExportar(false); }}
         maxWidth="sm"
         fullWidth
         fullScreen={isMobile}
@@ -1654,7 +1593,7 @@ function PedidosPageContent() {
           </Box>
           {isMobile && (
             <IconButton
-              onClick={() => setDialogExportar(false)}
+              aria-label="Fechar exportação" disabled={exportando} onClick={() => setDialogExportar(false)}
               sx={{ color: 'white' }}
             >
               <Close />
@@ -1663,6 +1602,11 @@ function PedidosPageContent() {
         </DialogTitle>
 
         <DialogContent sx={{ mt: 2 }}>
+          <TextField select fullWidth label="Pedidos a exportar" value={escopoExportacao} disabled={exportando} onChange={e => setEscopoExportacao(e.target.value as 'pagina' | 'todos')} sx={{ mb: 2 }}>
+            <MenuItem value="pagina">Página atual ({pedidos.length})</MenuItem>
+            <MenuItem value="todos">Todos os filtrados ({data?.total ?? 0})</MenuItem>
+          </TextField>
+          {exportando && <Alert role="status" aria-live="polite" sx={{ mb: 2 }}>{progressoExportacao}</Alert>}
           <Typography variant="body2" color="text.secondary" gutterBottom>
             Selecione as colunas que deseja exportar:
           </Typography>
@@ -1704,24 +1648,19 @@ function PedidosPageContent() {
                     alignItems: 'center',
                     p: 1,
                     borderRadius: 1,
-                    bgcolor: coluna.selecionada ? 'primary.50' : 'white',
+                    bgcolor: coluna.selecionada ? 'action.selected' : 'white',
                     border: '1px solid',
-                    borderColor: coluna.selecionada ? 'primary.200' : 'grey.200',
+                    borderColor: coluna.selecionada ? 'primary.light' : 'grey.200',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                     '&:hover': {
-                      bgcolor: coluna.selecionada ? 'primary.100' : 'grey.100',
+                      bgcolor: coluna.selecionada ? 'action.hover' : 'grey.100',
                       transform: 'translateX(4px)',
                     },
                   }}
-                  onClick={() => toggleColuna(coluna.id)}
+
                 >
-                  <Checkbox
-                    checked={coluna.selecionada}
-                    size="small"
-                    sx={{ mr: 1 }}
-                  />
-                  <Typography variant="body2">{coluna.label}</Typography>
+                  <FormControlLabel label={coluna.label} control={<Checkbox checked={coluna.selecionada} disabled={exportando} onChange={() => toggleColuna(coluna.id)} size="small" />} />
                 </Box>
               ))}
             </Box>
@@ -1730,7 +1669,7 @@ function PedidosPageContent() {
           {/* Resumo */}
           <Alert severity="info" sx={{ mb: 2 }}>
             <Typography variant="body2">
-              <strong>{pedidos.length}</strong> pedidos serão exportados com{' '}
+              <strong>{escopoExportacao === 'todos' ? data?.total ?? 0 : pedidos.length}</strong> pedidos serão exportados com{' '}
               <strong>{colunasExportacao.filter(c => c.selecionada).length}</strong> colunas.
             </Typography>
           </Alert>
@@ -1746,11 +1685,11 @@ function PedidosPageContent() {
                 {tipoAtendimento && <Chip label={`Tipo: ${tipoAtendimento}`} size="small" />}
                 {formaPagamento && (
                   <Chip
-                    label={`Pagamento: ${(formasPagamento as any)?.find((f: any) => f.id === formaPagamento)?.nome || formaPagamento}`}
+                    label={`Pagamento: ${formasPagamento?.find((f) => f.id === formaPagamento)?.nome || formaPagamento}`}
                     size="small"
                   />
                 )}
-                {clienteSelecionado && <Chip label={`Cliente: ${clienteSelecionado.nome}`} size="small" />}
+                {clienteSelecionado && <Chip label={`Cliente: ${nomeClienteFiltro}`} size="small" />}
                 {(dataInicio || dataFim) && (
                   <Chip
                     label={`Período: ${dataInicio ? formatDate(dataInicio) : '...'} - ${dataFim ? formatDate(dataFim) : '...'}`}
@@ -1764,7 +1703,7 @@ function PedidosPageContent() {
 
         <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button
-            onClick={() => setDialogExportar(false)}
+            disabled={exportando} onClick={() => setDialogExportar(false)}
             variant="outlined"
             color="inherit"
           >
@@ -1773,24 +1712,18 @@ function PedidosPageContent() {
           <Button
             variant="contained"
             startIcon={<TableChart />}
-            onClick={handleExportarExcel}
-            disabled={colunasExportacao.filter(c => c.selecionada).length === 0}
-            sx={{
-              background: 'linear-gradient(45deg, #4CAF50 30%, #8BC34A 90%)',
-              color: 'white',
-            }}
+            onClick={() => exportar('excel')}
+            disabled={search !== buscaDebounced || atualizandoLista || exportando || !!erroLista || !data || !data.total || colunasExportacao.filter(c => c.selecionada).length === 0}
+
           >
             Excel
           </Button>
           <Button
             variant="contained"
             startIcon={<PictureAsPdf />}
-            onClick={handleExportarPDF}
-            disabled={colunasExportacao.filter(c => c.selecionada).length === 0}
-            sx={{
-              background: 'linear-gradient(45deg, #f44336 30%, #e91e63 90%)',
-              color: 'white',
-            }}
+            onClick={() => exportar('pdf')}
+            disabled={search !== buscaDebounced || atualizandoLista || exportando || !!erroLista || !data || !data.total || colunasExportacao.filter(c => c.selecionada).length === 0}
+
           >
             PDF
           </Button>

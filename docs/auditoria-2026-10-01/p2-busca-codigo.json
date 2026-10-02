@@ -1,0 +1,9 @@
+{
+  "enterDurantePesquisa": "Nenhum produto selecionado nem item acrescentado; estado Pesquisando produtos observado.",
+  "selecaoPorCodigo": {
+    "produto": "Produto de teste local - P1",
+    "quantidade": "1",
+    "preco": "10",
+    "itens": "Itens do Pedido (1)"
+  }
+}

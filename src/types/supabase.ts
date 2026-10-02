@@ -202,6 +202,7 @@ export type Database = {
       }
       enderecos: {
         Row: {
+          ativo: boolean
           bairro: string | null
           cep: string | null
           cidade: string | null
@@ -216,6 +217,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          ativo?: boolean
           bairro?: string | null
           cep?: string | null
           cidade?: string | null
@@ -230,6 +232,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          ativo?: boolean
           bairro?: string | null
           cep?: string | null
           cidade?: string | null
@@ -316,6 +319,7 @@ export type Database = {
       }
       pedidos: {
         Row: {
+          endereco_snapshot: Json | null
           versao: number
           finalizado_em: string | null
           telefone_contato: string | null
@@ -339,6 +343,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          endereco_snapshot?: Json | null
           telefone_contato?: string | null
           cliente_id?: string | null
           created_at?: string | null
@@ -360,6 +365,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          endereco_snapshot?: Json | null
           telefone_contato?: string | null
           cliente_id?: string | null
           created_at?: string | null
@@ -535,6 +541,8 @@ export type Database = {
       }
     }
     Functions: {
+      pdv_listar_clientes: { Args: { p_busca?: string; p_ativo?: boolean | null; p_limite?: number; p_offset?: number }; Returns: Json };
+      pdv_listar_produtos: { Args: { p_busca?: string; p_categoria?: string; p_limite?: number; p_offset?: number }; Returns: Json };
       pdv_listar_pedidos: { Args: { p_filtros?: Json; p_limite?: number; p_offset?: number }; Returns: Json };
       pdv_totais_clientes: { Args: { p_ids: string[] }; Returns: { cliente_id: string; total_pedidos: number; valor_total_compras: number }[] };
       pdv_salvar_cliente: { Args: { p_dados: Json; p_id?: string }; Returns: Json };

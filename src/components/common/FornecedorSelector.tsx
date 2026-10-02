@@ -127,7 +127,7 @@ export default function FornecedorSelector({
       {/* Alerta quando é um novo fornecedor */}
       {isNovoFornecedor && (
         <Alert severity="success" sx={{ mt: 1 }}>
-          ✨ Novo fornecedor "{inputValue}" será criado automaticamente
+          ✨ Novo fornecedor &quot;{inputValue}&quot; será criado automaticamente
         </Alert>
       )}
     </Box>

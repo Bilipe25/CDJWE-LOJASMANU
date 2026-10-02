@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { dateToString } from '@/lib/utils/dateUtils';
@@ -66,17 +66,21 @@ import {
   Print,
   Download,
   ContentCopy,
-  HelpOutline,
   Keyboard,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
-import PageHeader from '@/components/common/PageHeader';
 import { trpc } from '@/lib/trpc/client';
 import { usePDVStore } from '@/stores/pdv-store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
 import { arredondarMoeda } from '@/lib/utils/valores-pedido';
 import EnderecoFields from '@/components/common/EnderecoFields';
+import ClienteDadosFields from '@/components/common/ClienteDadosFields';
+import { clienteSchema } from '@/lib/schemas/cliente';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useNetworkAvailable } from '@/hooks/useNetworkAvailable';
+import { empresaParaDocumento } from '@/lib/utils/documentos';
+import type { Tables } from '@/types/supabase';
 import { EnderecoCliente, EnderecoFormulario, enderecoVazio, formatarEndereco, selecionarEndereco, temDadosEndereco } from '@/lib/utils/endereco';
 
 function PDVPageContent() {
@@ -106,14 +110,14 @@ function PDVPageContent() {
   const [modoEdicao, setModoEdicao] = useState(false);
   const [pedidoOriginalId, setPedidoOriginalId] = useState<string | null>(null);
 
-  const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<Tables<'produtos'> | null>(null);
   const [quantidade, setQuantidade] = useState(1);
   const [valorUnitario, setValorUnitario] = useState(0);
   const [descontoItem, setDescontoItem] = useState(0);
   const [tipoDescontoItem, setTipoDescontoItem] = useState<'valor' | 'percentual'>('valor');
-  const [corSelecionada, setCorSelecionada] = useState<any>(null);
+  const [corSelecionada, setCorSelecionada] = useState<Tables<'cores'> | null>(null);
   const clienteSelecionado = pedidoAtual.cliente ?? null;
-  const setClienteSelecionado = (cliente: any) => setPedidoAtual({ cliente: cliente ?? undefined, cliente_id: cliente?.id, cliente_nome: cliente?.nome });
+  const setClienteSelecionado = (cliente: typeof pedidoAtual.cliente | null) => setPedidoAtual({ cliente: cliente ?? undefined, cliente_id: cliente?.id, cliente_nome: cliente?.nome });
   const [searchProduto, setSearchProduto] = useState('');
   const [searchCliente, setSearchCliente] = useState('');
   const [dialogFinalizar, setDialogFinalizar] = useState(false);
@@ -141,6 +145,7 @@ function PDVPageContent() {
   const setObservacoes = (valor: string) => setPedidoAtual({ observacao: valor });
   const [dialogNovoCliente, setDialogNovoCliente] = useState(false);
   const [novoClienteNome, setNovoClienteNome] = useState('');
+  const [novoClienteEmail, setNovoClienteEmail] = useState('');
   const [novoClienteCPF, setNovoClienteCPF] = useState('');
   const [novoClienteTelefone, setNovoClienteTelefone] = useState('');
   const [novoClienteEndereco, setNovoClienteEndereco] = useState<EnderecoFormulario>({ ...enderecoVazio });
@@ -159,18 +164,29 @@ function PDVPageContent() {
     if (isMobile && !accordionExpandido) {
       setAccordionExpandido('cliente');
     }
-  }, [isMobile]);
+  }, [isMobile, accordionExpandido]);
 
-  const { data: produtos, error: erroProdutos, refetch: recarregarProdutos } = trpc.produtos.list.useQuery({
+  const buscaProduto = useDebouncedValue(searchProduto);
+  const buscaCliente = useDebouncedValue(searchCliente);
+  const redeDisponivel = useNetworkAvailable();
+  const [itemEdicaoMovel, setItemEdicaoMovel] = useState<number | null>(null);
+  const [valoresItem, setValoresItem] = useState({ quantidade: '1', valor_unitario: '0', desconto_valor: '0' });
+  const abrirEdicaoItem = (index: number) => {
+    const item = pedidoAtual.itens[index];
+    setValoresItem({ quantidade: String(item.quantidade), valor_unitario: String(item.valor_unitario), desconto_valor: String(item.desconto_valor) });
+    setItemEdicaoMovel(index);
+  };
+  const { data: produtos, isFetching: buscandoProdutos, error: erroProdutos, refetch: recarregarProdutos } = trpc.produtos.list.useQuery({
     limit: 100,
     offset: 0,
-    search: searchProduto || undefined,
+    search: buscaProduto || undefined,
   });
+  const pesquisaProdutoPendente = searchProduto.trim() !== buscaProduto.trim() || buscandoProdutos;
 
   const { data: clientes, error: erroClientes, refetch: recarregarClientes } = trpc.clientes.list.useQuery({
-    limit: 1000,
+    limit: 50,
     offset: 0,
-    search: searchCliente || undefined,
+    search: buscaCliente || undefined,
   });
 
   const { data: tiposAtendimento, error: erroTipos, refetch: recarregarTipos } = trpc.dominios.tiposAtendimento.list.useQuery();
@@ -190,6 +206,9 @@ function PDVPageContent() {
   );
 
   const utils = trpc.useUtils();
+  const enderecosDisponiveis = useMemo(() => (clienteCompleto?.enderecos || [])
+    .filter(e => e.ativo || (modoEdicao && e.id === pedidoParaEditar?.endereco_id))
+    .map(e => modoEdicao && e.id === pedidoParaEditar?.endereco_id && pedidoParaEditar?.endereco ? { ...e, ...pedidoParaEditar.endereco } : e), [clienteCompleto, modoEdicao, pedidoParaEditar]);
 
   // Mutations
   const criarClienteMutation = trpc.clientes.create.useMutation();
@@ -198,7 +217,7 @@ function PDVPageContent() {
   const atualizarPedidoMutation = trpc.pedidos.update.useMutation();
 
   // Hook para buscar configurações
-  const { data: configuracoes } = trpc.configuracoes.get.useQuery();
+  const { data: configuracoes, error: erroEmpresa, isLoading: carregandoEmpresa } = trpc.configuracoes.get.useQuery();
 
 
 
@@ -233,35 +252,35 @@ function PDVPageContent() {
     if (!clienteCompleto || clienteCompleto.id !== clienteSelecionado.id || carregandoCliente || erroCliente) return;
     const restaurarPedido = Boolean(pedidoEditId && pedidoParaEditar && modoEdicao &&
       pedidoParaEditar.cliente_id === clienteSelecionado.id && enderecoPedidoRestaurado.current !== pedidoEditId);
-    const selecaoAtual = selecionarEndereco(clienteCompleto.enderecos, enderecoSelecionado?.id);
+    const selecaoAtual = selecionarEndereco(enderecosDisponiveis, enderecoSelecionado?.id);
     const semEnderecoNoPedido = pedidoEditId && enderecoPedidoRestaurado.current === pedidoEditId &&
       pedidoParaEditar?.cliente_id === clienteSelecionado.id && !enderecoSelecionado;
     const endereco = restaurarPedido
-      ? selecionarEndereco(clienteCompleto.enderecos, pedidoParaEditar?.endereco_id ?? null)
-      : semEnderecoNoPedido ? null : enderecoSelecionado && selecaoAtual ? selecaoAtual : selecionarEndereco(clienteCompleto.enderecos, pedidoAtual.endereco_id);
+      ? pedidoParaEditar?.endereco ?? selecionarEndereco(enderecosDisponiveis, pedidoParaEditar?.endereco_id ?? null)
+      : semEnderecoNoPedido ? null : enderecoSelecionado && selecaoAtual ? enderecoSelecionado : selecionarEndereco(enderecosDisponiveis, pedidoAtual.endereco_id);
     if (restaurarPedido) enderecoPedidoRestaurado.current = pedidoEditId;
     setEnderecoSelecionado(endereco);
     setPedidoAtual({ endereco_id: endereco?.id });
-  }, [clienteCompleto, clienteSelecionado, carregandoCliente, erroCliente, pedidoEditId, pedidoParaEditar, modoEdicao, enderecoSelecionado, setPedidoAtual]);
+  }, [clienteCompleto, clienteSelecionado, carregandoCliente, erroCliente, pedidoEditId, pedidoParaEditar, modoEdicao, enderecoSelecionado, pedidoAtual.endereco_id, enderecosDisponiveis, setPedidoAtual]);
 
   // useEffect para atalhos de teclado
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // Não executar atalhos se estiver em um dialog
-      const emDialog = dialogFinalizar || dialogNovoCliente || dialogNovoProduto || dialogAtalhos;
+      const emDialog = dialogFinalizar || dialogNovoCliente || dialogNovoProduto || dialogAtalhos || itemEdicaoMovel !== null || !!(e.target as HTMLElement | null)?.closest('[role="dialog"]');
 
       // F2 - Focar no campo de busca de produtos
       if (e.key === 'F2' && !emDialog) {
         e.preventDefault();
-        produtoInputRef.current?.focus();
+        setActiveStep(0); requestAnimationFrame(() => produtoInputRef.current?.focus());
         toast('Campo de produtos focado (F2)', { icon: '🔍' });
       }
 
       // F3 - Focar no campo de busca de clientes
       if (e.key === 'F3' && !emDialog) {
         e.preventDefault();
-        clienteInputRef.current?.focus();
-        setAccordionExpandido('cliente');
+        setActiveStep(1); setAccordionExpandido('cliente');
+        requestAnimationFrame(() => clienteInputRef.current?.focus());
         toast('Campo de clientes focado (F3)', { icon: '👤' });
       }
 
@@ -278,7 +297,7 @@ function PDVPageContent() {
 
       const alvo = e.target as HTMLElement | null;
       const campoProduto = alvo === produtoInputRef.current || !!alvo?.closest('[data-pdv-item]');
-      if (e.key === 'Enter' && produtoSelecionado && !emDialog && campoProduto && !salvandoRef.current) {
+      if (e.key === 'Enter' && !e.defaultPrevented && alvo?.getAttribute('aria-expanded') !== 'true' && produtoSelecionado && !emDialog && campoProduto && !salvandoRef.current) {
         e.preventDefault(); handleAdicionarProduto();
       }
       if (e.key === 'Escape' && !emDialog) {
@@ -297,7 +316,7 @@ function PDVPageContent() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, dialogNovoProduto, dialogAtalhos, quantidade, pedidoAtual.itens.length, valorUnitario, descontoItem, tipoDescontoItem, corSelecionada, tipoAtendimentoId, formaPagamentoId, pedidoAtual.desconto_valor, clienteSelecionado]);
+  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, dialogNovoProduto, dialogAtalhos, itemEdicaoMovel, redeDisponivel, quantidade, pedidoAtual.itens.length, valorUnitario, descontoItem, tipoDescontoItem, corSelecionada, tipoAtendimentoId, formaPagamentoId, pedidoAtual.desconto_valor, clienteSelecionado]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -325,9 +344,9 @@ function PDVPageContent() {
     try { adicionarItem({
       produto_id: produtoSelecionado.id,
       produto_nome: produtoSelecionado.nome,
-      produto_codigo: produtoSelecionado.codigo,
+      produto_codigo: produtoSelecionado.codigo ?? undefined,
       cor_id: corSelecionada?.id,
-      cor_descricao: corSelecionada?.descricao,
+      cor_descricao: corSelecionada?.descricao ?? undefined,
       quantidade,
       valor_unitario: valorUnitarioFinal,
       desconto_valor: arredondarMoeda(descontoValor),
@@ -349,7 +368,9 @@ function PDVPageContent() {
   };
 
   // Atualizar valor unitário quando selecionar produto
-  const handleSelecionarProduto = (produto: any) => {
+  const handleSelecionarProduto = (produto: Tables<'produtos'> | null) => {
+    if (!produto) setSearchProduto('');
+    setQuantidade(1); setTipoDescontoItem('valor');
     setProdutoSelecionado(produto);
     setValorUnitario(produto?.valor_base || 0);
     setDescontoItem(0);
@@ -389,6 +410,7 @@ function PDVPageContent() {
 
   const handleFinalizarPedido = () => {
     if (salvandoRef.current) return;
+    if (redeDisponivel === false) { toast.error('Sem conexão. O rascunho foi preservado; reconecte para salvar.'); return; }
     if (pedidoAtual.itens.length === 0) {
       toast.error('Adicione pelo menos um item ao pedido');
       return;
@@ -484,15 +506,15 @@ function PDVPageContent() {
           itens,
         });
 
-        toast.success(`Pedido #${(pedidoCriado as any).numero} criado com sucesso!`, { id: toastId });
+        toast.success(`Pedido #${pedidoCriado.numero} criado com sucesso!`, { id: toastId });
         setDialogFinalizar(false);
         await utils.invalidate();
         novoPedido();
         limparCamposVenda();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao salvar pedido:', error);
-      toast.error(error?.message || 'Erro ao salvar pedido. Tente novamente.', { id: toastId });
+      toast.error(error instanceof Error ? error.message : 'Erro ao salvar pedido. Tente novamente.', { id: toastId });
     } finally { salvandoRef.current = false; setSalvando(false); }
   };
 
@@ -504,6 +526,8 @@ function PDVPageContent() {
   };
 
   const handleCriarCliente = async () => {
+    const validacao = clienteSchema.safeParse({ nome: novoClienteNome, cpf: novoClienteCPF, telefone: novoClienteTelefone, email: novoClienteEmail });
+    if (!validacao.success) { toast.error(validacao.error.issues[0].message); return; }
     if (!novoClienteNome.trim()) {
       toast.error('Nome do cliente é obrigatório');
       return;
@@ -518,8 +542,9 @@ function PDVPageContent() {
     try {
       const novoCliente = await criarClienteMutation.mutateAsync({
         nome: novoClienteNome,
-        cpf: novoClienteCPF || undefined,
-        telefone: novoClienteTelefone || undefined,
+        cpf: novoClienteCPF,
+        telefone: novoClienteTelefone,
+        email: novoClienteEmail,
         endereco: temDadosEndereco(novoClienteEndereco) ? { ...novoClienteEndereco, principal: true } : undefined,
       });
 
@@ -536,7 +561,7 @@ function PDVPageContent() {
       setDialogNovoCliente(false);
       setNovoClienteNome('');
       setNovoClienteCPF('');
-      setNovoClienteTelefone('');
+      setNovoClienteTelefone(''); setNovoClienteEmail('');
       setNovoClienteEndereco({ ...enderecoVazio });
 
       toast.success(`Cliente ${novoClienteNome} criado com sucesso!`, { id: toastId });
@@ -585,6 +610,7 @@ function PDVPageContent() {
   };
 
   const handleImprimirPedido = async (acao: 'print' | 'download' = 'print') => {
+    if (erroEmpresa || carregandoEmpresa) { toast.error('Dados da empresa indisponíveis. Tente novamente antes de imprimir.'); return; }
     if (clienteSelecionado && (carregandoCliente || erroCliente || clienteCompleto?.id !== clienteSelecionado.id)) {
       toast.error('Aguarde o carregamento dos endereços do cliente ou tente novamente.');
       return;
@@ -599,8 +625,8 @@ function PDVPageContent() {
       cliente_cpf: clienteSelecionado?.cpf ?? undefined,
       cliente_telefone: telefoneContato,
       endereco: enderecoCompleto,
-      tipo_atendimento: (tiposAtendimento as any)?.find((t: any) => t.id === tipoAtendimentoId)?.nome,
-      forma_pagamento: (formasPagamento as any)?.find((f: any) => f.id === formaPagamentoId)?.nome,
+      tipo_atendimento: tiposAtendimento?.find((t: any) => t.id === tipoAtendimentoId)?.nome,
+      forma_pagamento: formasPagamento?.find((f: any) => f.id === formaPagamentoId)?.nome,
       observacoes: observacoes,
       itens: pedidoAtual.itens,
       subtotal: pedidoAtual.subtotal,
@@ -608,26 +634,7 @@ function PDVPageContent() {
       total: pedidoAtual.total,
     };
 
-    // Montar endereço completo da empresa
-    const enderecoEmpresa = [
-      (configuracoes as any)?.logradouro,
-      (configuracoes as any)?.numero,
-      (configuracoes as any)?.bairro,
-      (configuracoes as any)?.cidade,
-      (configuracoes as any)?.estado,
-      (configuracoes as any)?.cep ? `CEP: ${(configuracoes as any)?.cep}` : '',
-    ].filter(Boolean).join(', ');
-
-    const dadosEmpresa = {
-      nome_empresa: (configuracoes as any)?.nome_empresa,
-      razao_social: (configuracoes as any)?.razao_social,
-      cnpj: (configuracoes as any)?.cnpj,
-      telefone: (configuracoes as any)?.telefone,
-      endereco: enderecoEmpresa || (configuracoes as any)?.endereco,
-      logo_url: (configuracoes as any)?.logo_url,
-      instagram: (configuracoes as any)?.instagram,
-      site: (configuracoes as any)?.site,
-    };
+    const dadosEmpresa = empresaParaDocumento(configuracoes);
 
     await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
   };
@@ -656,6 +663,8 @@ function PDVPageContent() {
       </Breadcrumbs>
 
 
+      {redeDisponivel === false && <Alert severity="warning" sx={{mb:2}}>Sem conexão. O rascunho está salvo neste dispositivo; reconecte para enviar.</Alert>}
+      {isMobile && <Box sx={{display:'flex',gap:1,mb:2}}><Button variant={activeStep===0?'contained':'outlined'} onClick={()=>setActiveStep(0)}>Itens</Button><Button variant={activeStep===1?'contained':'outlined'} onClick={()=>{setActiveStep(1);setAccordionExpandido('cliente');}}>Cliente e pagamento</Button></Box>}
       {/* Badge de Ajuda com Atalhos */}
       <Box sx={{ position: 'fixed', bottom: { xs: 16, sm: 24 }, right: { xs: 16, sm: 24 }, zIndex: 1000 }}>
         <Tooltip title="Ver atalhos de teclado">
@@ -698,7 +707,7 @@ function PDVPageContent() {
           xs={12}
           lg={7}
           sx={{
-            order: { xs: 2, lg: 1 },
+            order: 1,
             display: { xs: activeStep === 0 ? 'block' : 'none', md: 'block' }
           }}
         >
@@ -723,15 +732,23 @@ function PDVPageContent() {
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} md={10}>
                 <Autocomplete
-                  options={produtos?.produtos || []}
-                  getOptionLabel={(option) => `${option.nome}${option.codigo ? ` - ${option.codigo}` : ''}`}
-                  value={produtoSelecionado}
-                  onChange={(_, newValue) => {
-                    if (newValue) {
-                      handleSelecionarProduto(newValue);
+                  clearText="Limpar produto"
+                  autoHighlight
+                  options={pesquisaProdutoPendente ? [] : produtos?.produtos || []}
+                  loading={pesquisaProdutoPendente}
+                  loadingText="Pesquisando produtos…"
+                  onKeyDown={(event) => {
+                    // Um leitor pode enviar Enter antes do debounce/resposta: não selecione a lista anterior.
+                    if (event.key === 'Enter' && pesquisaProdutoPendente && searchProduto.trim()) {
+                      event.preventDefault(); event.defaultMuiPrevented = true;
                     }
                   }}
-                  onInputChange={(_, value) => setSearchProduto(value)}
+                  getOptionLabel={(option) => `${option.nome}${option.codigo ? ` - ${option.codigo}` : ''}`}
+                  value={produtoSelecionado}
+                  onChange={(_, newValue) => handleSelecionarProduto(newValue)}
+                  filterOptions={(options) => options}
+                  isOptionEqualToValue={(a,b) => a.id === b.id}
+                  onInputChange={(_, value, reason) => setSearchProduto(reason === 'input' ? value : '')}
                   renderInput={(params) => (
                     <TextField
                       {...params}
@@ -759,7 +776,7 @@ function PDVPageContent() {
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {option.codigo && `Cód: ${option.codigo} | `}
-                            {formatCurrency(option.valor_base)}
+                            {formatCurrency(option.valor_base ?? 0)}
                           </Typography>
                         </Box>
                       </li>
@@ -830,8 +847,8 @@ function PDVPageContent() {
                       size="small"
                       label="Tipo"
                       value={tipoDescontoItem}
-                      onChange={(e: any) => {
-                        setTipoDescontoItem(e.target.value);
+                      onChange={(e) => {
+                        setTipoDescontoItem(e.target.value === 'percentual' ? 'percentual' : 'valor');
                         setDescontoItem(0);
                       }}
                       sx={{ mb: 1 }}
@@ -864,8 +881,8 @@ function PDVPageContent() {
                   <Grid item xs={12} sm={6} md={3}>
                     <Autocomplete
                       options={cores || []}
-                      getOptionLabel={(option: any) => option.descricao || ''}
-                      isOptionEqualToValue={(option: any, value: any) => option.id === value.id}
+                      getOptionLabel={(option) => option.descricao || ''}
+                      isOptionEqualToValue={(option, value) => option.id === value.id}
                       value={corSelecionada}
                       onChange={(_, newValue) => setCorSelecionada(newValue)}
                       renderInput={(params) => (
@@ -910,7 +927,7 @@ function PDVPageContent() {
             {produtoSelecionado && (
               <Card
                 component={motion.div}
-                initial={{ opacity: 0, y: -10 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'primary.main', color: 'white', mb: 3 }}
               >
@@ -995,7 +1012,7 @@ function PDVPageContent() {
                           <TableCell>Produto</TableCell>
                           <TableCell align="center">Qtd</TableCell>
                           <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Valor Unit.</TableCell>
-                          <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>Desconto</TableCell>
+                          <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Desconto</TableCell>
                           <TableCell align="right">Total</TableCell>
                           <TableCell align="center">Ações</TableCell>
                         </TableRow>
@@ -1005,7 +1022,7 @@ function PDVPageContent() {
                           <TableRow
                             key={index}
                             component={motion.tr}
-                            initial={{ opacity: 0, x: -20 }}
+                            initial={false}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
                           >
@@ -1033,6 +1050,7 @@ function PDVPageContent() {
                               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
                                 <IconButton
                                   size="small"
+                                  aria-label="Diminuir quantidade"
                                   onClick={() =>
                                     atualizarItem(index, { quantidade: Math.max(0.01, item.quantidade - 1) })
                                   }
@@ -1044,7 +1062,7 @@ function PDVPageContent() {
                                 </Typography>
                                 <IconButton
                                   size="small"
-                                  onClick={() => atualizarItem(index, { quantidade: item.quantidade + 1 })}
+                                  aria-label="Aumentar quantidade" onClick={() => atualizarItem(index, { quantidade: item.quantidade + 1 })}
                                 >
                                   <Add fontSize="small" />
                                 </IconButton>
@@ -1056,11 +1074,12 @@ function PDVPageContent() {
                                   size="small"
                                   type="number"
                                   value={item.valor_unitario}
+                                  inputProps={{'aria-label': 'Preço unitário do item'}}
                                   onChange={(e) => atualizarItem(index, { valor_unitario: parseFloat(e.target.value) || 0 })}
                                   onBlur={() => setEditandoItem(null)}
                                   autoFocus
                                   sx={{ width: 80 }}
-                                  InputProps={{ inputProps: { min: 0, step: 0.01 } }}
+                                  InputProps={{ inputProps: { min: 0, step: 0.01, 'aria-label': 'Preço unitário do item' } }}
                                 />
                               ) : (
                                 <Box
@@ -1072,15 +1091,16 @@ function PDVPageContent() {
                                 </Box>
                               )}
                             </TableCell>
-                            <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                            <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                               <TextField
                                 size="small"
                                 type="number"
                                 value={item.desconto_valor}
+                                inputProps={{'aria-label': 'Desconto do item'}}
                                 onChange={(e) => atualizarItem(index, { desconto_valor: parseFloat(e.target.value) || 0 })}
                                 sx={{ width: 80 }}
                                 InputProps={{
-                                  inputProps: { min: 0, step: 0.01 },
+                                  inputProps: { min: 0, step: 0.01, 'aria-label': 'Desconto do item' },
                                   startAdornment: <InputAdornment position="start">R$</InputAdornment>,
                                 }}
                               />
@@ -1096,6 +1116,7 @@ function PDVPageContent() {
                                 justifyContent: 'center',
                                 alignItems: 'center'
                               }}>
+                                <Tooltip title="Editar item"><IconButton aria-label="Editar quantidade, preço e desconto do item" onClick={()=>abrirEdicaoItem(index)}><Edit /></IconButton></Tooltip>
                                 <Tooltip title="Duplicar">
                                   <IconButton
                                     size={isMobile ? "medium" : "small"}
@@ -1104,7 +1125,7 @@ function PDVPageContent() {
                                       minWidth: { xs: 44, sm: 'auto' },
                                       minHeight: { xs: 44, sm: 'auto' }
                                     }}
-                                    onClick={() => handleDuplicarLinha(index)}
+                                    aria-label="Duplicar item" onClick={() => handleDuplicarLinha(index)}
                                   >
                                     <ContentCopy fontSize={isMobile ? "medium" : "small"} />
                                   </IconButton>
@@ -1117,7 +1138,7 @@ function PDVPageContent() {
                                       minWidth: { xs: 44, sm: 'auto' },
                                       minHeight: { xs: 44, sm: 'auto' }
                                     }}
-                                    onClick={() => removerItem(index)}
+                                    aria-label="Remover item" onClick={() => removerItem(index)}
                                   >
                                     <Delete fontSize={isMobile ? "medium" : "small"} />
                                   </IconButton>
@@ -1153,13 +1174,12 @@ function PDVPageContent() {
         </Grid>
 
         {/* Resumo e Finalização */}
-        {/* Resumo e Finalização */}
         <Grid
           item
           xs={12}
           lg={5}
           sx={{
-            order: { xs: 1, lg: 2 },
+            order: 2,
             display: { xs: activeStep === 1 ? 'block' : 'none', md: 'block' }
           }}
         >
@@ -1199,6 +1219,7 @@ function PDVPageContent() {
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       <Autocomplete
                         fullWidth
+                        filterOptions={options => options}
                         options={clientes?.clientes || []}
                         getOptionLabel={(option) => option.nome || ''}
                         isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -1207,7 +1228,7 @@ function PDVPageContent() {
                           setEnderecoSelecionado(null);
                           setPedidoAtual({ endereco_id: undefined });
                           setClienteSelecionado(newValue);
-                          setTelefoneContato((newValue as any)?.telefone || '');
+                          setTelefoneContato(newValue?.telefone || '');
                           setPedidoAtual({ cliente_id: newValue?.id, cliente_nome: newValue?.nome });
                         }}
                         onInputChange={(_, value) => setSearchCliente(value)}
@@ -1215,8 +1236,8 @@ function PDVPageContent() {
                           <TextField
                             {...params}
                             inputRef={clienteInputRef}
-                            label="Buscar Cliente (F3)"
-                            placeholder="Digite o nome..."
+                            label="Cliente (F3)"
+                            placeholder="Nome, CPF ou telefone"
                             size="small"
                           />
                         )}
@@ -1225,7 +1246,7 @@ function PDVPageContent() {
                         variant="outlined"
                         startIcon={<PersonAdd />}
                         onClick={() => setDialogNovoCliente(true)}
-                        sx={{ minWidth: 120 }}
+                        sx={{ minWidth: { xs: 80, sm: 120 } }}
                       >
                         Novo
                       </Button>
@@ -1256,8 +1277,8 @@ function PDVPageContent() {
                       {clienteCompleto && clienteCompleto.id === clienteSelecionado.id && clienteCompleto.enderecos.length > 0 && (
                         <Grid item xs={12}>
                           <FormControl fullWidth size="small">
-                            <InputLabel>Endereço de Entrega</InputLabel>
-                            <Select
+                            <InputLabel id="pdv-endereco-label">Endereço de Entrega</InputLabel>
+                            <Select labelId="pdv-endereco-label"
                               value={enderecoSelecionado?.id || ''}
                               label="Endereço de Entrega"
                               sx={{ '& .MuiSelect-select': { whiteSpace: 'normal', overflowWrap: 'anywhere' } }}
@@ -1272,7 +1293,7 @@ function PDVPageContent() {
                                 </InputAdornment>
                               }
                             >
-                              {clienteCompleto.enderecos.map((endereco) => (
+                              {enderecosDisponiveis.map((endereco) => (
                                 <MenuItem key={endereco.id} value={endereco.id} sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
                                   {formatarEndereco(endereco)}
                                   {endereco.principal && ' (Principal)'}
@@ -1304,8 +1325,8 @@ function PDVPageContent() {
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
                     <FormControl fullWidth size="small">
-                      <InputLabel>Tipo de Atendimento *</InputLabel>
-                      <Select
+                      <InputLabel id="pdv-tipo-label">Tipo de Atendimento *</InputLabel>
+                      <Select labelId="pdv-tipo-label"
                         value={tipoAtendimentoId}
                         label="Tipo de Atendimento *"
                         onChange={(e) => {
@@ -1313,7 +1334,7 @@ function PDVPageContent() {
                           setPedidoAtual({ tipo_atendimento_id: e.target.value });
                         }}
                       >
-                        {(tiposAtendimento as any)?.map((tipo: any) => (
+                        {tiposAtendimento?.map((tipo) => (
                           <MenuItem key={tipo.id} value={tipo.id}>
                             {tipo.nome} {tipo.tipo && `(${tipo.tipo})`}
                           </MenuItem>
@@ -1324,8 +1345,8 @@ function PDVPageContent() {
 
                   <Grid item xs={12}>
                     <FormControl fullWidth size="small">
-                      <InputLabel>Forma de Pagamento *</InputLabel>
-                      <Select
+                      <InputLabel id="pdv-pagamento-label">Forma de Pagamento *</InputLabel>
+                      <Select labelId="pdv-pagamento-label"
                         value={formaPagamentoId}
                         label="Forma de Pagamento *"
                         onChange={(e) => {
@@ -1338,7 +1359,7 @@ function PDVPageContent() {
                           </InputAdornment>
                         }
                       >
-                        {(formasPagamento as any)?.map((forma: any) => (
+                        {formasPagamento?.map((forma) => (
                           <MenuItem key={forma.id} value={forma.id}>
                             {forma.nome}
                           </MenuItem>
@@ -1389,8 +1410,9 @@ function PDVPageContent() {
                     fullWidth
                     select
                     size="small"
+                    label="Tipo"
                     value={tipoDescontoGeral}
-                    onChange={(e: any) => setTipoDescontoGeral(e.target.value)}
+                    onChange={(e) => setTipoDescontoGeral(e.target.value === 'percentual' ? 'percentual' : 'valor')}
                   >
                     <MenuItem value="valor">R$</MenuItem>
                     <MenuItem value="percentual">%</MenuItem>
@@ -1401,6 +1423,7 @@ function PDVPageContent() {
                     fullWidth
                     size="small"
                     type="number"
+                    label="Desconto"
                     value={descontoGeral}
                     onChange={(e) => setDescontoGeral(parseFloat(e.target.value) || 0)}
                     InputProps={{ inputProps: { min: 0, step: 0.01 } }}
@@ -1411,7 +1434,7 @@ function PDVPageContent() {
                     fullWidth
                     variant="outlined"
                     size="small"
-                    onClick={handleAplicarDescontoGeral}
+                    aria-label="Aplicar desconto geral" onClick={handleAplicarDescontoGeral}
                   >
                     OK
                   </Button>
@@ -1562,7 +1585,7 @@ function PDVPageContent() {
                       Tipo de Atendimento:
                     </Typography>
                     <Typography fontWeight="bold">
-                      {(tiposAtendimento as any)?.find((t: any) => t.id === tipoAtendimentoId)?.nome || '-'}
+                      {tiposAtendimento?.find((t: any) => t.id === tipoAtendimentoId)?.nome || '-'}
                     </Typography>
                   </Box>
                   <Box>
@@ -1570,7 +1593,7 @@ function PDVPageContent() {
                       Forma de Pagamento:
                     </Typography>
                     <Typography fontWeight="bold">
-                      {(formasPagamento as any)?.find((f: any) => f.id === formaPagamentoId)?.nome || '-'}
+                      {formasPagamento?.find((f: any) => f.id === formaPagamentoId)?.nome || '-'}
                     </Typography>
                   </Box>
                 </Card>
@@ -1689,6 +1712,13 @@ function PDVPageContent() {
         </DialogActions>
       </Dialog>
 
+      <Dialog open={itemEdicaoMovel!==null} onClose={()=>setItemEdicaoMovel(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Editar item</DialogTitle><DialogContent><Box sx={{display:'grid',gap:2,pt:2}}>
+          <TextField label="Quantidade" type="number" inputProps={{min:0.001,step:0.001}} value={valoresItem.quantidade} onChange={e=>setValoresItem(v=>({...v,quantidade:e.target.value}))} />
+          <TextField label="Preço unitário (R$)" type="number" inputProps={{min:0,step:0.01}} value={valoresItem.valor_unitario} onChange={e=>setValoresItem(v=>({...v,valor_unitario:e.target.value}))} />
+          <TextField label="Desconto do item (R$)" type="number" inputProps={{min:0,step:0.01}} value={valoresItem.desconto_valor} onChange={e=>setValoresItem(v=>({...v,desconto_valor:e.target.value}))} />
+        </Box></DialogContent><DialogActions><Button onClick={()=>setItemEdicaoMovel(null)}>Cancelar</Button><Button variant="contained" onClick={()=>{if(itemEdicaoMovel===null)return;try{atualizarItemStore(itemEdicaoMovel,{quantidade:Number(valoresItem.quantidade),valor_unitario:Number(valoresItem.valor_unitario),desconto_valor:Number(valoresItem.desconto_valor)});setItemEdicaoMovel(null);}catch(e){toast.error(e instanceof Error?e.message:'Confira os valores do item.');}}}>Salvar item</Button></DialogActions>
+      </Dialog>
       {/* Dialog de Criar Novo Cliente */}
       <Dialog open={dialogNovoCliente} onClose={() => setDialogNovoCliente(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1702,46 +1732,7 @@ function PDVPageContent() {
             </Alert>
 
             <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Nome Completo *"
-                  value={novoClienteNome}
-                  onChange={(e) => setNovoClienteNome(e.target.value)}
-                  placeholder="Digite o nome do cliente"
-                  autoFocus
-                  required
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="CPF"
-                  value={novoClienteCPF}
-                  onChange={(e) => setNovoClienteCPF(e.target.value)}
-                  placeholder="000.000.000-00"
-                  inputProps={{ maxLength: 14 }}
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Telefone"
-                  value={novoClienteTelefone}
-                  onChange={(e) => setNovoClienteTelefone(e.target.value)}
-                  placeholder="(00) 00000-0000"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Phone fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Grid>
-
+              <Grid item xs={12}><ClienteDadosFields value={{nome:novoClienteNome,cpf:novoClienteCPF,telefone:novoClienteTelefone,email:novoClienteEmail}} onChange={v=>{setNovoClienteNome(v.nome);setNovoClienteCPF(v.cpf);setNovoClienteTelefone(v.telefone);setNovoClienteEmail(v.email);}} /></Grid>
               <Grid item xs={12}>
                 <EnderecoFields value={novoClienteEndereco} onChange={setNovoClienteEndereco} />
               </Grid>
@@ -1754,7 +1745,7 @@ function PDVPageContent() {
               setDialogNovoCliente(false);
               setNovoClienteNome('');
               setNovoClienteCPF('');
-              setNovoClienteTelefone('');
+              setNovoClienteTelefone(''); setNovoClienteEmail('');
               setNovoClienteEndereco({ ...enderecoVazio });
             }}
             variant="outlined"

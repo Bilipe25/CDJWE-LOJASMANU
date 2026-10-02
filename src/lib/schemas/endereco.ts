@@ -13,3 +13,11 @@ export const enderecoSchema = z.object({
 });
 
 export type EnderecoInput = z.input<typeof enderecoSchema>;
+
+// Registros do banco possuem campos opcionais nulos; não invalidar o histórico por isso.
+export const enderecoSnapshotSchema = z.object({
+  id: z.string().uuid(), logradouro: z.string(),
+  numero: z.string().nullish(), complemento: z.string().nullish(),
+  bairro: z.string().nullish(), cidade: z.string().nullish(),
+  estado: z.string().nullish(), cep: z.string().nullish(), principal: z.boolean().nullish(),
+});

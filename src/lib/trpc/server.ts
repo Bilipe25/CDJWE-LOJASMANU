@@ -10,9 +10,11 @@ export const createTRPCContext = async (req: Request) => {
   });
   if (!token) return { supabase, user: null, role: null };
   const { data, error } = await supabase.auth.getUser(token);
+  if (error && (!error.status || error.status >= 500)) throw new TRPCError({ code: 'SERVICE_UNAVAILABLE', message: 'Não foi possível verificar a sessão. Tente novamente quando o serviço responder.' });
   if (error || !data.user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Sessão inválida ou expirada. Entre novamente.' });
   const { data: operator, error: permissionError } = await supabase.from('pdv_operadores').select('papel').eq('user_id', data.user.id).eq('ativo', true).maybeSingle();
-  if (permissionError || !operator) throw new TRPCError({ code: 'FORBIDDEN', message: 'Conta sem acesso ao PDV. Contate o administrador.' });
+  if (permissionError) throw new TRPCError({ code: 'SERVICE_UNAVAILABLE', message: 'Não foi possível verificar o acesso ao PDV. Tente novamente.' });
+  if (!operator) throw new TRPCError({ code: 'FORBIDDEN', message: 'Conta sem acesso ao PDV. Contate o administrador.' });
   return { supabase, user: data.user, role: operator.papel };
 };
 const t = initTRPC.context<typeof createTRPCContext>().create({ transformer: SuperJSON });

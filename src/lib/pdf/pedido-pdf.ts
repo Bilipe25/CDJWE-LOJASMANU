@@ -1,45 +1,7 @@
 import { formatDateBR, dateToString } from '@/lib/utils/dateUtils';
-import pdfMake from 'pdfmake/build/pdfmake';
-import * as pdfFonts from 'pdfmake/build/vfs_fonts';
+import pdfMake from './fontes';
 
-(pdfMake as any).vfs = pdfFonts;
-
-interface ItemPedido {
-  produto_nome: string;
-  produto_codigo?: string;
-  cor_descricao?: string;
-  quantidade: number;
-  valor_unitario: number;
-  desconto_valor: number;
-  valor_total: number;
-}
-
-interface DadosPedido {
-  numero?: number;
-  data: string;
-  cliente_nome?: string;
-  cliente_cpf?: string;
-  cliente_telefone?: string;
-  endereco?: string;
-  tipo_atendimento?: string;
-  forma_pagamento?: string;
-  observacoes?: string;
-  itens: ItemPedido[];
-  subtotal: number;
-  desconto_valor: number;
-  total: number;
-}
-
-interface DadosEmpresa {
-  nome_empresa?: string;
-  razao_social?: string;
-  cnpj?: string;
-  telefone?: string;
-  endereco?: string;
-  logo_url?: string;
-  instagram?: string;
-  site?: string;
-}
+import type { DadosPedidoDocumento as DadosPedido, DadosEmpresaDocumento as DadosEmpresa } from '@/lib/utils/documentos';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {

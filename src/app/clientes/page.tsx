@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatDateBR } from '@/lib/utils/dateUtils';
 import {
   Box,
@@ -34,6 +34,7 @@ import {
   useTheme,
   Typography,
   Alert,
+  MenuItem,
 } from '@mui/material';
 import {
   Search,
@@ -47,24 +48,23 @@ import {
   TrendingUp,
   CheckCircle,
   ShoppingCart,
-  Email,
   History,
   NavigateNext,
   OpenInNew,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
-import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import MaskedInput from '@/components/common/MaskedInput';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import StatusBadge from '@/components/common/StatusBadge';
 import { trpc } from '@/lib/trpc/client';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
-import EnderecoFields from '@/components/common/EnderecoFields';
-import { EnderecoFormulario, temDadosEndereco } from '@/lib/utils/endereco';
+import ClienteDadosFields from '@/components/common/ClienteDadosFields';
+import EnderecosClienteFields, { type EnderecoCadastroFormulario } from '@/components/common/EnderecosClienteFields';
+import { clienteSchema, clienteUpdateSchema } from '@/lib/schemas/cliente';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 export default function ClientesPage() {
   const router = useRouter();
@@ -79,9 +79,10 @@ export default function ClientesPage() {
   const [dialogEditar, setDialogEditar] = useState(false);
   const [dialogDetalhes, setDialogDetalhes] = useState(false);
   const [dialogHistorico, setDialogHistorico] = useState(false);
-  const [clienteEditando, setClienteEditando] = useState<any>(null);
-  const [clienteDetalhes, setClienteDetalhes] = useState<any>(null);
-  const [clienteHistorico, setClienteHistorico] = useState<any>(null);
+  const [paginaHistorico, setPaginaHistorico] = useState(0);
+  const [clienteEditando, setClienteEditando] = useState<Cliente | null>(null);
+  const [clienteDetalhes, setClienteDetalhes] = useState<Cliente | null>(null);
+  const [clienteHistorico, setClienteHistorico] = useState<Cliente | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -96,47 +97,35 @@ export default function ClientesPage() {
   const [email, setEmail] = useState('');
   const [ativo, setAtivo] = useState(true);
 
-  // Campos de endereço
-  const [logradouro, setLogradouro] = useState('');
-  const [numero, setNumero] = useState('');
-  const [complemento, setComplemento] = useState('');
-  const [bairro, setBairro] = useState('');
-  const [cidade, setCidade] = useState('');
-  const [estado, setEstado] = useState('');
-  const [cep, setCep] = useState('');
+  const [enderecosFormulario, setEnderecosFormulario] = useState<EnderecoCadastroFormulario[]>([]);
   const [loadingEndereco, setLoadingEndereco] = useState(false);
   const [erroEndereco, setErroEndereco] = useState(false);
   const consultaEnderecoAtual = useRef(0);
-
-  const enderecoFormulario: EnderecoFormulario = { logradouro, numero, complemento, bairro, cidade, estado, cep };
-  const atualizarEnderecoFormulario = (endereco: EnderecoFormulario) => {
-    setLogradouro(endereco.logradouro);
-    setNumero(endereco.numero);
-    setComplemento(endereco.complemento);
-    setBairro(endereco.bairro);
-    setCidade(endereco.cidade);
-    setEstado(endereco.estado);
-    setCep(endereco.cep);
-  };
+  const [filtroAtivo, setFiltroAtivo] = useState<'ativos'|'inativos'|'todos'>('ativos');
+  const buscaConsulta = useDebouncedValue(search);
+  const dadosCliente = { nome, cpf, telefone, email };
+  const atualizarDadosCliente = (dados: typeof dadosCliente) => { setNome(dados.nome); setCpf(dados.cpf); setTelefone(dados.telefone); setEmail(dados.email); };
 
   const { data, isLoading, error: erroLista, refetch: recarregarLista } = trpc.clientes.list.useQuery({
     limit: rowsPerPage,
     offset: page * rowsPerPage,
-    search: search || undefined,
+    search: buscaConsulta || undefined,
+    ativo: filtroAtivo === 'todos' ? null : filtroAtivo === 'ativos',
   });
 
   // Query para estatísticas
   const { data: stats, error: erroEstatisticas, refetch: recarregarEstatisticas } = trpc.clientes.stats.useQuery();
 
   // Query para pedidos do cliente (só busca quando dialog está aberto)
-  const { data: pedidosCliente, isLoading: loadingPedidos } = trpc.pedidos.listByCliente.useQuery(
-    { clienteId: clienteHistorico?.id || '' },
+  const { data: pedidosCliente, isLoading: loadingPedidos, error: erroHistorico, refetch: recarregarHistorico } = trpc.pedidos.listByCliente.useQuery(
+    { clienteId: clienteHistorico?.id || '', limit: 25, offset: paginaHistorico * 25 },
     { enabled: !!clienteHistorico?.id && dialogHistorico }
   );
 
   const clientes = data?.clientes || [];
   const total = data?.total || 0;
 
+  useEffect(() => { if (data && page > 0 && page * rowsPerPage >= data.total) setPage(Math.max(0, Math.ceil(data.total / rowsPerPage) - 1)); }, [data, page, rowsPerPage]);
   // Mutations
   const utils = trpc.useUtils();
   const criarMutation = trpc.clientes.create.useMutation({
@@ -174,13 +163,7 @@ export default function ClientesPage() {
     setTelefone('');
     setEmail('');
     setAtivo(true);
-    setLogradouro('');
-    setNumero('');
-    setComplemento('');
-    setBairro('');
-    setCidade('');
-    setEstado('');
-    setCep('');
+    setEnderecosFormulario([]);
   };
 
   const handleNovoCliente = () => {
@@ -188,15 +171,15 @@ export default function ClientesPage() {
     setDialogNovo(true);
   };
 
-  const handleEditarCliente = (cliente: any) => {
+  const handleEditarCliente = (cliente: Cliente) => {
     setClienteEditando(cliente);
     setNome(cliente.nome);
     setCpf(cliente.cpf || '');
     setTelefone(cliente.telefone || '');
     setEmail(cliente.email || '');
-    setAtivo(cliente.ativo);
+    setAtivo(cliente.ativo !== false);
 
-    atualizarEnderecoFormulario({ logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '', cep: '' });
+    setEnderecosFormulario([]);
 
     // Buscar endereço do cliente via query separada
     buscarEnderecoCliente(cliente.id);
@@ -211,49 +194,22 @@ export default function ClientesPage() {
     try {
       const clienteCompleto = await utils.clientes.getById.fetch({ id: clienteId });
       if (consulta !== consultaEnderecoAtual.current) return;
-      if (clienteCompleto?.enderecos && Array.isArray(clienteCompleto.enderecos) && clienteCompleto.enderecos.length > 0) {
-        // Usar type assertion para garantir que TypeScript reconheça todos os campos
-        const endereco: any = clienteCompleto.enderecos.find((e: any) => e.principal) || clienteCompleto.enderecos[0];
-        setLogradouro(endereco?.logradouro || '');
-        setNumero(endereco?.numero || '');
-        setComplemento(endereco?.complemento || '');
-        setBairro(endereco?.bairro || '');
-        setCidade(endereco?.cidade || '');
-        setEstado(endereco?.estado || '');
-        setCep(endereco?.cep || '');
-      } else {
-        // Limpa campos de endereço se não houver endereços
-        setLogradouro('');
-        setNumero('');
-        setComplemento('');
-        setBairro('');
-        setCidade('');
-        setEstado('');
-        setCep('');
-      }
-    } catch (error) {
+      setEnderecosFormulario(clienteCompleto.enderecos.map(e => ({ id: e.id, logradouro: e.logradouro, numero: e.numero || '', complemento: e.complemento || '', bairro: e.bairro || '', cidade: e.cidade || '', estado: e.estado || '', cep: e.cep || '', principal: !!e.principal, ativo: e.ativo })));
+    } catch {
       if (consulta !== consultaEnderecoAtual.current) return;
       setErroEndereco(true);
-      console.error('Erro ao buscar endereço:', error);
-      // Limpa campos de endereço em caso de erro
-      setLogradouro('');
-      setNumero('');
-      setComplemento('');
-      setBairro('');
-      setCidade('');
-      setEstado('');
-      setCep('');
     } finally {
       if (consulta === consultaEnderecoAtual.current) setLoadingEndereco(false);
     }
   };
 
-  const handleVisualizarCliente = (cliente: any) => {
+  const handleVisualizarCliente = (cliente: Cliente) => {
     setClienteDetalhes(cliente);
     setDialogDetalhes(true);
   };
 
-  const handleHistoricoPedidos = (cliente: any) => {
+  const handleHistoricoPedidos = (cliente: Cliente) => {
+    setPaginaHistorico(0);
     setClienteHistorico(cliente);
     setDialogHistorico(true);
   };
@@ -262,100 +218,23 @@ export default function ClientesPage() {
     router.push(`/pedidos?id=${pedidoId}`);
   };
 
-  const handleSalvarNovo = async () => {
-    if (!nome.trim()) {
-      toast.error('Nome é obrigatório');
-      return;
-    }
-
-    if (temDadosEndereco(enderecoFormulario) && !logradouro.trim()) {
-      toast.error('Informe o logradouro para salvar o endereço');
-      return;
-    }
-
-    const toastId = toast.loading('Criando cliente...');
+  const salvarCliente = async (edicao: boolean) => {
+    if (edicao && (!clienteEditando || loadingEndereco || erroEndereco)) return;
+    const entrada = { ...dadosCliente, ativo, enderecos: enderecosFormulario };
+    const validacao = edicao ? clienteUpdateSchema.safeParse({ ...entrada, id: clienteEditando?.id }) : clienteSchema.safeParse(entrada);
+    if (!validacao.success) { toast.error(validacao.error.issues[0].message); return; }
+    const toastId = toast.loading(edicao ? 'Atualizando cliente...' : 'Criando cliente...');
     try {
-      const novoClienteData: Parameters<typeof criarMutation.mutateAsync>[0] = {
-        nome: nome.trim(),
-        cpf: cpf.trim() || undefined,
-        telefone: telefone.trim() || undefined,
-        email: email.trim() || undefined,
-        ativo: ativo,
-      };
-
-      // Adicionar endereço se houver dados preenchidos
-      if (logradouro.trim()) {
-        novoClienteData.endereco = {
-          logradouro: logradouro.trim(),
-          numero: numero.trim(),
-          complemento: complemento.trim(),
-          bairro: bairro.trim(),
-          cidade: cidade.trim(),
-          estado: estado.trim(),
-          cep: cep.trim(),
-          principal: true,
-        };
-      }
-
-      await criarMutation.mutateAsync(novoClienteData);
-
-      toast.success('Cliente criado com sucesso!', { id: toastId });
-      setDialogNovo(false);
-      limparFormulario();
-    } catch (error: any) {
-      toast.error(error?.message || 'Erro ao criar cliente', { id: toastId });
-    }
+      if (edicao && clienteEditando) await atualizarMutation.mutateAsync({ ...entrada, id: clienteEditando.id });
+      else await criarMutation.mutateAsync(entrada);
+      toast.success(edicao ? 'Cliente atualizado!' : 'Cliente criado!', { id: toastId });
+      setDialogNovo(false); setDialogEditar(false); setClienteEditando(null); limparFormulario();
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Não foi possível salvar o cliente.', { id: toastId }); }
   };
+  const handleSalvarNovo = () => salvarCliente(false);
+  const handleSalvarEdicao = () => salvarCliente(true);
 
-  const handleSalvarEdicao = async () => {
-    if (!nome.trim()) {
-      toast.error('Nome é obrigatório');
-      return;
-    }
-
-    if (temDadosEndereco(enderecoFormulario) && !logradouro.trim()) {
-      toast.error('Informe o logradouro para salvar o endereço');
-      return;
-    }
-    if (loadingEndereco || erroEndereco) return;
-
-    const toastId = toast.loading('Atualizando cliente...');
-    try {
-      const updateData: Parameters<typeof atualizarMutation.mutateAsync>[0] = {
-        id: clienteEditando.id,
-        nome: nome.trim(),
-        cpf: cpf.trim() || undefined,
-        telefone: telefone.trim() || undefined,
-        email: email.trim() || undefined,
-        ativo: ativo,
-      };
-
-      // Adicionar endereço se houver dados preenchidos
-      if (logradouro.trim()) {
-        updateData.endereco = {
-          logradouro: logradouro.trim(),
-          numero: numero.trim(),
-          complemento: complemento.trim(),
-          bairro: bairro.trim(),
-          cidade: cidade.trim(),
-          estado: estado.trim(),
-          cep: cep.trim(),
-          principal: true,
-        };
-      }
-
-      await atualizarMutation.mutateAsync(updateData);
-
-      toast.success('Cliente atualizado com sucesso!', { id: toastId });
-      setDialogEditar(false);
-      setClienteEditando(null);
-      limparFormulario();
-    } catch (error: any) {
-      toast.error(error?.message || 'Erro ao atualizar cliente', { id: toastId });
-    }
-  };
-
-  const handleDeletarCliente = (cliente: any) => {
+  const handleDeletarCliente = (cliente: Cliente) => {
     setConfirmDialog({
       open: true,
       title: 'Desativar Cliente',
@@ -366,13 +245,16 @@ export default function ClientesPage() {
           await deletarMutation.mutateAsync({ id: cliente.id });
           toast.success('Cliente desativado com sucesso!', { id: toastId });
           setConfirmDialog({ ...confirmDialog, open: false });
-        } catch (error: any) {
-          toast.error(error?.message || 'Erro ao desativar cliente', { id: toastId });
+        } catch (error: unknown) {
+          toast.error((error instanceof Error ? error.message : null) || 'Erro ao desativar cliente', { id: toastId });
         }
       },
     });
   };
 
+  const handleReativar = (cliente: Cliente) => setConfirmDialog({ open: true, title: 'Reativar cliente', message: 'Reativar ' + cliente.nome + '? O cadastro voltará a aparecer no PDV.', onConfirm: async () => {
+    try { await atualizarMutation.mutateAsync({ id: cliente.id, ativo: true }); setConfirmDialog(c => ({ ...c, open: false })); toast.success('Cliente reativado.'); } catch (e) { toast.error(e instanceof Error ? e.message : 'Não foi possível reativar.'); }
+  }});
   return (
     <AppLayout>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -397,26 +279,26 @@ export default function ClientesPage() {
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={6} md={3}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 }, height: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'primary.light', color: 'primary.main' }}>
                 <Person sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
-                <Box sx={{ fontSize: 24, fontWeight: 700 }}>{erroEstatisticas ? '—' : stats?.total ?? '—'}</Box>
+                <Box sx={{ fontSize: { xs: 20, sm: 24 }, fontWeight: 700, whiteSpace: 'nowrap', maxWidth: '100%', overflowX: 'auto', fontVariantNumeric: 'tabular-nums' }}>{erroEstatisticas ? '—' : stats?.total ?? '—'}</Box>
                 <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Total de Clientes</Box>
               </Box>
             </Box>
           </Card>
         </Grid>
         <Grid item xs={6} sm={6} md={3}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 }, height: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'success.light', color: 'success.main' }}>
                 <CheckCircle sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
-                <Box sx={{ fontSize: 24, fontWeight: 700 }}>
+                <Box sx={{ fontSize: { xs: 20, sm: 24 }, fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                   {erroEstatisticas ? '—' : stats?.ativos ?? '—'}
                 </Box>
                 <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Clientes Ativos</Box>
@@ -425,13 +307,13 @@ export default function ClientesPage() {
           </Card>
         </Grid>
         <Grid item xs={6} sm={6} md={3}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 }, height: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'warning.light', color: 'warning.main' }}>
                 <ShoppingCart sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
-                <Box sx={{ fontSize: 24, fontWeight: 700 }}>
+                <Box sx={{ fontSize: { xs: 20, sm: 24 }, fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                   {erroEstatisticas ? '—' : stats?.totalPedidos ?? '—'}
                 </Box>
                 <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Total de Pedidos</Box>
@@ -440,13 +322,13 @@ export default function ClientesPage() {
           </Card>
         </Grid>
         <Grid item xs={6} sm={6} md={3}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 }, height: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'info.light', color: 'info.main' }}>
                 <TrendingUp sx={{ fontSize: { xs: 28, sm: 24 } }} />
               </Box>
               <Box>
-                <Box sx={{ fontSize: 24, fontWeight: 700 }}>
+                <Box sx={{ fontSize: { xs: 20, sm: 24 }, fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                   {erroEstatisticas || !stats ? '—' : formatCurrency(stats.valorTotalCompras)}
                 </Box>
                 <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Total em Compras</Box>
@@ -478,6 +360,9 @@ export default function ClientesPage() {
           />
         </Box>
 
+        <Box sx={{ px: 2, pb: 2 }}><TextField select label="Situação dos clientes" fullWidth value={filtroAtivo} onChange={e => { setFiltroAtivo(e.target.value as typeof filtroAtivo); setPage(0); }}>
+          <MenuItem value="ativos">Ativos</MenuItem><MenuItem value="inativos">Inativos</MenuItem><MenuItem value="todos">Todos</MenuItem>
+        </TextField></Box>
         {/* Tabela */}
         {erroLista ? <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarLista()}>Tentar novamente</Button>}>Não foi possível carregar os clientes. Confira a conexão e tente novamente.</Alert> : isLoading ? (
           <Box sx={{ p: 2 }}>
@@ -490,10 +375,10 @@ export default function ClientesPage() {
             description={
               search
                 ? 'Tente buscar com outros termos'
-                : 'Cadastre seu primeiro cliente para começar'
+                : filtroAtivo === 'inativos' ? 'Não há clientes inativos. Altere a situação para consultar outros cadastros.' : 'Cadastre seu primeiro cliente para começar'
             }
             action={
-              !search
+              !search && filtroAtivo !== 'inativos'
                 ? {
                   label: 'Cadastrar Cliente',
                   onClick: handleNovoCliente,
@@ -517,13 +402,13 @@ export default function ClientesPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {clientes.map((cliente: any, index) => (
+                  {clientes.map((cliente, index) => (
                     <TableRow
                       key={cliente.id}
                       component={motion.tr}
-                      initial={{ opacity: 0, x: -20 }}
+                      initial={false}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
+                      transition={{ duration: 0.15, delay: Math.min(index, 4) * 0.02 }}
                       hover
                       onClick={() => handleVisualizarCliente(cliente)}
                       sx={{
@@ -536,7 +421,7 @@ export default function ClientesPage() {
                       }}
                     >
                       <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
                           <Avatar sx={{ bgcolor: 'primary.main' }}>
                             {cliente.nome?.charAt(0).toUpperCase()}
                           </Avatar>
@@ -610,16 +495,16 @@ export default function ClientesPage() {
                             <Edit fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Desativar">
+                        <Tooltip title={cliente.ativo ? "Desativar cliente" : "Reativar cliente"}>
                           <IconButton
                             size="small"
                             color="error"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeletarCliente(cliente);
+                              if (cliente.ativo) handleDeletarCliente(cliente); else handleReativar(cliente);
                             }}
                           >
-                            <Delete fontSize="small" />
+                            {cliente.ativo ? <Delete fontSize="small" /> : <CheckCircle fontSize="small" />}
                           </IconButton>
                         </Tooltip>
                       </TableCell>
@@ -657,39 +542,7 @@ export default function ClientesPage() {
         <DialogTitle>Novo Cliente</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <TextField
-              label="Nome Completo"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              fullWidth
-              required
-              autoFocus
-              placeholder="Ex: João Silva"
-            />
-            <MaskedInput
-              maskType="cpf"
-              label="CPF"
-              value={cpf}
-              onChange={(val) => setCpf(val)}
-              fullWidth
-              placeholder="000.000.000-00"
-            />
-            <MaskedInput
-              maskType="phone"
-              label="Telefone"
-              value={telefone}
-              onChange={(val) => setTelefone(val)}
-              fullWidth
-              placeholder="(00) 00000-0000"
-            />
-            <TextField
-              label="E-mail"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              fullWidth
-              type="email"
-              placeholder="email@exemplo.com"
-            />
+            <ClienteDadosFields value={dadosCliente} onChange={atualizarDadosCliente} />
             <FormControlLabel
               control={<Switch checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />}
               label="Cliente Ativo"
@@ -699,7 +552,7 @@ export default function ClientesPage() {
               <Chip label="Endereço" size="small" />
             </Divider>
 
-            <EnderecoFields value={enderecoFormulario} onChange={atualizarEnderecoFormulario} />
+            <EnderecosClienteFields value={enderecosFormulario} onChange={setEnderecosFormulario} />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -715,39 +568,7 @@ export default function ClientesPage() {
         <DialogTitle>Editar Cliente</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <TextField
-              label="Nome Completo"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              fullWidth
-              required
-              autoFocus
-              placeholder="Ex: João Silva"
-            />
-            <MaskedInput
-              maskType="cpf"
-              label="CPF"
-              value={cpf}
-              onChange={(val) => setCpf(val)}
-              fullWidth
-              placeholder="000.000.000-00"
-            />
-            <MaskedInput
-              maskType="phone"
-              label="Telefone"
-              value={telefone}
-              onChange={(val) => setTelefone(val)}
-              fullWidth
-              placeholder="(00) 00000-0000"
-            />
-            <TextField
-              label="E-mail"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              fullWidth
-              type="email"
-              placeholder="email@exemplo.com"
-            />
+            <ClienteDadosFields value={dadosCliente} onChange={atualizarDadosCliente} />
             <FormControlLabel
               control={<Switch checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />}
               label="Cliente Ativo"
@@ -762,11 +583,11 @@ export default function ClientesPage() {
                 <LoadingSkeleton type="form" rows={4} />
               </Box>
             ) : erroEndereco ? (
-              <Alert severity="error" action={<Button color="inherit" onClick={() => buscarEnderecoCliente(clienteEditando.id)}>Tentar novamente</Button>}>
+              <Alert severity="error" action={<Button color="inherit" onClick={() => clienteEditando && buscarEnderecoCliente(clienteEditando.id)}>Tentar novamente</Button>}>
                 Não foi possível carregar o endereço. Tente novamente antes de salvar.
               </Alert>
             ) : (
-              <EnderecoFields value={enderecoFormulario} onChange={atualizarEnderecoFormulario} />
+              <EnderecosClienteFields value={enderecosFormulario} onChange={setEnderecosFormulario} />
             )}
           </Box>
         </DialogContent>
@@ -843,7 +664,7 @@ export default function ClientesPage() {
           <Button
             onClick={() => {
               setDialogDetalhes(false);
-              handleEditarCliente(clienteDetalhes);
+              if (clienteDetalhes) handleEditarCliente(clienteDetalhes);
             }}
             variant="contained"
             startIcon={<Edit />}
@@ -866,7 +687,7 @@ export default function ClientesPage() {
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
             </Box>
-          ) : !pedidosCliente || pedidosCliente.length === 0 ? (
+          ) : erroHistorico ? <Alert severity="error" action={<Button onClick={() => recarregarHistorico()}>Tentar novamente</Button>}>Histórico indisponível.</Alert> : !pedidosCliente || pedidosCliente.total === 0 ? (
             <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
               Nenhum pedido encontrado para este cliente
             </Box>
@@ -883,7 +704,7 @@ export default function ClientesPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {pedidosCliente.map((pedido: any) => (
+                  {pedidosCliente.pedidos.map((pedido) => (
                     <TableRow key={pedido.id} hover>
                       <TableCell>
                         <Chip
@@ -931,7 +752,7 @@ export default function ClientesPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogHistorico(false)}>Fechar</Button>
+          <TablePagination component="div" count={pedidosCliente?.total ?? 0} page={paginaHistorico} rowsPerPage={25} rowsPerPageOptions={[25]} onPageChange={(_,p) => setPaginaHistorico(p)} labelRowsPerPage="Por página" /><Button onClick={() => setDialogHistorico(false)}>Fechar</Button>
         </DialogActions>
       </Dialog>
 
@@ -942,9 +763,10 @@ export default function ClientesPage() {
         message={confirmDialog.message}
         onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}
         onConfirm={confirmDialog.onConfirm}
-        confirmText="Desativar"
+        confirmText={confirmDialog.title === 'Reativar cliente' ? 'Reativar' : 'Desativar'}
         cancelText="Cancelar"
-        severity="warning"
+        severity={confirmDialog.title === 'Reativar cliente' ? 'success' : 'warning'}
+        loading={atualizarMutation.isPending || deletarMutation.isPending}
       />
     </AppLayout>
   );

@@ -2,13 +2,7 @@
  * Função para exportar lista de saídas financeiras para PDF usando pdfmake
  */
 
-import pdfMake from 'pdfmake/build/pdfmake';
-// @ts-ignore - pdfFonts types are not well supported
-import pdfFonts from 'pdfmake/build/vfs_fonts';
-
-// Registrar fontes
-// @ts-ignore
-pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
+import pdfMake from './fontes';
 
 interface ColunaSelecionada {
   id: string;

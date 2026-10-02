@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { trpc, trpcClient } from '@/lib/trpc/client';
+import { MotionConfig } from 'framer-motion';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { ptBR } from '@mui/material/locale';
 import { Toaster } from 'react-hot-toast';
@@ -134,6 +135,7 @@ const theme = createTheme(
       '0 25px 50px -12px rgb(0 0 0 / 0.25)',
     ],
     components: {
+      MuiIconButton: { styleOverrides: { root: { minWidth: 44, minHeight: 44 } } },
       MuiButton: {
         styleOverrides: {
           root: {
@@ -229,7 +231,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <ThemeProvider theme={theme}>
           <CssBaseline />
           <AuthProvider>
-            <AuthGate>{children}</AuthGate>
+            <MotionConfig reducedMotion="user"><AuthGate>{children}</AuthGate></MotionConfig>
             <InstallPWA />
             <ReactQueryDevtools initialIsOpen={false} />
             <Toaster

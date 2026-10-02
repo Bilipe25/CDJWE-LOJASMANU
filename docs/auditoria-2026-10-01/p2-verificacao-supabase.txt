@@ -1,0 +1,4 @@
+verificacao
+resultado
+P2 APROVADO
+ADMIN lê clientes/produtos com paginação coerente; cópias históricas preenchidas; anônimo e conta não habilitada sem acesso; escrita direta bloqueada.

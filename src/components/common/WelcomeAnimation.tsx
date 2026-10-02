@@ -12,20 +12,13 @@ export default function WelcomeAnimation() {
   const { nomeEmpresa, corPrimaria } = useConfiguracoes();
 
   useEffect(() => {
-    // Verificar se acabou de fazer login
-    const justLoggedIn = sessionStorage.getItem('justLoggedIn');
-    
-    if (justLoggedIn === 'true') {
-      setShow(true);
-      sessionStorage.removeItem('justLoggedIn');
-      
-      // Ocultar após 3 segundos
-      const timer = setTimeout(() => {
-        setShow(false);
-      }, 3000);
-
-      return () => clearTimeout(timer);
-    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const frame = requestAnimationFrame(() => {
+      if (sessionStorage.getItem('justLoggedIn') !== 'true') return;
+      sessionStorage.removeItem('justLoggedIn'); setShow(true);
+      timer = setTimeout(() => setShow(false), 3000);
+    });
+    return () => { cancelAnimationFrame(frame); if (timer) clearTimeout(timer); };
   }, []);
 
   return (
@@ -155,8 +148,8 @@ export default function WelcomeAnimation() {
                 animate={{
                   opacity: [0, 1, 0],
                   scale: [0, 1, 0],
-                  x: [0, Math.random() * 200 - 100],
-                  y: [0, Math.random() * 200 - 100],
+                  x: [0, [-80, 50, -30, 90, 15][i]],
+                  y: [0, [45, -70, 90, -35, 60][i]],
                 }}
                 transition={{
                   duration: 2,

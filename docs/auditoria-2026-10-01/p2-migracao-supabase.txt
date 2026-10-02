@@ -1,0 +1,14 @@
+resultado
+clientes
+enderecos
+pedidos
+itens
+pedidos_com_snapshot
+operadores_ativos
+P2 APLICADO; DADOS E PERMISSOES PRESERVADOS
+407
+204
+1643
+700
+86
+1

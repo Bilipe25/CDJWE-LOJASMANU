@@ -34,7 +34,7 @@ import Image from 'next/image';
 export default function LoginPage() {
   const router = useRouter();
   const { configuracoes, nomeEmpresa, logoUrl, corPrimaria } = useConfiguracoes();
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, authError } = useAuth();
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -57,10 +57,10 @@ export default function LoginPage() {
 
   // Redirecionar se já estiver autenticado (mas não durante o login)
   useEffect(() => {
-    if (isAuthenticated && !loginSuccess && !loading) {
+    if (isAuthenticated && !authError && !loginSuccess && !loading) {
       router.push('/');
     }
-  }, [isAuthenticated, loginSuccess, loading, router]);
+  }, [isAuthenticated, authError, loginSuccess, loading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -629,7 +629,7 @@ export default function LoginPage() {
                       fontStyle: 'italic',
                     }}
                   >
-                    "{versiculoDoDia.texto}"
+                    &quot;{versiculoDoDia.texto}&quot;
                   </Typography>
 
                   <Typography
@@ -905,7 +905,7 @@ export default function LoginPage() {
                   />
 
                   <AnimatePresence mode="wait">
-                    {error && (
+                    {(authError || error) && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -913,7 +913,7 @@ export default function LoginPage() {
                         transition={{ duration: 0.3 }}
                       >
                         <Alert severity="error" sx={{ borderRadius: 2 }}>
-                          {error}
+                          {authError || error}
                         </Alert>
                       </motion.div>
                     )}

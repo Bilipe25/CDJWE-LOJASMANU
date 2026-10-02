@@ -1,0 +1,9 @@
+{
+  "erros": 0,
+  "avisos": 200,
+  "porRegra": {
+    "@typescript-eslint/no-unused-vars": 49,
+    "@typescript-eslint/no-explicit-any": 149,
+    "react-hooks/exhaustive-deps": 2
+  }
+}

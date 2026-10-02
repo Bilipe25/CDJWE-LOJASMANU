@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import { enderecoSnapshotSchema } from '@/lib/schemas/endereco';
 import { executarRPC } from '@/server/rpc';
 import { totaisPedido } from '@/lib/utils/valores-pedido';
 import type { Database } from '@/types/supabase';
@@ -14,6 +15,7 @@ const itemPedidoSchema = z.object({
   ordem: z.number().int().min(0).default(0),
 }).refine(item => item.desconto_valor <= Math.round(item.quantidade * item.valor_unitario * 100) / 100, { message: 'O desconto do item não pode superar seu valor', path: ['desconto_valor'] });
 
+export type PedidoListado = Omit<Database['public']['Views']['vw_pedidos_completos']['Row'], 'id'> & { id: string };
 type PedidoRow = Database['public']['Tables']['pedidos']['Row'];
 const filtrosSchema = z.object({
   limit: z.number().int().min(1).max(10000).default(50), offset: z.number().int().min(0).default(0),
@@ -31,9 +33,13 @@ export const pedidosRouter = router({
     .input(filtrosSchema)
     .query(async ({ ctx, input }) => {
       const { limit, offset, ...filtros } = input;
-      return await executarRPC(ctx.supabase, 'pdv_listar_pedidos', {
+      const resultado = await executarRPC(ctx.supabase, 'pdv_listar_pedidos', {
         p_filtros: filtros, p_limite: limit, p_offset: offset,
-      }) as { pedidos: Database['public']['Views']['vw_pedidos_completos']['Row'][]; total: number };
+      }) as { pedidos: (Database['public']['Views']['vw_pedidos_completos']['Row'] & { cpf?: string | null; telefone?: string | null })[]; total: number };
+      return { total: resultado.total, pedidos: resultado.pedidos.map(pedido => {
+        if (!pedido.id) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Pedido sem identificação na consulta.' });
+        return { ...pedido, id: pedido.id, cliente_cpf: pedido.cliente_cpf ?? pedido.cpf ?? null, cliente_telefone: pedido.cliente_telefone ?? pedido.telefone ?? null };
+      }) };
     }),
 
   // Listar pedidos por cliente
@@ -41,18 +47,19 @@ export const pedidosRouter = router({
     .input(
       z.object({
         clienteId: z.string().uuid(),
+        limit: z.number().int().min(1).max(100).default(25), offset: z.number().int().min(0).default(0),
       })
     )
     .query(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const { data, error, count } = await ctx.supabase
         .from('pedidos')
-        .select('id, numero, data, status, total')
+        .select('id, numero, data, status, total', { count: 'exact' })
         .eq('cliente_id', input.clienteId)
-        .order('data', { ascending: false });
+        .order('data', { ascending: false }).order('id').range(input.offset, input.offset + input.limit - 1);
 
       if (error) throw new Error(error.message);
 
-      return data || [];
+      return { pedidos: data || [], total: count ?? 0 };
     }),
 
   // Buscar pedido por ID
@@ -66,11 +73,17 @@ export const pedidosRouter = router({
         .single();
 
       if (pedidoError) throw new Error(pedidoError.message);
+      if (!pedido?.id) throw new TRPCError({ code: 'NOT_FOUND', message: 'Pedido não encontrado' });
 
-      const { data: meta, error: metaError } = await ctx.supabase.from('pedidos').select('versao, finalizado_em, telefone_contato').eq('id', input.id).single();
+      const { data: meta, error: metaError } = await ctx.supabase.from('pedidos').select('versao, finalizado_em, telefone_contato, endereco_snapshot').eq('id', input.id).single();
       if (metaError) throw new Error(metaError.message);
-      // Consultar o endereço vinculado ao pedido, sem depender dos campos da view.
-      const { data: endereco, error: enderecoError } = pedido.endereco_id
+      const { data: contato, error: contatoError } = pedido.cliente_id
+        ? await ctx.supabase.from('clientes').select('cpf, telefone').eq('id', pedido.cliente_id).single()
+        : { data: null, error: null };
+      if (contatoError) throw new Error(contatoError.message);
+      const snapshot = enderecoSnapshotSchema.safeParse(meta.endereco_snapshot);
+      // Snapshot conserva a impressão mesmo quando o cadastro muda.
+      const { data: endereco, error: enderecoError } = pedido.endereco_id && !snapshot.success
         ? await ctx.supabase.from('enderecos').select('*').eq('id', pedido.endereco_id).single()
         : { data: null, error: null };
       if (enderecoError) throw new Error(enderecoError.message);
@@ -85,8 +98,10 @@ export const pedidosRouter = router({
 
       return {
         ...pedido,
+        id: pedido.id,
         ...meta,
-        endereco,
+        cliente_cpf: contato?.cpf ?? null, cliente_telefone: contato?.telefone ?? null,
+        endereco: snapshot.success ? snapshot.data : endereco,
         itens: itens || [],
       };
     }),

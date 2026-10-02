@@ -1,3 +1,4 @@
+import type { PedidoExportacao as Pedido, DadosEmpresaDocumento as DadosEmpresa } from '@/lib/utils/documentos';
 /**
  * Função para exportar lista de pedidos para Excel
  * Usa xlsx (SheetJS)
@@ -9,25 +10,6 @@ interface ColunaSelecionada {
   id: string;
   label: string;
   selecionada: boolean;
-}
-
-interface Pedido {
-  numero: string | number;
-  data: string;
-  cliente_nome: string | null;
-  tipo_atendimento_nome: string | null;
-  forma_pagamento_nome: string | null;
-  total: number | null;
-  status: string;
-  total_itens?: number | null;
-}
-
-interface DadosEmpresa {
-  nome_empresa?: string;
-  razao_social?: string;
-  cnpj?: string;
-  telefone?: string;
-  endereco?: string;
 }
 
 export function exportarPedidosParaExcel(
@@ -167,7 +149,7 @@ export function exportarPedidosParaExcel(
 }
 
 // Helpers
-function formatarData(dataString: string): string {
+function formatarData(dataString: string | null): string {
   if (!dataString) return '-';
   try {
     const [year, month, day] = dataString.split('T')[0].split('-');

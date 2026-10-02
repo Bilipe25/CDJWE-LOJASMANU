@@ -10,7 +10,7 @@ async function main() {
     ALTER TABLE formas_pagamento ADD COLUMN ativo boolean DEFAULT true;
     ALTER TABLE categorias ADD COLUMN ativo boolean DEFAULT true;
     ALTER TABLE cores ADD COLUMN ativo boolean DEFAULT true;
-    ALTER TABLE produtos ADD COLUMN ativo boolean DEFAULT true;
+    ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ativo boolean DEFAULT true;
     CREATE TABLE configuracoes_empresa(id uuid DEFAULT gen_random_uuid(),ativo boolean DEFAULT true,nome_empresa text,nome_sistema text,logradouro text,numero text,cidade text,estado text,telefone text,cor_primaria text,cor_secundaria text);
     INSERT INTO configuracoes_empresa(nome_empresa,nome_sistema,logradouro,numero,cidade,estado,cor_primaria,cor_secundaria) VALUES('Lojas Manu — teste local','PDV de teste','Rua da Empresa','10','Fortaleza','CE','#0369a1','#0369a1');
     INSERT INTO formas_pagamento(id,nome) VALUES('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee','Dinheiro');

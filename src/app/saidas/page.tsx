@@ -1735,7 +1735,7 @@ export default function SaidasPage() {
 
           {novaSaida.destinatario_nome && !novaSaida.cliente_id && (
             <Alert severity="success" sx={{ mb: 3 }}>
-              ✨ Novo destinatário "{novaSaida.destinatario_nome}" será criado automaticamente
+              ✨ Novo destinatário &quot;{novaSaida.destinatario_nome}&quot; será criado automaticamente
             </Alert>
           )}
 

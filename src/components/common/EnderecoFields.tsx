@@ -13,7 +13,7 @@ export default function EnderecoFields({ value, onChange }: Props) {
   const alterar = (campo: keyof EnderecoFormulario, texto: string) => {
     onChange({ ...value, [campo]: campo === 'estado' ? texto.toUpperCase() : texto });
   };
-  const faltaLogradouro = !value.logradouro.trim() && Object.values(value).some((campo) => campo.trim());
+  const faltaLogradouro = !value.logradouro.trim() && ['numero', 'complemento', 'bairro', 'cidade', 'estado', 'cep'].some((campo) => value[campo as keyof EnderecoFormulario].trim());
 
   return (
     <Grid container spacing={2}>

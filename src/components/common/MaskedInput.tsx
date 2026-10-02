@@ -30,6 +30,7 @@ export const formatCNPJ = (value: string) => {
 
 export const formatPhone = (value: string) => {
     const r = value.replace(/\D/g, '');
+    if (!r) return '';
     if (r.length > 10) {
         return r
             .replace(/^(\d\d)(\d{5})(\d{4}).*/, '($1) $2-$3');

@@ -1,38 +1,15 @@
+import type { PedidoExportacao as Pedido, DadosEmpresaDocumento as DadosEmpresa } from '@/lib/utils/documentos';
 /**
  * Função para exportar lista de pedidos para PDF usando pdfmake
  */
 
-import pdfMake from 'pdfmake/build/pdfmake';
-// @ts-ignore - pdfFonts types are not well supported
-import pdfFonts from 'pdfmake/build/vfs_fonts';
-
-// Registrar fontes
-// @ts-ignore
-pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
+import pdfMake from './fontes';
+import type { TDocumentDefinitions, Content } from 'pdfmake/interfaces';
 
 interface ColunaSelecionada {
   id: string;
   label: string;
   selecionada: boolean;
-}
-
-interface Pedido {
-  numero: string | number;
-  data: string;
-  cliente_nome: string | null;
-  tipo_atendimento_nome: string | null;
-  forma_pagamento_nome: string | null;
-  total: number | null;
-  status: string;
-  total_itens?: number | null;
-}
-
-interface DadosEmpresa {
-  nome_empresa?: string;
-  razao_social?: string;
-  cnpj?: string;
-  telefone?: string;
-  endereco?: string;
 }
 
 export async function exportarPedidosParaPDF(
@@ -55,7 +32,7 @@ export async function exportarPedidosParaPDF(
   // Preparar linhas de dados
   const dataRows = pedidos.map((pedido, index) => {
     return colunasSelecionadas.map(coluna => {
-      let valor: any;
+      let valor: string | number;
       
       switch (coluna.id) {
         case 'numero':
@@ -80,7 +57,7 @@ export async function exportarPedidosParaPDF(
           valor = formatarMoeda(pedido.total || 0);
           break;
         case 'status':
-          valor = pedido.status;
+          valor = pedido.status || '-';
           break;
         default:
           valor = '-';
@@ -117,7 +94,7 @@ export async function exportarPedidosParaPDF(
   });
 
   // Larguras dinâmicas das colunas
-  const widthsMap: Record<string, string | number> = {
+  const widthsMap: Record<string, number | '*' | 'auto'> = {
     numero: 50,
     data: 60,
     cliente: '*',
@@ -129,9 +106,13 @@ export async function exportarPedidosParaPDF(
   };
 
   const columnWidths = colunasSelecionadas.map(col => widthsMap[col.id] || 'auto');
+  const filtrosContent: Content[] = filtrosAplicados?.length ? [
+    { text: 'Filtros Aplicados:', style: 'sectionTitle', margin: [0, 10, 0, 5] },
+    { ul: filtrosAplicados.map(text => ({ text, fontSize: 9, color: '#4a5568' })), margin: [0, 0, 0, 15] },
+  ] : [];
 
   // Montar documento
-  const docDefinition: any = {
+  const docDefinition: TDocumentDefinitions = {
     pageSize: 'A4',
     pageOrientation: colunasSelecionadas.length > 5 ? 'landscape' : 'portrait',
     pageMargins: [40, 60, 40, 60],
@@ -154,7 +135,7 @@ export async function exportarPedidosParaPDF(
       ],
     }),
 
-    footer: (currentPage: number, pageCount: number) => ({
+    footer: () => ({
       text: `Gerado em ${new Date().toLocaleString('pt-BR')}`,
       alignment: 'center',
       fontSize: 8,
@@ -187,15 +168,7 @@ export async function exportarPedidosParaPDF(
       },
 
       // Filtros aplicados
-      ...(filtrosAplicados && filtrosAplicados.length > 0
-        ? [
-            { text: 'Filtros Aplicados:', style: 'sectionTitle', margin: [0, 10, 0, 5] },
-            {
-              ul: filtrosAplicados.map(filtro => ({ text: filtro, fontSize: 9, color: '#4a5568' })),
-              margin: [0, 0, 0, 15],
-            },
-          ]
-        : []),
+      ...filtrosContent,
 
       // Resumo
       {
@@ -233,7 +206,7 @@ export async function exportarPedidosParaPDF(
           body: [headerRow, ...dataRows, totalRow],
         },
         layout: {
-          hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length ? 1 : 0.5),
+          hLineWidth: (i, node) => (i === 0 || i === 1 || i === node.table.body.length ? 1 : 0.5),
           vLineWidth: () => 0.5,
           hLineColor: (i: number) => (i === 0 || i === 1 ? '#4a5568' : '#e2e8f0'),
           vLineColor: () => '#e2e8f0',
@@ -296,7 +269,7 @@ export async function exportarPedidosParaPDF(
 }
 
 // Helpers
-function formatarData(dataString: string): string {
+function formatarData(dataString: string | null): string {
   if (!dataString) return '-';
   try {
     const [year, month, day] = dataString.split('T')[0].split('-');

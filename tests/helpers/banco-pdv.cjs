@@ -61,6 +61,9 @@ async function criarBanco({ schemaProducao = false } = {}) {
   await pg.exec(migration);
   // Confere reaplicação sem recriar colunas/views/policies incompatíveis.
   await pg.exec(migration);
+  await pg.exec('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ativo boolean DEFAULT true');
+  const migrationP2 = fs.readFileSync(path.join(__dirname,'../../supabase/migrations/202610010002_p2_cadastro_consultas.sql'),'utf8');
+  await pg.exec(migrationP2); await pg.exec(migrationP2);
   await pg.query('INSERT INTO pdv_operadores VALUES ($1,$2,true)', [usuario,'ADMIN']);
   await pg.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[usuario]);
 
