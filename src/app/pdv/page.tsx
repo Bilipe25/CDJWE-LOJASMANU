@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { dateToString } from '@/lib/utils/dateUtils';
+import { formatarTipoAtendimentoPDV } from '@/lib/utils/tipo-atendimento';
 import {
   Box,
   Card,
@@ -238,6 +239,7 @@ function PDVPageContent() {
   });
 
   const { data: tiposAtendimento, error: erroTipos, refetch: recarregarTipos } = trpc.dominios.tiposAtendimento.list.useQuery();
+  const tipoAtendimentoSelecionado = tiposAtendimento?.find((tipo) => tipo.id === tipoAtendimentoId);
   const { data: formasPagamento, error: erroPagamentos, refetch: recarregarPagamentos } = trpc.dominios.formasPagamento.list.useQuery();
   const { data: cores } = trpc.dominios.cores.list.useQuery();
 
@@ -667,7 +669,7 @@ function PDVPageContent() {
       cliente_cpf: clienteSelecionado?.cpf ?? undefined,
       cliente_telefone: telefoneContato,
       endereco: enderecoCompleto,
-      tipo_atendimento: tiposAtendimento?.find((t) => t.id === tipoAtendimentoId)?.nome,
+      tipo_atendimento: tipoAtendimentoSelecionado ? formatarTipoAtendimentoPDV(tipoAtendimentoSelecionado.nome, tipoAtendimentoSelecionado.tipo) : undefined,
       forma_pagamento: formasPagamento?.find((f) => f.id === formaPagamentoId)?.nome,
       observacoes: observacoes,
       itens: pedidoAtual.itens.map(item => ({ ...item, produto_unidade: item.produto_unidade ?? produtos?.produtos.find(p => p.id === item.produto_id)?.unidade ?? undefined })),
@@ -1269,7 +1271,7 @@ function PDVPageContent() {
             <SaleSection compact={isMobile} expanded={accordionExpandido === 'atendimento'} onChange={open => setAccordionExpandido(open ? 'atendimento' : false)} title={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
                   <Category color="primary" />
                   <Typography fontWeight="bold">Atendimento e pagamento</Typography>
-                  {accordionExpandido !== 'atendimento' && <Typography variant="caption" color="text.secondary">{tiposAtendimento?.find(tipo => tipo.id === tipoAtendimentoId)?.nome || 'Selecione o atendimento'} · {formasPagamento?.find(forma => forma.id === formaPagamentoId)?.nome || 'Selecione o pagamento'}</Typography>}
+                  {accordionExpandido !== 'atendimento' && <Typography variant="caption" color="text.secondary">{tipoAtendimentoSelecionado ? formatarTipoAtendimentoPDV(tipoAtendimentoSelecionado.nome, tipoAtendimentoSelecionado.tipo) : 'Selecione o atendimento'} · {formasPagamento?.find(forma => forma.id === formaPagamentoId)?.nome || 'Selecione o pagamento'}</Typography>}
                 </Box>}>
 
                 <Grid container spacing={2}>
@@ -1287,7 +1289,7 @@ function PDVPageContent() {
                       >
                         {tiposAtendimento?.map((tipo) => (
                           <MenuItem key={tipo.id} value={tipo.id}>
-                            {tipo.nome} {tipo.tipo && `(${tipo.tipo})`}
+                            {formatarTipoAtendimentoPDV(tipo.nome, tipo.tipo)}
                           </MenuItem>
                         ))}
                       </Select>
@@ -1483,7 +1485,7 @@ function PDVPageContent() {
                       Tipo de Atendimento:
                     </Typography>
                     <Typography fontWeight="bold">
-                      {tiposAtendimento?.find((t) => t.id === tipoAtendimentoId)?.nome || '-'}
+                      {tipoAtendimentoSelecionado ? formatarTipoAtendimentoPDV(tipoAtendimentoSelecionado.nome, tipoAtendimentoSelecionado.tipo) : '-'}
                     </Typography>
                   </Box>
                   <Box>

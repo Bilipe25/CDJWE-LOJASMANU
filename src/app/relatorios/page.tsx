@@ -536,7 +536,7 @@ export default function RelatoriosPage() {
                       Filtros Rápidos
                     </Typography>
                     <Chip
-                      label="Apenas ENTRADA"
+                      label="Apenas Venda"
                       size="small"
                       color="success"
                       sx={{ fontWeight: 600 }}

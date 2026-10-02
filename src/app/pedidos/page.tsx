@@ -73,6 +73,7 @@ import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import { trpc } from '@/lib/trpc/client';
 import { OperationalHeader, OperationalSummary, operationalSurface, operationalTable } from '@/components/common/OperationalPage';
 import type { PedidoListado as Pedido } from '@/server/routers/pedidos';
+import { formatarTipoAtendimento } from '@/lib/utils/tipo-atendimento';
 import { empresaParaDocumento, pedidoParaDocumento, buscarTodosFiltrados } from '@/lib/utils/documentos';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { validarFiltrosPedidos } from '@/lib/schemas/filtros-pedidos';
@@ -457,7 +458,7 @@ function PedidosPageContent() {
     const filtrosTexto = [escopoExportacao === 'todos' ? 'Todos os pedidos filtrados' : 'Página atual'];
     if (search) filtrosTexto.push('Busca: ' + search);
     if (status) filtrosTexto.push('Status: ' + status);
-    if (tipoAtendimento) filtrosTexto.push('Tipo: ' + tipoAtendimento);
+    if (tipoAtendimento) filtrosTexto.push('Tipo: ' + formatarTipoAtendimento(tipoAtendimento));
     if (formaPagamento) filtrosTexto.push('Pagamento: ' + (formasPagamento?.find(f => f.id === formaPagamento)?.nome || formaPagamento));
     if (clienteSelecionado) filtrosTexto.push('Cliente: ' + nomeClienteFiltro);
     if (dataInicio || dataFim) filtrosTexto.push('Período: ' + (dataInicio ? formatDate(dataInicio) : 'Início') + ' até ' + (dataFim ? formatDate(dataFim) : 'Fim'));
@@ -524,7 +525,7 @@ function PedidosPageContent() {
       <OperationalSummary label="Indicadores dos pedidos filtrados" variant="cards" loading={carregandoEstatisticas} items={[
         { label: 'Pedidos', value: erroEstatisticas ? '—' : estatisticas.totalPedidos ?? '—' },
         { label: 'Pendentes', value: erroEstatisticas ? '—' : estatisticas.pedidosPendentes ?? '—' },
-        { label: 'Vendas finalizadas', help: 'Soma dos totais dos pedidos finalizados do tipo ENTRADA que atendem aos filtros. Não representa recebimentos em caixa.', value: erroEstatisticas || estatisticas.totalVendas === undefined ? '—' : formatCurrency(estatisticas.totalVendas) },
+        { label: 'Vendas finalizadas', help: 'Soma dos totais dos pedidos finalizados do tipo Venda que atendem aos filtros. Não representa recebimentos em caixa.', value: erroEstatisticas || estatisticas.totalVendas === undefined ? '—' : formatCurrency(estatisticas.totalVendas) },
         { label: 'Finalizados hoje', help: 'Pedidos da consulta finalizados hoje, pela data de finalização no horário de Fortaleza. Os filtros de período usam a data do pedido.', value: erroEstatisticas ? '—' : estatisticas.finalizadosHoje ?? '—' },
       ]} />
       {erroPeriodo && <Alert severity="warning" sx={{ mb: 2 }}>{erroPeriodo} Corrija o período para atualizar a consulta e exportar. Os resultados anteriores foram mantidos.</Alert>}
@@ -586,7 +587,7 @@ function PedidosPageContent() {
     {temFiltrosAtivos && <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5, alignItems: 'center' }}>
       {search && <Chip size="small" variant="outlined" label={'Busca: ' + search} onDelete={() => atualizarFiltro('search', '')} />}
       {status && <StatusBadge status={status} onDelete={() => atualizarFiltro('status', '')} />}
-      {tipoAtendimento && <Chip size="small" label={'Tipo: ' + tipoAtendimento} onDelete={() => atualizarFiltro('tipoAtendimento', '')} />}
+      {tipoAtendimento && <Chip size="small" label={'Tipo: ' + formatarTipoAtendimento(tipoAtendimento)} onDelete={() => atualizarFiltro('tipoAtendimento', '')} />}
       {formaPagamento && <Chip size="small" label={'Pagamento: ' + (formasPagamento?.find(f => f.id === formaPagamento)?.nome || 'Carregando…')} onDelete={() => atualizarFiltro('formaPagamento', '')} />}
       {clienteSelecionado && <Chip size="small" label={'Cliente: ' + nomeClienteFiltro} onDelete={() => atualizarFiltro('clienteSelecionado', null)} />}
       {(dataInicio || dataFim) && <Chip size="small" color={erroPeriodo ? 'warning' : 'default'} label={(dataInicio ? formatDate(dataInicio) : 'Início livre') + ' a ' + (dataFim ? formatDate(dataFim) : 'Fim livre')} onDelete={() => atualizarFiltros({ dataInicio: '', dataFim: '' })} />}
@@ -616,7 +617,7 @@ function PedidosPageContent() {
                     }}
                   >
                     <MenuItem value="">Todos</MenuItem>
-                    <MenuItem value="ENTRADA">ENTRADA</MenuItem>
+                    <MenuItem value="ENTRADA">Venda</MenuItem>
                     <MenuItem value="SAIDA">SAÍDA</MenuItem>
                     <MenuItem value="ORÇAMENTO">ORÇAMENTO</MenuItem>
                     <MenuItem value="S/MOVIMENTO">S/MOVIMENTO</MenuItem>
@@ -782,7 +783,7 @@ function PedidosPageContent() {
                       </TableCell>
                       <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                         <Chip
-                          label={pedido.tipo_atendimento_nome || 'Sem Tipo'}
+                          label={pedido.tipo_atendimento_nome ? formatarTipoAtendimento(pedido.tipo_atendimento_nome) : 'Sem Tipo'}
                           size="small"
                           color={getTipoChipColor(pedido.tipo_atendimento_nome)}
                           variant="outlined"
@@ -976,7 +977,7 @@ function PedidosPageContent() {
                 </Grid>
                 <Grid item xs={12} sm={4}>
                   <Typography variant="caption" color="text.secondary">Atendimento e pagamento</Typography>
-                  <Typography fontWeight={600}>{pedidoCompleto.tipo_atendimento_nome || '-'}</Typography>
+                  <Typography fontWeight={600}>{formatarTipoAtendimento(pedidoCompleto.tipo_atendimento_nome)}</Typography>
                   <Typography variant="body2">{pedidoCompleto.forma_pagamento_nome || '-'}</Typography>
                 </Grid>
               </Grid>
@@ -1184,7 +1185,7 @@ function PedidosPageContent() {
               </Typography>
               <Box display="flex" flexWrap="wrap" gap={0.5}>
                 {status && <Chip label={`Status: ${status}`} size="small" />}
-                {tipoAtendimento && <Chip label={`Tipo: ${tipoAtendimento}`} size="small" />}
+                {tipoAtendimento && <Chip label={`Tipo: ${formatarTipoAtendimento(tipoAtendimento)}`} size="small" />}
                 {formaPagamento && (
                   <Chip
                     label={`Pagamento: ${formasPagamento?.find((f) => f.id === formaPagamento)?.nome || formaPagamento}`}

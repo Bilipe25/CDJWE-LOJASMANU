@@ -5,6 +5,7 @@ import type { PedidoExportacao as Pedido, DadosEmpresaDocumento as DadosEmpresa 
  */
 
 import * as XLSX from 'xlsx';
+import { formatarTipoAtendimento } from '@/lib/utils/tipo-atendimento';
 
 interface ColunaSelecionada {
   id: string;
@@ -73,7 +74,7 @@ export function exportarPedidosParaExcel(
         case 'cliente':
           return pedido.cliente_nome || '-';
         case 'tipo':
-          return pedido.tipo_atendimento_nome || '-';
+          return formatarTipoAtendimento(pedido.tipo_atendimento_nome);
         case 'pagamento':
           return pedido.forma_pagamento_nome || '-';
         case 'itens':

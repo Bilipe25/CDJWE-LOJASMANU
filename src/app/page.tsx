@@ -13,6 +13,7 @@ import { OperationalHeader, operationalSurface, operationalTable } from '@/compo
 import StatusBadge from '@/components/common/StatusBadge';
 import { trpc } from '@/lib/trpc/client';
 import { formatDateBR } from '@/lib/utils/dateUtils';
+import { formatarTipoAtendimento } from '@/lib/utils/tipo-atendimento';
 
 type PedidoResumo = inferRouterOutputs<AppRouter>['relatorios']['dashboardPedidos']['ultimosPedidos'][number];
 type Estado = { isPending: boolean; isFetching: boolean; error: unknown; dataUpdatedAt: number; refetch: () => unknown };
@@ -44,7 +45,7 @@ function TabelaPedidos({ pedidos, fila = false }: { pedidos: PedidoResumo[]; fil
       <TableCell><Button component={NextLink} href={`/pedidos?id=${p.id}`} size="small" sx={{ minHeight: 44, px: 0, py: .5, display: 'flex', justifyContent: 'flex-start', alignItems: 'baseline', gap: 1, textAlign: 'left', width: '100%' }} aria-label={`Abrir pedido ${p.numero} de ${p.cliente_nome || 'cliente não informado'}`}>
         <Box component="span" sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>#{p.numero}</Box>
         <Box component="span" sx={{ minWidth: 0 }}><Typography component="span" display="block" variant="body2" fontWeight={600} color="text.primary" sx={{ overflowWrap: 'anywhere' }}>{p.cliente_nome || 'Cliente não informado'}</Typography>
-          <Typography component="span" display="block" variant="caption" color="text.secondary" sx={{ fontWeight: 400 }}>{p.data ? formatDateBR(p.data) : 'Sem data'} · {p.tipo_atendimento_nome || 'Atendimento não informado'}</Typography></Box>
+          <Typography component="span" display="block" variant="caption" color="text.secondary" sx={{ fontWeight: 400 }}>{p.data ? formatDateBR(p.data) : 'Sem data'} · {p.tipo_atendimento_nome ? formatarTipoAtendimento(p.tipo_atendimento_nome) : 'Atendimento não informado'}</Typography></Box>
       </Button>
         <Box sx={{ display: { xs: 'block', sm: 'none' }, mt: .5 }}><StatusBadge status={p.status || ''} /></Box>
       </TableCell>

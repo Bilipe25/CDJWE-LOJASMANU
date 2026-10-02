@@ -4,6 +4,7 @@ import type { PedidoExportacao as Pedido, DadosEmpresaDocumento as DadosEmpresa 
  */
 
 import pdfMake from './fontes';
+import { formatarTipoAtendimento } from '@/lib/utils/tipo-atendimento';
 import type { TDocumentDefinitions, Content } from 'pdfmake/interfaces';
 
 interface ColunaSelecionada {
@@ -45,7 +46,7 @@ export async function exportarPedidosParaPDF(
           valor = pedido.cliente_nome || '-';
           break;
         case 'tipo':
-          valor = pedido.tipo_atendimento_nome || '-';
+          valor = formatarTipoAtendimento(pedido.tipo_atendimento_nome);
           break;
         case 'pagamento':
           valor = pedido.forma_pagamento_nome || '-';
