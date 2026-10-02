@@ -1,292 +1,127 @@
-import { formatDateBR, dateToString } from '@/lib/utils/dateUtils';
+import { formatDateBR } from '@/lib/utils/dateUtils';
 import pdfMake from './fontes';
-
+import type { Content, ContentColumns, ContentText, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
 import type { DadosPedidoDocumento as DadosPedido, DadosEmpresaDocumento as DadosEmpresa } from '@/lib/utils/documentos';
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
-};
+const cor = { texto: '#0f172a', secundario: '#475569', linha: '#cbd5e1', fundo: '#f1f5f9', azul: '#0369a1' };
+const moeda = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+const quantidade = (value: number) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(value);
+const numeroPedido = (pedido: DadosPedido) => pedido.numero === undefined ? '' : `#${String(pedido.numero).padStart(5, '0')}`;
+const situacoes: Record<string, string> = { PENDENTE: 'Pendente', CONFIRMADO: 'Confirmado', FINALIZADO: 'Finalizado', CANCELADO: 'Cancelado' };
+const cpf = (value: string) => /^\d{11}$/.test(value) ? value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : value;
 
-const formatDate = (dateString: string) => {
-  try {
-    return formatDateBR(dateString);
-  } catch {
-    return dateString;
-  }
-};
+function validarPedido(pedido: DadosPedido) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(pedido.data) || Number.isNaN(Date.parse(`${pedido.data}T12:00:00Z`)) || new Date(`${pedido.data}T12:00:00Z`).toISOString().slice(0, 10) !== pedido.data) throw new Error('Confira a data do pedido antes de imprimir.');
+  if (!pedido.itens.length) throw new Error('Adicione pelo menos um produto antes de imprimir.');
+  const valores = [pedido.subtotal, pedido.desconto_valor, pedido.total, ...pedido.itens.flatMap(i => [i.quantidade, i.valor_unitario, i.desconto_valor, i.valor_total])];
+  if (valores.some(v => !Number.isFinite(v) || v < 0) || pedido.itens.some(i => i.quantidade <= 0)) throw new Error('Confira as quantidades e os valores do pedido antes de imprimir.');
+}
 
-export const gerarPedidoPDF = async (
-  pedido: DadosPedido,
-  empresa: DadosEmpresa,
-  acao: 'download' | 'print' = 'print',
-  janelaImpressao?: Window,
-) => {
-  // Converter logo para base64 se disponível
-  let logoBase64 = null;
-  if (empresa.logo_url) {
-    try {
-      const response = await fetch(empresa.logo_url);
-      const blob = await response.blob();
-      logoBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-    } catch (error) {
-      console.error('Erro ao carregar logo:', error);
-    }
-  }
-
-  const docDefinition: any = {
-    pageSize: 'A4',
-    pageMargins: [30, 30, 30, 40],
-    
-    content: [
-      // Data e Número do Atendimento no topo
-      {
-        columns: [
-          { text: formatDate(pedido.data), fontSize: 9, alignment: 'left' },
-          { text: '', width: '*' },
-          { text: 'ATENDIMENTO', fontSize: 9, alignment: 'right', bold: true },
-          { text: (pedido.numero?.toString() || '---').padStart(5, ' '), fontSize: 11, alignment: 'right', bold: true, width: 50 },
-        ],
-        margin: [0, 0, 0, 10],
-      },
-
-      // Linha separadora
-      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }] },
-
-      // Logo e Nome da Empresa
-      {
-        columns: [
-          // Logo à esquerda
-          ...(logoBase64 ? [{
-            image: logoBase64,
-            width: 65,
-            height: 65,
-            alignment: 'left' as const,
-            margin: [0, 5, 20, 0],  // Aumentado espaçamento à direita de 15 para 20
-            fit: [65, 65]  // Garantir que a imagem se ajuste
-          }] : []),
-          // Informações da empresa à direita
-          {
-            stack: [
-              { text: empresa.nome_empresa?.toUpperCase() || 'EMPRESA', fontSize: 14, bold: true, alignment: logoBase64 ? 'left' : 'center', margin: [0, 0, 0, 2] },
-              ...(empresa.razao_social ? [
-                { text: empresa.razao_social, fontSize: 8, alignment: logoBase64 ? 'left' : 'center', color: '#666', margin: [0, 0, 0, 2] }
-              ] : []),
-              { text: empresa.endereco || '', fontSize: 7, alignment: logoBase64 ? 'left' : 'center', color: '#333', margin: [0, 0, 0, 2] },
-              { 
-                text: [
-                  { text: empresa.telefone ? `TEL: ${empresa.telefone}` : '', fontSize: 7 },
-                  { text: empresa.cnpj ? ` - CNPJ: ${empresa.cnpj}` : '', fontSize: 7 }
-                ],
-                alignment: logoBase64 ? 'left' : 'center',
-                color: '#333',
-                margin: [0, 0, 0, 2]
-              },
-              {
-                text: [
-                  { text: empresa.instagram ? `Instagram: ${empresa.instagram}` : '', fontSize: 7 },
-                  { text: (empresa.instagram && empresa.site) ? ' - ' : '', fontSize: 7 },
-                  { text: empresa.site ? `Site: ${empresa.site}` : '', fontSize: 7 }
-                ],
-                alignment: logoBase64 ? 'left' : 'center',
-                color: '#666',
-                margin: [0, 0, 0, 0]
-              },
-            ],
-            width: '*',
-            margin: logoBase64 ? [0, 5, 0, 0] : [0, 5, 0, 0],  // Margem superior para alinhar com a logo
-          },
-        ],
-        margin: [0, 10, 0, 15],
-      },
-
-      // Linha separadora
-      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }], margin: [0, 0, 0, 15] },
-
-      // Box de Dados do Cliente - Layout Profissional
-      {
-        table: {
-          widths: [60, '*', 60, 120],
-          body: [
-            [
-              { text: 'NOME:', fontSize: 9, bold: true, fillColor: '#f0f0f0', margin: [3, 3, 3, 3] },
-              { text: pedido.cliente_nome?.toUpperCase() || 'CLIENTE CONSUMIDOR', fontSize: 9, margin: [3, 3, 3, 3], colSpan: 2 },
-              {},
-              { 
-                text: `TEL.: ${pedido.cliente_telefone || ''}`, 
-                fontSize: 9, 
-                margin: [3, 3, 3, 3]
-              },
-            ],
-            [
-              { text: 'CPF:', fontSize: 9, bold: true, fillColor: '#f0f0f0', margin: [3, 3, 3, 3] },
-              { text: pedido.cliente_cpf || '', fontSize: 9, margin: [3, 3, 3, 3], colSpan: 3 },
-              {},
-              {},
-            ],
-            [
-              { text: 'ENDEREÇO:', fontSize: 9, bold: true, fillColor: '#f0f0f0', margin: [3, 3, 3, 3] },
-              { 
-                text: pedido.endereco?.toUpperCase() || '', 
-                fontSize: 9, 
-                margin: [3, 3, 3, 3], 
-                colSpan: 3,
-                // Quebrar linha se necessário
-                noWrap: false
-              },
-              {},
-              {},
-            ],
-          ],
-        },
-        layout: {
-          hLineWidth: () => 1,
-          vLineWidth: () => 1,
-          hLineColor: () => '#999',
-          vLineColor: () => '#999',
-        },
-        margin: [0, 0, 0, 15],
-      },
-
-      // Linha separadora
-      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }], margin: [0, 0, 0, 10] },
-
-      // Cabeçalho da tabela com total de itens
-      {
-        columns: [
-          { text: '', width: '*' },
-          { text: `TOTAL DE ITENS: ${pedido.itens.length}`, fontSize: 9, bold: true, alignment: 'right' },
-        ],
-        margin: [0, 0, 0, 5],
-      },
-
-      // Tabela de Itens
-      {
-        table: {
-          headerRows: 1,
-          widths: [30, '*', 50, 30, 65, 55, 70],
-          body: [
-            [
-              { text: 'Item\nNº', bold: true, fontSize: 8, alignment: 'center', fillColor: '#e0e0e0', margin: [2, 3, 2, 3] },
-              { text: 'Descrição', bold: true, fontSize: 8, fillColor: '#e0e0e0', margin: [2, 3, 2, 3] },
-              { text: 'COR', bold: true, fontSize: 8, alignment: 'center', fillColor: '#e0e0e0', margin: [2, 3, 2, 3] },
-              { text: 'Qtde', bold: true, fontSize: 8, alignment: 'center', fillColor: '#e0e0e0', margin: [2, 3, 2, 3] },
-              { text: 'Preço Unitário', bold: true, fontSize: 8, alignment: 'right', fillColor: '#e0e0e0', margin: [2, 3, 2, 3] },
-              { text: 'Desconto', bold: true, fontSize: 8, alignment: 'right', fillColor: '#e0e0e0', margin: [2, 3, 2, 3] },
-              { text: 'Total', bold: true, fontSize: 8, alignment: 'right', fillColor: '#e0e0e0', margin: [2, 3, 2, 3] },
-            ],
-            ...pedido.itens.map((item, idx) => [
-              { text: (idx + 1).toString(), fontSize: 9, alignment: 'center', fillColor: idx % 2 === 0 ? '#f9f9f9' : null, margin: [2, 3, 2, 3] },
-              { text: item.produto_nome.toUpperCase(), fontSize: 9, fillColor: idx % 2 === 0 ? '#f9f9f9' : null, margin: [2, 3, 2, 3] },
-              { text: item.cor_descricao?.toUpperCase() || 'S/N', fontSize: 8, alignment: 'center', fillColor: idx % 2 === 0 ? '#f9f9f9' : null, margin: [2, 3, 2, 3] },
-              { text: item.quantidade.toString(), fontSize: 9, alignment: 'center', fillColor: idx % 2 === 0 ? '#f9f9f9' : null, margin: [2, 3, 2, 3] },
-              { text: formatCurrency(item.valor_unitario), fontSize: 9, alignment: 'right', fillColor: idx % 2 === 0 ? '#f9f9f9' : null, margin: [2, 3, 2, 3] },
-              { text: item.desconto_valor > 0 ? formatCurrency(item.desconto_valor) : 'R$ 0,00', fontSize: 9, alignment: 'right', fillColor: idx % 2 === 0 ? '#f9f9f9' : null, margin: [2, 3, 2, 3] },
-              { text: formatCurrency(item.valor_total), fontSize: 10, alignment: 'right', bold: true, fillColor: idx % 2 === 0 ? '#f9f9f9' : null, margin: [2, 3, 2, 3] },
-            ]),
-          ],
-        },
-        layout: {
-          hLineWidth: () => 0.8,
-          vLineWidth: () => 0.8,
-          hLineColor: () => '#999',
-          vLineColor: () => '#999',
-        },
-      },
-
-      // Linha separadora
-      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }], margin: [0, 10, 0, 10] },
-
-      // Totais - Mais profissional
-      {
-        columns: [
-          { text: '', width: '*' },
-          {
-            table: {
-              widths: [100, 80],
-              body: [
-                [
-                  { text: 'Subtotal', fontSize: 10, alignment: 'right', border: [false, false, false, false], margin: [5, 2, 5, 2] },
-                  { text: formatCurrency(pedido.subtotal), fontSize: 10, alignment: 'right', border: [false, false, false, false], margin: [5, 2, 5, 2] },
-                ],
-                ...(pedido.desconto_valor > 0 ? [[
-                  { text: 'Descontos (R$)', fontSize: 10, alignment: 'right', border: [false, false, false, false], margin: [5, 2, 5, 2] },
-                  { text: `R$ ${pedido.desconto_valor.toFixed(2).replace('.', ',')}`, fontSize: 10, alignment: 'right', color: '#ef4444', border: [false, false, false, false], margin: [5, 2, 5, 2] },
-                ]] : []),
-                [
-                  { text: 'Total', fontSize: 12, bold: true, alignment: 'right', border: [false, true, false, false], margin: [5, 5, 5, 2], fillColor: '#f0f0f0' },
-                  { text: formatCurrency(pedido.total), fontSize: 12, bold: true, alignment: 'right', border: [false, true, false, false], margin: [5, 5, 5, 2], fillColor: '#f0f0f0' },
-                ],
-              ],
-            },
-            width: 180,
-            layout: {
-              hLineWidth: (i: number) => i === 2 ? 1.5 : 0,
-              vLineWidth: () => 0,
-              hLineColor: () => '#333',
-            },
-          },
-        ],
-      },
-
-      // Informações de Pagamento
-      ...(pedido.forma_pagamento ? [
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }], margin: [0, 15, 0, 10] },
-        { 
-          text: [
-            { text: 'Pagar: ', fontSize: 10, bold: true },
-            { text: pedido.forma_pagamento.toUpperCase(), fontSize: 10 }
-          ],
-          margin: [0, 0, 0, 5]
-        }
-      ] : []),
-
-      // Observações
-      ...(pedido.observacoes ? [
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }], margin: [0, 10, 0, 10] },
-        { text: 'obs.:', fontSize: 9, bold: true, margin: [0, 0, 0, 5] },
-        { text: pedido.observacoes, fontSize: 9, color: '#333' },
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }], margin: [0, 10, 0, 15] },
-      ] : [
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }], margin: [0, 10, 0, 10] },
-        { text: 'obs.:', fontSize: 9, bold: true, margin: [0, 0, 0, 5] },
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }], margin: [0, 30, 0, 15] },
-      ]),
-    ],
-    
-    // Rodapé
-    footer: (currentPage: number, pageCount: number) => {
-      return {
-        columns: [
-          { 
-            text: `Documento gerado em ${formatDate(dateToString(new Date()))}`,
-            fontSize: 7, 
-            color: '#666',
-            alignment: 'left',
-            margin: [30, 10, 30, 10]
-          },
-          { 
-            text: `Página ${currentPage} de ${pageCount}`, 
-            fontSize: 7, 
-            color: '#666',
-            alignment: 'right',
-            margin: [30, 10, 30, 10]
-          },
-        ],
-      };
+// Shared definition for download and print. Financial values come from the order, never from display rounding.
+export function criarDefinicaoPedido(pedido: DadosPedido, empresa: DadosEmpresa, logo?: string, agora = new Date()): TDocumentDefinitions {
+  validarPedido(pedido);
+  const rascunho = pedido.rascunho || pedido.numero === undefined;
+  const titulo = rascunho ? (pedido.numero === undefined ? 'Rascunho de venda' : `Rascunho ${numeroPedido(pedido)}`) : `Pedido ${numeroPedido(pedido)}`;
+  const status = rascunho ? 'Dados em edição no PDV' : situacoes[pedido.status ?? ''];
+  const descontosItens = pedido.itens.reduce((soma, i) => soma + Math.round(i.desconto_valor * 100), 0) / 100;
+  const temDescontos = descontosItens > 0;
+  const gerado = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Fortaleza', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(agora);
+  const secundario = (text: string): Content => ({ text, color: cor.secundario, fontSize: 9, margin: [0, 3, 0, 0] });
+  const coluna = (label: string, value?: string): ContentColumns['columns'][number] => ({ stack: [{ text: label, color: cor.secundario, fontSize: 9 }, { text: value || 'Não informado', fontSize: 10, bold: true, margin: [0, 4, 0, 0] }], width: '*' });
+  const cabecalho = (text: string, alignment: 'left' | 'right' = 'left'): TableCell => ({ text, bold: true, fontSize: 9, color: cor.texto, fillColor: cor.fundo, alignment });
+  const itemDinheiro = (value: number): ContentText => ({ text: moeda(value), alignment: 'right', fontSize: 9 });
+  const totais: TableCell[][] = [
+    ...(temDescontos ? [[{ text: 'Descontos nos itens (já aplicados)', color: cor.secundario, fontSize: 9 }, itemDinheiro(descontosItens)]] : []),
+    [{ text: 'Subtotal dos itens', color: cor.secundario }, itemDinheiro(pedido.subtotal)],
+    ...(pedido.desconto_valor > 0 ? [[{ text: 'Desconto do pedido', color: cor.secundario }, itemDinheiro(pedido.desconto_valor)]] : []),
+    [{ text: 'Total do pedido', bold: true, fontSize: 12, fillColor: cor.fundo }, { text: moeda(pedido.total), bold: true, fontSize: 16, alignment: 'right', fillColor: cor.fundo }],
+  ];
+  const corpo: TableCell[][] = [
+    [cabecalho('Nº'), cabecalho('Produto'), cabecalho('Qtd.', 'right'), cabecalho('Valor unit.', 'right'), ...(temDescontos ? [cabecalho('Desconto', 'right')] : []), cabecalho('Total', 'right')],
+    ...pedido.itens.map((item, idx): TableCell[] => [
+      { text: String(idx + 1), color: cor.secundario, fontSize: 9 },
+      { stack: [
+        { text: item.produto_nome || 'Produto', bold: true, fontSize: 10 },
+        ...([item.produto_codigo ? `Cód.: ${item.produto_codigo}` : '', item.cor_descricao ? `Cor: ${item.cor_descricao}` : ''].filter(Boolean).length ? [secundario([item.produto_codigo ? `Cód.: ${item.produto_codigo}` : '', item.cor_descricao ? `Cor: ${item.cor_descricao}` : ''].filter(Boolean).join(' · '))] : []),
+      ] },
+      { stack: [{ text: quantidade(item.quantidade), alignment: 'right' }, ...(item.produto_unidade ? [{ text: item.produto_unidade, fontSize: 8, color: cor.secundario, alignment: 'right' as const }] : [])] },
+      itemDinheiro(item.valor_unitario),
+      ...(temDescontos ? [itemDinheiro(item.desconto_valor)] : []),
+      { ...itemDinheiro(item.valor_total), bold: true },
+    ]),
+  ];
+  return {
+    pageSize: 'A4', pageMargins: [36, 44, 36, 48],
+    info: { title: titulo, author: empresa.nome_empresa, subject: 'Pedido de venda' },
+    defaultStyle: { font: 'Roboto', fontSize: 10, color: cor.texto, lineHeight: 1.15 },
+    header: (pagina) => pagina === 1 ? { text: '' } : {
+      columns: [{ text: empresa.nome_empresa, bold: true }, { text: titulo, alignment: 'right' }], fontSize: 9, color: cor.secundario, margin: [36, 20, 36, 0],
     },
+    footer: (pagina, total) => ({ columns: [
+      { text: `${titulo} · Gerado em ${gerado} (Fortaleza)`, width: '*' },
+      { text: `${pagina} / ${total}`, width: 45, alignment: 'right' },
+    ], fontSize: 8, color: cor.secundario, margin: [36, 16, 36, 0] }),
+    content: [
+      { columns: [
+        ...(logo ? [{ image: logo, fit: [48, 58] as [number, number], width: 58 }] : []),
+        { width: '*', stack: [
+          { text: empresa.nome_empresa || 'Lojas Manu', fontSize: 17, bold: true, color: cor.azul },
+          ...(empresa.razao_social ? [secundario(empresa.razao_social)] : []),
+          ...(empresa.endereco ? [secundario(empresa.endereco)] : []),
+          ...([empresa.telefone ? `Tel.: ${empresa.telefone}` : '', empresa.cnpj ? `CNPJ: ${empresa.cnpj}` : ''].some(Boolean) ? [secundario([empresa.telefone ? `Tel.: ${empresa.telefone}` : '', empresa.cnpj ? `CNPJ: ${empresa.cnpj}` : ''].filter(Boolean).join(' · '))] : []),
+          ...([empresa.instagram, empresa.site].some(Boolean) ? [secundario([empresa.instagram ? `Instagram: ${empresa.instagram}` : '', empresa.site].filter(Boolean).join(' · '))] : []),
+        ] },
+        { width: 158, alignment: 'right', stack: [{ text: titulo, bold: true, fontSize: 18 }, ...(status ? [secundario(status)] : []), secundario(formatDateBR(pedido.data))] },
+      ], columnGap: 10, margin: [0, 0, 0, 20] },
+      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 523.28, y2: 0, lineWidth: .6, lineColor: cor.linha }], margin: [0, 0, 0, 16] },
+      { text: 'Cliente', bold: true, fontSize: 11, margin: [0, 0, 0, 6] },
+      { text: pedido.cliente_nome || 'Cliente não informado', fontSize: 12, bold: true },
+      ...([pedido.cliente_cpf, pedido.cliente_telefone].some(Boolean) ? [secundario([pedido.cliente_cpf ? `CPF: ${cpf(pedido.cliente_cpf)}` : '', pedido.cliente_telefone ? `Tel.: ${pedido.cliente_telefone}` : ''].filter(Boolean).join(' · '))] : []),
+      secundario(pedido.endereco || 'Endereço não informado'),
+      { columns: [coluna('Atendimento', pedido.tipo_atendimento), coluna('Forma de pagamento', pedido.forma_pagamento)], columnGap: 20, margin: [0, 16, 0, 20] },
+      { columns: [{ text: 'Itens do pedido', bold: true, fontSize: 11 }, { text: `${pedido.itens.length} ${pedido.itens.length === 1 ? 'item' : 'itens'}`, alignment: 'right', color: cor.secundario, fontSize: 9 }], margin: [0, 0, 0, 8] },
+      { table: { headerRows: 1, keepWithHeaderRows: 1, dontBreakRows: false, widths: [20, '*', 38, 72, ...(temDescontos ? [60] : []), 78], body: corpo }, layout: {
+        hLineWidth: (i, node) => i === 0 ? 0 : i === 1 || i === node.table.body.length ? .7 : .4,
+        vLineWidth: () => 0, hLineColor: () => cor.linha,
+        paddingLeft: () => 6, paddingRight: () => 6, paddingTop: () => 8, paddingBottom: () => 8,
+      }, margin: [0, 0, 0, 14] },
+      { unbreakable: true, columns: [{ text: '', width: '*' }, { width: 300, table: { widths: ['*', 128], body: totais }, layout: {
+        hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 6, paddingBottom: () => 6,
+      } }] },
+      ...(pedido.observacoes?.trim() ? [{ text: 'Observações', fontSize: 11, bold: true, margin: [0, 20, 0, 6] } as Content, { text: pedido.observacoes, fontSize: 10, color: cor.secundario } as Content] : []),
+    ],
   };
+}
 
+async function carregarLogo(url: string): Promise<string | undefined> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return;
+    const blob = await response.blob();
+    if (!['image/png', 'image/jpeg'].includes(blob.type) || blob.size > 2_000_000) return;
+    const data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('Não foi possível ler o logo.'));
+      reader.readAsDataURL(blob);
+    });
+    // Reject HTML disguised as an image and corrupted files before pdfmake decodes them.
+    await new Promise<void>((resolve, reject) => {
+      const imagem = new Image(); imagem.onload = () => resolve(); imagem.onerror = () => reject(new Error('Logo inválido.')); imagem.src = data;
+    });
+    return data;
+  } catch { return; } finally { clearTimeout(timeout); }
+}
+
+export async function gerarPedidoPDF(pedido: DadosPedido, empresa: DadosEmpresa, acao: 'download' | 'print' = 'print', janelaImpressao?: Window) {
+  validarPedido(pedido);
+  if (janelaImpressao?.closed) throw new Error('A janela de impressão foi fechada. Clique em imprimir novamente.');
+  const logo = await carregarLogo(empresa.logo_url || '/icon-192x192.png');
+  const doc = criarDefinicaoPedido(pedido, empresa, logo);
   if (acao === 'print') {
     if (janelaImpressao?.closed) throw new Error('A janela de impressão foi fechada. Clique em imprimir novamente.');
-    pdfMake.createPdf(docDefinition).print({}, janelaImpressao);
-  } else {
-    pdfMake.createPdf(docDefinition).download(`pedido-${pedido.numero || 'sn'}.pdf`);
-  }
-};
+    pdfMake.createPdf(doc).print({}, janelaImpressao);
+  } else pdfMake.createPdf(doc).download(`pedido-${pedido.numero ?? 'rascunho'}.pdf`);
+}

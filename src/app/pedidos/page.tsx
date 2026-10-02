@@ -74,6 +74,7 @@ import { trpc } from '@/lib/trpc/client';
 import { OperationalHeader, OperationalSummary, operationalSurface, operationalTable } from '@/components/common/OperationalPage';
 import type { PedidoListado as Pedido } from '@/server/routers/pedidos';
 import { empresaParaDocumento, pedidoParaDocumento, buscarTodosFiltrados } from '@/lib/utils/documentos';
+import { comJanelaImpressao } from '@/lib/pdf/impressao-browser';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { validarFiltrosPedidos } from '@/lib/schemas/filtros-pedidos';
 import { formatarEndereco } from '@/lib/utils/endereco';
@@ -292,22 +293,23 @@ function PedidosPageContent() {
     const toastId = toast.loading('Gerando documento...');
 
     try {
-      // 1. Buscar dados completos do pedido (incluindo itens)
-      const pedidoCompleto = await utils.pedidos.getById.fetch({ id: pedido.id });
+      await comJanelaImpressao(acao, async janela => {
+        const pedidoCompleto = await utils.pedidos.getById.fetch({ id: pedido.id });
 
-      if (!pedidoCompleto) {
-        throw new Error('Pedido não encontrado');
-      }
+        if (!pedidoCompleto) {
+          throw new Error('Pedido não encontrado');
+        }
 
-      const dadosPedido = pedidoParaDocumento(pedidoCompleto);
-      const dadosEmpresa = empresaParaDocumento(configuracoes);
+        const dadosPedido = pedidoParaDocumento(pedidoCompleto);
+        const dadosEmpresa = empresaParaDocumento(configuracoes);
 
-      const { gerarPedidoPDF } = await import('@/lib/pdf/pedido-pdf');
-      await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
+        const { gerarPedidoPDF } = await import('@/lib/pdf/pedido-pdf');
+        await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao, janela);
+      });
       toast.dismiss(toastId);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
-      toast.error('Erro ao gerar o documento. Tente novamente.', { id: toastId });
+      toast.error(error instanceof Error ? error.message : 'Erro ao gerar o documento. Tente novamente.', { id: toastId });
     }
   };
 

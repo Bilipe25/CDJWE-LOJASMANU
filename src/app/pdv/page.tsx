@@ -232,7 +232,7 @@ function PDVPageContent() {
         tipo_atendimento_id: pedidoParaEditar.tipo_atendimento_id ?? undefined, forma_pagamento_id: pedidoParaEditar.forma_pagamento_id ?? undefined,
         telefone_contato: pedidoParaEditar.telefone_contato ?? cliente?.telefone ?? '', observacao: pedidoParaEditar.observacao ?? '',
         desconto_valor: pedidoParaEditar.desconto_valor ?? 0, status: pedidoParaEditar.status as 'PENDENTE' | 'CONFIRMADO',
-        itens: pedidoParaEditar.itens.map(item => ({ id: item.id ?? undefined, produto_id: item.produto_id!, produto_nome: item.produto_nome ?? 'Produto', produto_codigo: item.produto_codigo ?? undefined, cor_id: item.cor_id ?? undefined, cor_descricao: item.cor_descricao ?? undefined, quantidade: item.quantidade ?? 0, valor_unitario: item.valor_unitario ?? 0, desconto_valor: item.desconto_valor ?? 0, valor_total: item.valor_total ?? 0, ordem: item.ordem ?? 0 })),
+        itens: pedidoParaEditar.itens.map(item => ({ id: item.id ?? undefined, produto_id: item.produto_id!, produto_nome: item.produto_nome ?? 'Produto', produto_codigo: item.produto_codigo ?? undefined, produto_unidade: item.produto_unidade ?? undefined, cor_id: item.cor_id ?? undefined, cor_descricao: item.cor_descricao ?? undefined, quantidade: item.quantidade ?? 0, valor_unitario: item.valor_unitario ?? 0, desconto_valor: item.desconto_valor ?? 0, valor_total: item.valor_total ?? 0, ordem: item.ordem ?? 0 })),
       });
       setSearchCliente(cliente?.nome ?? '');
       setModoEdicao(true); setPedidoOriginalId(pedidoEditId); edicaoHidratada.current = pedidoEditId; setFalhaHidratacao('');
@@ -344,6 +344,7 @@ function PDVPageContent() {
       produto_id: produtoSelecionado.id,
       produto_nome: produtoSelecionado.nome,
       produto_codigo: produtoSelecionado.codigo ?? undefined,
+      produto_unidade: produtoSelecionado.unidade ?? undefined,
       cor_id: corSelecionada?.id,
       cor_descricao: corSelecionada?.descricao ?? undefined,
       quantidade,
@@ -620,6 +621,7 @@ function PDVPageContent() {
 
     const dadosPedido = {
       numero: pedidoAtual.numero,
+      rascunho: true,
       data: pedidoAtual.data,
       cliente_nome: clienteSelecionado?.nome,
       cliente_cpf: clienteSelecionado?.cpf ?? undefined,
@@ -628,7 +630,7 @@ function PDVPageContent() {
       tipo_atendimento: tiposAtendimento?.find((t) => t.id === tipoAtendimentoId)?.nome,
       forma_pagamento: formasPagamento?.find((f) => f.id === formaPagamentoId)?.nome,
       observacoes: observacoes,
-      itens: pedidoAtual.itens,
+      itens: pedidoAtual.itens.map(item => ({ ...item, produto_unidade: item.produto_unidade ?? produtos?.produtos.find(p => p.id === item.produto_id)?.unidade ?? undefined })),
       subtotal: pedidoAtual.subtotal,
       desconto_valor: pedidoAtual.desconto_valor,
       total: pedidoAtual.total,

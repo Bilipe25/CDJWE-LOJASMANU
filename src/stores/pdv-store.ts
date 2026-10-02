@@ -7,6 +7,7 @@ export interface ItemCarrinho {
   produto_id: string;
   produto_nome: string;
   produto_codigo?: string;
+  produto_unidade?: string;
   cor_id?: string;
   cor_descricao?: string;
   quantidade: number;

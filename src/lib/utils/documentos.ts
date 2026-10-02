@@ -17,19 +17,19 @@ export interface PedidoExportacao {
   total: number | null; status: string | null; total_itens?: number | null;
 }
 export interface DadosPedidoDocumento {
-  numero?: number; data: string; cliente_nome?: string; cliente_cpf?: string; cliente_telefone?: string;
+  numero?: number; data: string; status?: string; rascunho?: boolean; cliente_nome?: string; cliente_cpf?: string; cliente_telefone?: string;
   endereco?: string; tipo_atendimento?: string; forma_pagamento?: string; observacoes?: string;
-  itens: { produto_nome: string; produto_codigo?: string; cor_descricao?: string; quantidade: number; valor_unitario: number; desconto_valor: number; valor_total: number }[];
+  itens: { produto_nome: string; produto_codigo?: string; produto_unidade?: string; cor_descricao?: string; quantidade: number; valor_unitario: number; desconto_valor: number; valor_total: number }[];
   subtotal: number; desconto_valor: number; total: number;
 }
 export function pedidoParaDocumento(pedido: Views<'vw_pedidos_completos'> & { telefone_contato: string | null; endereco: Parameters<typeof formatarEndereco>[0]; itens: Views<'vw_itens_pedido_completos'>[] }): DadosPedidoDocumento {
   if (!pedido.data) throw new Error('Pedido sem data para impressão');
   return {
-    numero: pedido.numero ?? undefined, data: pedido.data, cliente_nome: pedido.cliente_nome ?? undefined,
+    numero: pedido.numero ?? undefined, data: pedido.data, status: pedido.status ?? undefined, cliente_nome: pedido.cliente_nome ?? undefined,
     cliente_cpf: pedido.cliente_cpf ?? undefined, cliente_telefone: pedido.telefone_contato || pedido.cliente_telefone || undefined,
     endereco: formatarEndereco(pedido.endereco), tipo_atendimento: pedido.tipo_atendimento_nome ?? undefined,
     forma_pagamento: pedido.forma_pagamento_nome ?? undefined, observacoes: pedido.observacao ?? undefined,
-    itens: pedido.itens.map(i => ({ produto_nome: i.produto_nome || 'Produto', produto_codigo: i.produto_codigo ?? undefined, cor_descricao: i.cor_descricao ?? undefined, quantidade: i.quantidade ?? 0, valor_unitario: i.valor_unitario ?? 0, desconto_valor: i.desconto_valor ?? 0, valor_total: i.valor_total ?? 0 })),
+    itens: pedido.itens.map(i => ({ produto_nome: i.produto_nome || 'Produto', produto_codigo: i.produto_codigo ?? undefined, produto_unidade: i.produto_unidade ?? undefined, cor_descricao: i.cor_descricao ?? undefined, quantidade: i.quantidade ?? 0, valor_unitario: i.valor_unitario ?? 0, desconto_valor: i.desconto_valor ?? 0, valor_total: i.valor_total ?? 0 })),
     subtotal: pedido.subtotal ?? 0, desconto_valor: pedido.desconto_valor ?? 0, total: pedido.total ?? 0,
   };
 }
