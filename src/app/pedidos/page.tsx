@@ -14,6 +14,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
+  LinearProgress,
   IconButton,
   Chip,
   TablePagination,
@@ -56,8 +58,6 @@ import {
   Edit,
   Close,
   AttachMoney,
-  Notes,
-  Check,
   Delete,
   MoreVert,
   FileDownload,
@@ -90,6 +90,9 @@ function PedidosPageContent() {
   // Hook customizado para gerenciar filtros com persistência
   const {
     filtros,
+    filtrosAplicados,
+    erroPeriodo,
+    atualizarFiltros,
     pronto,
     atualizarFiltro,
     limparFiltros: limparFiltrosHook,
@@ -109,39 +112,50 @@ function PedidosPageContent() {
     tipoAtendimento,
     formaPagamento,
     clienteSelecionado,
-    filtrosExpanded
+    filtrosExpanded,
+    ordenarPor,
+    direcao,
   } = filtros;
   const [pedidoDetalhes, setPedidoDetalhes] = useState<Pedido | null>(null);
   const [dialogDetalhes, setDialogDetalhes] = useState(false);
-  const [dialogEditar, setDialogEditar] = useState(false);
   const [searchCliente, setSearchCliente] = useState('');
-  const [pedidoEditando, setPedidoEditando] = useState<any>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
     message: string;
     onConfirm: () => void;
     severity?: 'warning' | 'error' | 'info' | 'success';
+    confirmText?: string;
   }>({ open: false, title: '', message: '', onConfirm: () => { }, severity: 'warning' });
   const [printDialog, setPrintDialog] = useState<{
     open: boolean;
     pedido: Pedido | null;
   }>({ open: false, pedido: null });
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
-  const [pedidoSelecionado, setPedidoSelecionado] = useState<any>(null);
+  const [pedidoSelecionado, setPedidoSelecionado] = useState<Pedido | null>(null);
   const [dialogExportar, setDialogExportar] = useState(false);
   const [escopoExportacao, setEscopoExportacao] = useState<'pagina' | 'todos'>('pagina');
   const [exportando, setExportando] = useState(false);
   const [progressoExportacao, setProgressoExportacao] = useState('');
   const exportacaoEmCurso = useRef(false);
   const buscaClienteDebounced = useDebouncedValue(searchCliente);
-  const buscaDebounced = useDebouncedValue(search);
+  const buscaDebounced = useDebouncedValue(filtrosAplicados.search);
+  const buscaPedidoRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const atalho = (event: KeyboardEvent) => {
+      if (event.key === 'F2' && !document.querySelector('[role="dialog"]')) {
+        event.preventDefault(); buscaPedidoRef.current?.focus(); buscaPedidoRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', atalho);
+    return () => window.removeEventListener('keydown', atalho);
+  }, []);
   const [colunasExportacao, setColunasExportacao] = useState([
     { id: 'numero', label: 'Número', selecionada: true },
     { id: 'data', label: 'Data', selecionada: true },
     { id: 'cliente', label: 'Cliente', selecionada: true },
     { id: 'tipo', label: 'Tipo', selecionada: true },
-    { id: 'pagamento', label: 'Forma Pagamento', selecionada: true },
+    { id: 'pagamento', label: 'Forma de pagamento', selecionada: true },
     { id: 'itens', label: 'Qtd. Itens', selecionada: false },
     { id: 'total', label: 'Total', selecionada: true },
     { id: 'status', label: 'Status', selecionada: true },
@@ -163,20 +177,21 @@ function PedidosPageContent() {
 
   const filtrosConsulta = {
     search: buscaDebounced || undefined,
-    status,
-    dataInicio: dataInicio || undefined,
-    dataFim: dataFim || undefined,
-    tipoAtendimento: tipoAtendimento || undefined,
-    formaPagamentoId: formaPagamento || undefined,
-    clienteId: clienteSelecionado?.id,
+    status: filtrosAplicados.status,
+    dataInicio: filtrosAplicados.dataInicio || undefined,
+    dataFim: filtrosAplicados.dataFim || undefined,
+    tipoAtendimento: filtrosAplicados.tipoAtendimento || undefined,
+    formaPagamentoId: filtrosAplicados.formaPagamento || undefined,
+    clienteId: filtrosAplicados.clienteSelecionado?.id,
   };
-  const { data, isLoading, error: erroLista, isFetching: atualizandoLista, refetch: recarregarLista } = trpc.pedidos.list.useQuery({ ...filtrosConsulta, limit: rowsPerPage, offset: page * rowsPerPage }, { enabled: pronto });
+  const consultaOrdenada = { ...filtrosConsulta, ordenarPor: filtrosAplicados.ordenarPor, direcao: filtrosAplicados.direcao };
+  const { data, isLoading, isPlaceholderData: mostrandoConsultaAnterior, error: erroLista, isFetching: atualizandoLista, refetch: recarregarLista } = trpc.pedidos.list.useQuery({ ...consultaOrdenada, limit: filtrosAplicados.rowsPerPage, offset: filtrosAplicados.page * filtrosAplicados.rowsPerPage }, { enabled: pronto && !erroPeriodo, placeholderData: anterior => anterior });
 
-  const { data: dadosEstatisticas, error: erroEstatisticas, refetch: recarregarEstatisticas } = trpc.pedidos.estatisticas.useQuery(filtrosConsulta, { enabled: pronto });
+  const { data: dadosEstatisticas, error: erroEstatisticas, isLoading: carregandoEstatisticas, isFetching: atualizandoEstatisticas, refetch: recarregarEstatisticas } = trpc.pedidos.estatisticas.useQuery(filtrosConsulta, { enabled: pronto && !erroPeriodo, placeholderData: anterior => anterior });
 
   useEffect(() => {
-    if (data && page > Math.max(0, Math.ceil(data.total / rowsPerPage) - 1)) atualizarFiltro('page', Math.max(0, Math.ceil(data.total / rowsPerPage) - 1));
-  }, [data, page, rowsPerPage, atualizarFiltro]);
+    if (!erroPeriodo && !mostrandoConsultaAnterior && data && page > Math.max(0, Math.ceil(data.total / rowsPerPage) - 1)) atualizarFiltro('page', Math.max(0, Math.ceil(data.total / rowsPerPage) - 1));
+  }, [data, page, rowsPerPage, atualizarFiltro, erroPeriodo, mostrandoConsultaAnterior]);
   const { data: clienteDoFiltro } = trpc.clientes.getById.useQuery({ id: clienteSelecionado?.id || '' }, { enabled: pronto && !!clienteSelecionado?.id && !clienteSelecionado.nome });
   const nomeClienteFiltro = clienteSelecionado?.nome || clienteDoFiltro?.nome || 'Cliente selecionado';
 
@@ -209,10 +224,8 @@ function PedidosPageContent() {
   const cancelarMutation = trpc.pedidos.cancelar.useMutation();
   const finalizarMutation = trpc.pedidos.finalizar.useMutation();
   const duplicarMutation = trpc.pedidos.duplicar.useMutation();
-  const atualizarMutation = trpc.pedidos.update.useMutation();
   const deletarMutation = trpc.pedidos.delete.useMutation();
 
-  const { data: tiposAtendimento } = trpc.dominios.tiposAtendimento.list.useQuery();
   const { data: formasPagamento } = trpc.dominios.formasPagamento.list.useQuery();
   const { data: configuracoes, error: erroEmpresa, isLoading: carregandoEmpresa } = trpc.configuracoes.get.useQuery();
 
@@ -254,6 +267,15 @@ function PedidosPageContent() {
       return '-';
     }
   };
+  const formatTelefone = (valor: string) => {
+    let digitos = valor.replace(/\D/g, '');
+    if (digitos.length === 13 && digitos.startsWith('55')) digitos = digitos.slice(2);
+    if (digitos.length === 11) return digitos.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
+    if (digitos.length === 10) return digitos.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
+    return valor;
+  };
+  const ordenarPedidos = (coluna: 'data' | 'numero' | 'total') => atualizarFiltros({ ordenarPor: coluna, direcao: ordenarPor === coluna && direcao === 'desc' ? 'asc' : 'desc' });
+  const resumoPedido = (pedido: Pedido) => `Pedido #${pedido.numero}\nCliente: ${pedido.cliente_nome || 'Não informado'}\nTotal: ${formatCurrency(pedido.total)}`;
 
 
 
@@ -277,12 +299,14 @@ function PedidosPageContent() {
     return colorMap[tipoUpper] || 'default';
   };
 
-  const handleFecharDialogDetalhes = () => {
+  const handleFecharDialogDetalhes = (navegando = false) => {
     setDialogDetalhes(false);
     setPedidoDetalhes(null);
     // Limpar parâmetro da URL
-    if (pedidoIdUrl) {
-      router.push('/pedidos');
+    if (pedidoIdUrl && !navegando) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('id');
+      router.replace('/pedidos' + (params.size ? '?' + params.toString() : ''), { scroll: false });
     }
   };
 
@@ -326,41 +350,13 @@ function PedidosPageContent() {
     router.push(`/pdv?edit=${pedido.id}`);
   };
 
-  const handleSalvarEdicao = async () => {
-    if (!pedidoEditando || atualizarMutation.isPending) return;
-
-    const toastId = toast.loading('Salvando alterações...');
-
-    try {
-      await atualizarMutation.mutateAsync({
-        id: pedidoEditando.id,
-        versao: pedidoEditando.versao,
-        cliente_id: pedidoEditando.cliente_id || undefined,
-        endereco_id: pedidoEditando.endereco_id || undefined,
-        tipo_atendimento_id: pedidoEditando.tipo_atendimento_id || undefined,
-        forma_pagamento_id: pedidoEditando.forma_pagamento_id || undefined,
-        desconto_valor: pedidoEditando.desconto_valor ?? 0,
-        observacao: pedidoEditando.observacao,
-        status: pedidoEditando.status === 'CONFIRMADO' ? 'CONFIRMADO' : 'PENDENTE',
-      });
-
-      toast.success('Pedido atualizado com sucesso!', { id: toastId });
-      setDialogEditar(false);
-      setPedidoEditando(null);
-
-      // Atualizar lista sem reload
-      await atualizarListaPedidos();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Erro ao atualizar pedido. Tente novamente.', { id: toastId });
-    }
-  };
-
   const handleCancelarPedido = async (pedido: Pedido | null) => {
     if (!pedido) return;
     setConfirmDialog({
       open: true,
-      title: 'Cancelar Pedido',
-      message: `Deseja realmente cancelar o pedido #${pedido.numero}?\n\nO pedido ficará com status CANCELADO.`,
+      title: 'Cancelar pedido',
+      message: `${resumoPedido(pedido)}\n\nO pedido ficará cancelado. Deseja continuar?`,
+      confirmText: 'Cancelar pedido',
       severity: 'warning',
       onConfirm: async () => {
         const toastId = toast.loading('Cancelando pedido...');
@@ -381,8 +377,9 @@ function PedidosPageContent() {
     if (!pedido) return;
     setConfirmDialog({
       open: true,
-      title: 'Finalizar Pedido',
-      message: `Deseja finalizar o pedido #${pedido.numero}?\n\nO pedido ficará com status FINALIZADO.`,
+      title: 'Finalizar pedido',
+      message: `${resumoPedido(pedido)}\n\nO pedido ficará finalizado e não poderá ser editado. Confira os dados antes de continuar.`,
+      confirmText: 'Finalizar pedido',
       severity: 'success',
       onConfirm: async () => {
         const toastId = toast.loading('Finalizando pedido...');
@@ -404,8 +401,9 @@ function PedidosPageContent() {
     const chave = crypto.randomUUID();
     setConfirmDialog({
       open: true,
-      title: 'Duplicar Pedido',
-      message: `Deseja duplicar o pedido #${pedido.numero}?\n\nUma cópia do pedido será criada com todos os itens.`,
+      title: 'Duplicar pedido',
+      message: `${resumoPedido(pedido)}\n\nSerá criado outro pedido com uma cópia dos itens. O original será preservado.`,
+      confirmText: 'Duplicar pedido',
       severity: 'info',
       onConfirm: async () => {
         const toastId = toast.loading('Duplicando pedido...');
@@ -426,8 +424,9 @@ function PedidosPageContent() {
     if (!pedido) return;
     setConfirmDialog({
       open: true,
-      title: 'Excluir Pedido Permanentemente',
-      message: `⚠️ ATENÇÃO: Deseja realmente EXCLUIR o pedido #${pedido.numero}?\n\n✗ Esta ação NÃO pode ser desfeita!\n✗ Todos os itens do pedido também serão excluídos.\n✗ Não será possível recuperar os dados.`,
+      title: 'Excluir pedido permanentemente',
+      message: `${resumoPedido(pedido)}\n\nO pedido e seus itens serão excluídos permanentemente. Esta ação não pode ser desfeita.`,
+      confirmText: 'Excluir pedido',
       severity: 'error',
       onConfirm: async () => {
         const toastId = toast.loading('Excluindo pedido...');
@@ -450,10 +449,10 @@ function PedidosPageContent() {
 
   const exportar = async (formato: 'pdf' | 'excel') => {
     if (erroEmpresa || carregandoEmpresa) { toast.error('Dados da empresa indisponíveis. Tente novamente antes de exportar.'); return; }
-    if (search !== buscaDebounced || atualizandoLista || exportacaoEmCurso.current || erroLista || !data || !colunasExportacao.some(c => c.selecionada)) return;
+    if (erroPeriodo || search !== buscaDebounced || atualizandoLista || exportacaoEmCurso.current || erroLista || !data || !colunasExportacao.some(c => c.selecionada)) return;
     exportacaoEmCurso.current = true; setExportando(true); setProgressoExportacao('Preparando exportação…');
     // Congelar filtros, colunas e empresa antes de aguardar as consultas.
-    const consulta = { ...filtrosConsulta }, colunas = colunasExportacao.map(c => ({ ...c }));
+    const consulta = { ...consultaOrdenada }, colunas = colunasExportacao.map(c => ({ ...c }));
     const empresa = empresaParaDocumento(configuracoes);
     const filtrosTexto = [escopoExportacao === 'todos' ? 'Todos os pedidos filtrados' : 'Página atual'];
     if (search) filtrosTexto.push('Busca: ' + search);
@@ -514,27 +513,34 @@ function PedidosPageContent() {
   return (
     <AppLayout>
       <OperationalHeader description="Consulte, confira e acompanhe os pedidos." actions={<>
-        <Button variant="outlined" startIcon={<FileDownload />} onClick={() => setDialogExportar(true)}>Exportar</Button>
+        <Button variant="outlined" startIcon={<FileDownload />} disabled={!!erroPeriodo} onClick={() => setDialogExportar(true)}>Exportar</Button>
         <Button variant="contained" startIcon={<Receipt />} onClick={() => router.push('/pdv')}>Novo pedido</Button>
       </>} />
       {erroEstatisticas && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => recarregarEstatisticas()}>Tentar novamente</Button>}>Indicadores indisponíveis.</Alert>}
-      <OperationalSummary label="Indicadores da consulta" variant="cards" items={[
-        { label: 'Pedidos na consulta', value: erroEstatisticas ? '—' : estatisticas.totalPedidos ?? '—' },
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 1 }}>
+        <Typography variant="caption" color="text.secondary">Indicadores dos pedidos filtrados</Typography>
+        <Typography variant="caption" color="text.secondary" role="status" aria-live="polite">{erroPeriodo ? 'Última consulta válida' : (atualizandoLista || atualizandoEstatisticas || search !== buscaDebounced) ? 'Atualizando consulta…' : ''}</Typography>
+      </Box>
+      <OperationalSummary label="Indicadores dos pedidos filtrados" variant="cards" loading={carregandoEstatisticas} items={[
+        { label: 'Pedidos', value: erroEstatisticas ? '—' : estatisticas.totalPedidos ?? '—' },
         { label: 'Pendentes', value: erroEstatisticas ? '—' : estatisticas.pedidosPendentes ?? '—' },
-        { label: 'Vendas finalizadas na consulta', value: erroEstatisticas || estatisticas.totalVendas === undefined ? '—' : formatCurrency(estatisticas.totalVendas) },
-        { label: 'Finalizados hoje na consulta', value: erroEstatisticas ? '—' : estatisticas.finalizadosHoje ?? '—' },
+        { label: 'Vendas finalizadas', help: 'Soma dos totais dos pedidos finalizados do tipo ENTRADA que atendem aos filtros. Não representa recebimentos em caixa.', value: erroEstatisticas || estatisticas.totalVendas === undefined ? '—' : formatCurrency(estatisticas.totalVendas) },
+        { label: 'Finalizados hoje', help: 'Pedidos da consulta finalizados hoje, pela data de finalização no horário de Fortaleza. Os filtros de período usam a data do pedido.', value: erroEstatisticas ? '—' : estatisticas.finalizadosHoje ?? '—' },
       ]} />
+      {erroPeriodo && <Alert severity="warning" sx={{ mb: 2 }}>{erroPeriodo} Corrija o período para atualizar a consulta e exportar. Os resultados anteriores foram mantidos.</Alert>}
       <Card sx={{ ...operationalSurface, overflow: 'hidden', maxWidth: '100%' }}>
 <Box sx={{ p: 2.5 }}><Grid container spacing={2} alignItems="center">              <Grid item xs={12} sm={6} md={6}>
                 <TextField
                   fullWidth size="small"
                   label="Buscar pedido"
+                  inputRef={buscaPedidoRef}
                   placeholder="Número, cliente..."
                   value={search}
                   onChange={(e) => {
                     atualizarFiltro('search', e.target.value);
                   }}
                   InputProps={{
+                    endAdornment: <InputAdornment position="end"><Typography variant="caption" color="text.secondary">F2</Typography></InputAdornment>,
                     startAdornment: (
                       <InputAdornment position="start">
                         <Search />
@@ -568,13 +574,22 @@ function PedidosPageContent() {
 
     <Grid item xs={12} md={3}><Button fullWidth variant="outlined" startIcon={<FilterList />} aria-expanded={filtrosExpanded} aria-controls="pedidos-filtros-adicionais" onClick={() => atualizarFiltro('filtrosExpanded', !filtrosExpanded)}>Filtros adicionais {contarFiltrosAtivos > 0 ? '(' + contarFiltrosAtivos + ')' : ''}</Button></Grid>
     </Grid>
-    {temFiltrosAtivos && <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2, alignItems: 'center' }}>
+    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
+      {(['hoje', 'mes'] as const).map(periodo => {
+        const hoje = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Fortaleza' }).format(new Date());
+        const inicio = periodo === 'hoje' ? hoje : hoje.slice(0, 7) + '-01';
+        const ativo = dataInicio === inicio && dataFim === hoje;
+        return <Button key={periodo} size="small" variant={ativo ? 'outlined' : 'text'} aria-pressed={ativo} onClick={() => atualizarFiltros({ dataInicio: ativo ? '' : inicio, dataFim: ativo ? '' : hoje })}>{periodo === 'hoje' ? 'Hoje' : 'Este mês'}</Button>;
+      })}
+      <Button size="small" variant={status === 'PENDENTE' ? 'outlined' : 'text'} aria-pressed={status === 'PENDENTE'} onClick={() => atualizarFiltro('status', status === 'PENDENTE' ? '' : 'PENDENTE')}>Pendentes</Button>
+    </Box>
+    {temFiltrosAtivos && <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5, alignItems: 'center' }}>
       {search && <Chip size="small" variant="outlined" label={'Busca: ' + search} onDelete={() => atualizarFiltro('search', '')} />}
       {status && <StatusBadge status={status} onDelete={() => atualizarFiltro('status', '')} />}
       {tipoAtendimento && <Chip size="small" label={'Tipo: ' + tipoAtendimento} onDelete={() => atualizarFiltro('tipoAtendimento', '')} />}
       {formaPagamento && <Chip size="small" label={'Pagamento: ' + (formasPagamento?.find(f => f.id === formaPagamento)?.nome || 'Carregando…')} onDelete={() => atualizarFiltro('formaPagamento', '')} />}
       {clienteSelecionado && <Chip size="small" label={'Cliente: ' + nomeClienteFiltro} onDelete={() => atualizarFiltro('clienteSelecionado', null)} />}
-      {(dataInicio || dataFim) && <Chip size="small" label={(dataInicio ? formatDate(dataInicio) : 'Início livre') + ' a ' + (dataFim ? formatDate(dataFim) : 'Fim livre')} />}
+      {(dataInicio || dataFim) && <Chip size="small" color={erroPeriodo ? 'warning' : 'default'} label={(dataInicio ? formatDate(dataInicio) : 'Início livre') + ' a ' + (dataFim ? formatDate(dataFim) : 'Fim livre')} onDelete={() => atualizarFiltros({ dataInicio: '', dataFim: '' })} />}
       <Button size="small" startIcon={<Close />} onClick={limparFiltros}>Limpar filtros</Button>
     </Box>}
     </Box>
@@ -611,10 +626,10 @@ function PedidosPageContent() {
 
               <Grid item xs={12} sm={6} md={2}>
                 <FormControl fullWidth>
-                  <InputLabel id="pedidos-select-3">Forma Pgto.</InputLabel>
+                  <InputLabel id="pedidos-select-3">Forma de pagamento</InputLabel>
                     <Select labelId="pedidos-select-3"
                     value={formaPagamento}
-                    label="Forma Pgto."
+                    label="Forma de pagamento"
                     onChange={(e) => {
                       atualizarFiltro('formaPagamento', e.target.value);
                     }}
@@ -639,6 +654,7 @@ function PedidosPageContent() {
                   fullWidth
                   type="date"
                   label="Data Início"
+                  error={!!erroPeriodo}
                   value={dataInicio}
                   onChange={(e) => {
                     atualizarFiltro('dataInicio', e.target.value);
@@ -653,6 +669,8 @@ function PedidosPageContent() {
                   fullWidth
                   type="date"
                   label="Data Fim"
+                  error={!!erroPeriodo}
+                  helperText={erroPeriodo || undefined}
                   value={dataFim}
                   onChange={(e) => {
                     atualizarFiltro('dataFim', e.target.value);
@@ -703,31 +721,32 @@ function PedidosPageContent() {
         )}
 
         {/* Tabela */}
-        {erroLista ? <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarLista()}>Tentar novamente</Button>}>Não foi possível carregar os pedidos. Confira a conexão e tente novamente.</Alert> : isLoading ? (
+        {erroLista ? <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarLista()}>Tentar novamente</Button>}>Não foi possível carregar os pedidos. Confira a conexão e tente novamente.</Alert> : !pronto || isLoading ? (
           <Box sx={{ p: 2 }}><LoadingSkeleton type="table" rows={5} /></Box>
-        ) : pedidos.length === 0 ? (
+        ) : erroPeriodo && !data ? <Box sx={{ p: 2.5 }}><Typography color="text.secondary">Corrija o período para consultar os pedidos.</Typography></Box> : pedidos.length === 0 ? (
           <EmptyState
             icon={<Receipt />}
             title="Nenhum pedido encontrado"
             description={
-              status
-                ? 'Tente ajustar os filtros de busca'
+              temFiltrosAtivos
+                ? 'Nenhum pedido corresponde à busca e aos filtros. Ajuste os critérios ou limpe os filtros.'
                 : 'Os pedidos aparecerão aqui quando forem criados'
             }
           />
         ) : (
           <>
-            <TableContainer>
+            {atualizandoLista && <LinearProgress aria-label="Atualizando pedidos" />}
+            <TableContainer aria-busy={atualizandoLista}>
               <Table size="small" sx={operationalTable}>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Número</TableCell>
-                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Data</TableCell>
+                    <TableCell sortDirection={ordenarPor === 'numero' ? direcao : false} sx={{ display: { xs: 'none', sm: 'table-cell' } }}><TableSortLabel disabled={!!erroPeriodo} active={ordenarPor === 'numero'} direction={ordenarPor === 'numero' ? direcao : 'desc'} onClick={() => ordenarPedidos('numero')}>Número</TableSortLabel></TableCell>
+                    <TableCell sortDirection={ordenarPor === 'data' ? direcao : false} sx={{ display: { xs: 'none', sm: 'table-cell' } }}><TableSortLabel disabled={!!erroPeriodo} active={ordenarPor === 'data'} direction={ordenarPor === 'data' ? direcao : 'desc'} onClick={() => ordenarPedidos('data')}>Data</TableSortLabel></TableCell>
                     <TableCell>Cliente</TableCell>
                     <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Tipo</TableCell>
                     <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Pagamento</TableCell>
                     <TableCell align="right" sx={{ display: { xs: 'none', xl: 'table-cell' } }}>Itens</TableCell>
-                    <TableCell align="right">Total</TableCell>
+                    <TableCell align="right" sortDirection={ordenarPor === 'total' ? direcao : false}><TableSortLabel disabled={!!erroPeriodo} active={ordenarPor === 'total'} direction={ordenarPor === 'total' ? direcao : 'desc'} onClick={() => ordenarPedidos('total')}>Total</TableSortLabel></TableCell>
                     <TableCell align="center" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Status</TableCell>
                     <TableCell align="right">Ações</TableCell>
                   </TableRow>
@@ -746,13 +765,7 @@ function PedidosPageContent() {
                       }}
                     >
                       <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                        <Chip
-                          label={`#${pedido.numero}`}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
-                        />
+                        <Button size="small" aria-label={'Consultar pedido #' + pedido.numero} onClick={e => { e.stopPropagation(); handleVisualizarPedido(pedido); }} sx={{ p: 0.5, minWidth: 0, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>#{pedido.numero}</Button>
                       </TableCell>
                       <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{formatDate(pedido.data)}</TableCell>
                       <TableCell>
@@ -761,9 +774,9 @@ function PedidosPageContent() {
                           <Box sx={{ fontWeight: 600 }}>{pedido.cliente_nome || 'Cliente não informado'}</Box>
 <Box sx={{ display: { xs: 'block', sm: 'none' }, my: 0.5 }}><StatusBadge status={pedido.status || 'Não informado'} /></Box>
                           {pedido.cliente_telefone && (
-                            <Box sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-                              {pedido.cliente_telefone}
-                            </Box>
+                            <Typography variant="body2" color="text.secondary">
+                              {formatTelefone(pedido.cliente_telefone)}
+                            </Typography>
                           )}
                         </Box>
                       </TableCell>
@@ -777,30 +790,10 @@ function PedidosPageContent() {
                         />
                       </TableCell>
                       <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
-                        <Tooltip title={pedido.forma_pagamento_nome || 'Não informado'} arrow>
-                          <Chip
-                            label={pedido.forma_pagamento_nome || '-'}
-                            size="small"
-                            variant="outlined"
-                            color="default"
-                            icon={<AttachMoney />}
-                            sx={{
-                              maxWidth: '120px',
-                              '& .MuiChip-label': {
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }
-                            }}
-                          />
-                        </Tooltip>
+                        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 180, overflowWrap: 'anywhere' }}>{pedido.forma_pagamento_nome || 'Não informado'}</Typography>
                       </TableCell>
                       <TableCell align="right" sx={{ display: { xs: 'none', xl: 'table-cell' } }}>
-                        <Chip
-                          label={`${pedido.total_itens || 0} itens`}
-                          size="small"
-                          variant="outlined"
-                        />
+                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{pedido.total_itens || 0} {(pedido.total_itens || 0) === 1 ? 'item' : 'itens'}</Typography>
                       </TableCell>
                       <TableCell align="right">
                         <Box sx={{ fontWeight: 600, color: 'primary.main', fontSize: '1rem' }}>
@@ -851,9 +844,10 @@ function PedidosPageContent() {
             <TablePagination
               component="div"
               count={total}
-              page={page}
+              page={filtrosAplicados.page}
+              disabled={!!erroPeriodo}
               onPageChange={handleChangePage}
-              rowsPerPage={rowsPerPage}
+              rowsPerPage={filtrosAplicados.rowsPerPage}
               onRowsPerPageChange={handleChangeRowsPerPage}
               rowsPerPageOptions={[5, 10, 25, 50]}
               labelRowsPerPage={isMobile ? "Por pág:" : "Linhas por página:"}
@@ -887,7 +881,7 @@ function PedidosPageContent() {
           <ListItemIcon>
             <Edit fontSize="small" color={pedidoSelecionado?.status === 'CANCELADO' ? 'disabled' : 'primary'} />
           </ListItemIcon>
-          <ListItemText primary="Editar Pedido" />
+          <ListItemText primary="Editar pedido" />
         </MenuItem>
 
         <MenuItem onClick={() => handleMenuAction(() => setPrintDialog({ open: true, pedido: pedidoSelecionado }))}>
@@ -901,37 +895,37 @@ function PedidosPageContent() {
           <ListItemIcon>
             <ContentCopy fontSize="small" />
           </ListItemIcon>
-          <ListItemText primary="Duplicar Pedido" />
+          <ListItemText primary="Duplicar pedido" />
         </MenuItem>
 
         <Divider />
 
-        {['PENDENTE','CONFIRMADO'].includes(pedidoSelecionado?.status) && (
+        {['PENDENTE','CONFIRMADO'].includes(pedidoSelecionado?.status || '') && (
           <>
             <MenuItem onClick={() => handleMenuAction(() => handleFinalizarPedido(pedidoSelecionado))}>
               <ListItemIcon>
                 <CheckCircle fontSize="small" sx={{ color: 'success.main' }} />
               </ListItemIcon>
-              <ListItemText primary="Finalizar Pedido" />
+              <ListItemText primary="Finalizar pedido" />
             </MenuItem>
 
             <MenuItem onClick={() => handleMenuAction(() => handleCancelarPedido(pedidoSelecionado))}>
               <ListItemIcon>
                 <Cancel fontSize="small" sx={{ color: 'warning.main' }} />
               </ListItemIcon>
-              <ListItemText primary="Cancelar Pedido" />
+              <ListItemText primary="Cancelar pedido" />
             </MenuItem>
 
             <Divider />
           </>
         )}
 
-        {podeExcluir && <MenuItem onClick={() => handleMenuAction(() => handleExcluirPedido(pedidoSelecionado))} disabled={['CANCELADO','FINALIZADO'].includes(pedidoSelecionado?.status)}>
+        {podeExcluir && <MenuItem onClick={() => handleMenuAction(() => handleExcluirPedido(pedidoSelecionado))} disabled={['CANCELADO','FINALIZADO'].includes(pedidoSelecionado?.status || '')}>
           <ListItemIcon>
             <Delete fontSize="small" sx={{ color: 'error.main' }} />
           </ListItemIcon>
           <ListItemText
-            primary="Excluir Pedido"
+            primary="Excluir pedido"
             primaryTypographyProps={{ sx: { color: 'error.main' } }}
           />
         </MenuItem>}
@@ -940,7 +934,7 @@ function PedidosPageContent() {
       {/* Dialog de Detalhes do Pedido */}
       <Dialog
         open={dialogDetalhes}
-        onClose={handleFecharDialogDetalhes}
+        onClose={() => handleFecharDialogDetalhes()}
         maxWidth="md"
         fullWidth
         fullScreen={isMobile}
@@ -954,7 +948,7 @@ function PedidosPageContent() {
             </Typography>
             {pedidoDetalhes && <StatusBadge status={pedidoDetalhes.status || 'Não informado'} />}
           </Box>
-          <IconButton aria-label="Fechar detalhes do pedido" onClick={handleFecharDialogDetalhes}>
+          <IconButton aria-label="Fechar detalhes do pedido" onClick={() => handleFecharDialogDetalhes()}>
             <Close />
           </IconButton>
         </DialogTitle>
@@ -974,7 +968,7 @@ function PedidosPageContent() {
                 <Grid item xs={12} sm={4}>
                   <Typography variant="caption" color="text.secondary">Cliente</Typography>
                   <Typography fontWeight={600}>{pedidoCompleto.cliente_nome || 'Não informado'}</Typography>
-                  <Typography variant="body2">{pedidoCompleto.cliente_telefone || 'Telefone não informado'}</Typography>
+                  <Typography variant="body2">{pedidoCompleto.cliente_telefone ? formatTelefone(pedidoCompleto.cliente_telefone) : 'Telefone não informado'}</Typography>
                 </Grid>
                 <Grid item xs={12} sm={4}>
                   <Typography variant="caption" color="text.secondary">Endereço do pedido</Typography>
@@ -1002,7 +996,7 @@ function PedidosPageContent() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {pedidoCompleto.itens?.map((item: any, index: number) => (
+                      {pedidoCompleto.itens?.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell>
                             <Box>
@@ -1078,167 +1072,11 @@ function PedidosPageContent() {
         </DialogContent>
 
         <DialogActions sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider', gap: 1, flexWrap: 'wrap' }}>
-          <Button onClick={handleFecharDialogDetalhes} sx={{ mr: 'auto' }}>Fechar</Button>
+          <Button onClick={() => handleFecharDialogDetalhes()} sx={{ mr: 'auto' }}>Fechar</Button>
           <Button aria-haspopup="menu" startIcon={<MoreVert />} disabled={!pedidoCompleto || !!erroDetalhes} onClick={e => handleOpenMenu(e, pedidoCompleto || pedidoDetalhes)}>Mais ações</Button>
           <Button variant="outlined" startIcon={<Print />} disabled={!pedidoCompleto || !!erroDetalhes} onClick={() => { setPrintDialog({ open: true, pedido: pedidoCompleto || pedidoDetalhes }); handleFecharDialogDetalhes(); }}>Imprimir</Button>
-          {pedidoCompleto && !['CANCELADO', 'FINALIZADO'].includes(pedidoCompleto.status || '') && <Button variant="outlined" startIcon={<Edit />} onClick={() => { handleEditarPedido(pedidoCompleto); handleFecharDialogDetalhes(); }}>Editar</Button>}
+          {pedidoCompleto && !['CANCELADO', 'FINALIZADO'].includes(pedidoCompleto.status || '') && <Button variant="outlined" startIcon={<Edit />} onClick={() => { handleFecharDialogDetalhes(true); handleEditarPedido(pedidoCompleto); }}>Editar</Button>}
           {pedidoCompleto && ['PENDENTE', 'CONFIRMADO'].includes(pedidoCompleto.status || '') && <Button variant="contained" startIcon={<CheckCircle />} disabled={finalizarMutation.isPending} onClick={() => { void handleFinalizarPedido(pedidoCompleto); handleFecharDialogDetalhes(); }}>Finalizar pedido</Button>}
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog de Edição de Pedido */}      {/* Dialog de Edição de Pedido */}
-      <Dialog
-        open={dialogEditar}
-        onClose={() => setDialogEditar(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Edit color="primary" />
-            <Typography variant="h6" fontWeight="bold">
-              Editar Pedido
-            </Typography>
-          </Box>
-          <IconButton aria-label="Fechar edição do pedido" onClick={() => setDialogEditar(false)}>
-            <Close />
-          </IconButton>
-        </DialogTitle>
-
-        <DialogContent>
-          {pedidoEditando && (
-            <Box sx={{ pt: 2 }}>
-              <Grid container spacing={2}>
-                {/* Tipo de Atendimento */}
-                <Grid item xs={12}>
-                  <FormControl fullWidth>
-                    <InputLabel id="pedidos-select-4">Tipo de Atendimento</InputLabel>
-                    <Select labelId="pedidos-select-4"
-                      value={pedidoEditando.tipo_atendimento_id || ''}
-                      label="Tipo de Atendimento"
-                      onChange={(e) => setPedidoEditando({
-                        ...pedidoEditando,
-                        tipo_atendimento_id: e.target.value
-                      })}
-                    >
-                      <MenuItem value="">Nenhum</MenuItem>
-                      {tiposAtendimento?.map((tipo) => (
-                        <MenuItem key={tipo.id} value={tipo.id}>
-                          {tipo.nome}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                {/* Forma de Pagamento */}
-                <Grid item xs={12}>
-                  <FormControl fullWidth>
-                    <InputLabel id="pedidos-select-5">Forma de Pagamento</InputLabel>
-                    <Select labelId="pedidos-select-5"
-                      value={pedidoEditando.forma_pagamento_id || ''}
-                      label="Forma de Pagamento"
-                      onChange={(e) => setPedidoEditando({
-                        ...pedidoEditando,
-                        forma_pagamento_id: e.target.value
-                      })}
-                    >
-                      <MenuItem value="">Nenhuma</MenuItem>
-                      {formasPagamento?.map((forma) => (
-                        <MenuItem key={forma.id} value={forma.id}>
-                          {forma.nome}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                {/* Desconto */}
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Desconto (R$)"
-                    type="number"
-                    value={pedidoEditando.desconto_valor}
-                    onChange={(e) => setPedidoEditando({
-                      ...pedidoEditando,
-                      desconto_valor: parseFloat(e.target.value) || 0
-                    })}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <AttachMoney />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-
-                {/* Status */}
-                <Grid item xs={12}>
-                  <FormControl fullWidth>
-                    <InputLabel id="pedidos-select-6">Status</InputLabel>
-                    <Select labelId="pedidos-select-6"
-                      value={pedidoEditando.status || 'PENDENTE'}
-                      label="Status"
-                      onChange={(e) => setPedidoEditando({
-                        ...pedidoEditando,
-                        status: e.target.value
-                      })}
-                    >
-                      <MenuItem value="PENDENTE">Pendente</MenuItem>
-                      <MenuItem value="CONFIRMADO">Confirmado</MenuItem>
-
-
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                {/* Observações */}
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={4}
-                    label="Observações"
-                    value={pedidoEditando.observacao}
-                    onChange={(e) => setPedidoEditando({
-                      ...pedidoEditando,
-                      observacao: e.target.value
-                    })}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Notes />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-              </Grid>
-
-              <Alert severity="info" sx={{ mt: 2 }}>
-                Para editar itens do pedido, use a página de PDV ou crie um novo pedido.
-              </Alert>
-            </Box>
-          )}
-        </DialogContent>
-
-        <DialogActions sx={{ p: 3 }}>
-          <Button
-            onClick={() => setDialogEditar(false)}
-            variant="outlined"
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSalvarEdicao}
-            variant="contained"
-            disabled={atualizarMutation.isPending}
-            startIcon={atualizarMutation.isPending ? <CircularProgress size={20} /> : <Check />}
-          >
-            {atualizarMutation.isPending ? 'Salvando...' : 'Salvar Alterações'}
-          </Button>
         </DialogActions>
       </Dialog>
 
@@ -1251,92 +1089,85 @@ function PedidosPageContent() {
         fullScreen={isMobile}
       >
         <DialogTitle sx={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
+          bgcolor: 'background.paper',
+          color: 'text.primary',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           fontWeight: 'bold',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}>
           <Box display="flex" alignItems="center" gap={1}>
-            <FileDownload />
-            Exportar Pedidos
+            <FileDownload color="primary" />
+            Exportar pedidos
           </Box>
           {isMobile && (
             <IconButton
               aria-label="Fechar exportação" disabled={exportando} onClick={() => setDialogExportar(false)}
-              sx={{ color: 'white' }}
+              sx={{ color: 'text.secondary' }}
             >
               <Close />
             </IconButton>
           )}
         </DialogTitle>
 
-        <DialogContent sx={{ mt: 2 }}>
+        <DialogContent sx={{ pt: '24px !important' }}>
           <TextField select fullWidth label="Pedidos a exportar" value={escopoExportacao} disabled={exportando} onChange={e => setEscopoExportacao(e.target.value as 'pagina' | 'todos')} sx={{ mb: 2 }}>
             <MenuItem value="pagina">Página atual ({pedidos.length})</MenuItem>
             <MenuItem value="todos">Todos os filtrados ({data?.total ?? 0})</MenuItem>
           </TextField>
           {exportando && <Alert role="status" aria-live="polite" sx={{ mb: 2 }}>{progressoExportacao}</Alert>}
           <Typography variant="body2" color="text.secondary" gutterBottom>
-            Selecione as colunas que deseja exportar:
+            Colunas do documento
           </Typography>
 
           <Box sx={{
             mb: 2,
-            p: 2,
-            bgcolor: 'grey.50',
-            borderRadius: 1,
-            border: '1px solid',
-            borderColor: 'grey.200',
+            p: 1.5,
+            bgcolor: 'background.default',
+            borderRadius: '12px',
           }}>
             <Box display="flex" gap={1} mb={1.5}>
               <Button
                 size="small"
-                variant="outlined"
+                variant="text"
                 onClick={selecionarTodasColunas}
-                sx={{ flex: 1, fontSize: '0.75rem' }}
+                disabled={exportando}
               >
-                Selecionar Todas
+                Selecionar todas
               </Button>
               <Button
                 size="small"
-                variant="outlined"
-                color="error"
+                variant="text"
                 onClick={desmarcarTodasColunas}
-                sx={{ flex: 1, fontSize: '0.75rem' }}
+                disabled={exportando}
               >
-                Desmarcar Todas
+                Desmarcar todas
               </Button>
             </Box>
 
-            <Box display="flex" flexDirection="column" gap={0.5}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 0.5 }}>
               {colunasExportacao.map((coluna) => (
                 <Box
                   key={coluna.id}
                   sx={{
                     display: 'flex',
                     alignItems: 'center',
-                    p: 1,
-                    borderRadius: 1,
-                    bgcolor: coluna.selecionada ? 'action.selected' : 'white',
-                    border: '1px solid',
-                    borderColor: coluna.selecionada ? 'primary.light' : 'grey.200',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      bgcolor: coluna.selecionada ? 'action.hover' : 'grey.100',
-                      transform: 'translateX(4px)',
-                    },
+                    minWidth: 0,
+                    borderRadius: '8px',
+                    '&:hover': { bgcolor: 'action.hover' },
                   }}
 
                 >
-                  <FormControlLabel label={coluna.label} control={<Checkbox checked={coluna.selecionada} disabled={exportando} onChange={() => toggleColuna(coluna.id)} size="small" />} />
+                  <FormControlLabel sx={{ m: 0, width: '100%' }} label={coluna.label} control={<Checkbox checked={coluna.selecionada} disabled={exportando} onChange={() => toggleColuna(coluna.id)} size="small" />} />
                 </Box>
               ))}
             </Box>
           </Box>
 
+          {!colunasExportacao.some(c => c.selecionada) && <Alert severity="warning" sx={{ mb: 2 }}>Selecione ao menos uma coluna para exportar.</Alert>}
+          {erroPeriodo && <Alert severity="warning" sx={{ mb: 2 }}>{erroPeriodo} Feche esta janela e corrija o período antes de exportar.</Alert>}
           {/* Resumo */}
           <Alert severity="info" sx={{ mb: 2 }}>
             <Typography variant="body2">
@@ -1384,7 +1215,7 @@ function PedidosPageContent() {
             variant="contained"
             startIcon={<TableChart />}
             onClick={() => exportar('excel')}
-            disabled={search !== buscaDebounced || atualizandoLista || exportando || !!erroLista || !data || !data.total || colunasExportacao.filter(c => c.selecionada).length === 0}
+            disabled={!!erroPeriodo || search !== buscaDebounced || atualizandoLista || exportando || !!erroLista || !data || !data.total || colunasExportacao.filter(c => c.selecionada).length === 0}
 
           >
             Excel
@@ -1393,7 +1224,7 @@ function PedidosPageContent() {
             variant="contained"
             startIcon={<PictureAsPdf />}
             onClick={() => exportar('pdf')}
-            disabled={search !== buscaDebounced || atualizandoLista || exportando || !!erroLista || !data || !data.total || colunasExportacao.filter(c => c.selecionada).length === 0}
+            disabled={!!erroPeriodo || search !== buscaDebounced || atualizandoLista || exportando || !!erroLista || !data || !data.total || colunasExportacao.filter(c => c.selecionada).length === 0}
 
           >
             PDF
@@ -1410,8 +1241,8 @@ function PedidosPageContent() {
         title={confirmDialog.title}
         message={confirmDialog.message}
         severity={confirmDialog.severity}
-        confirmText="Confirmar"
-        cancelText="Cancelar"
+        confirmText={confirmDialog.confirmText || 'Confirmar'}
+        cancelText="Voltar"
       />
 
       {/* Dialog de Impressão */}

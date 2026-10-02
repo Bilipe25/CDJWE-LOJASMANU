@@ -24,16 +24,27 @@ const filtrosSchema = z.object({
   dataInicio: z.string().optional().transform(v => v || undefined), dataFim: z.string().optional().transform(v => v || undefined),
   tipoAtendimento: z.string().optional().transform(v => v || undefined),
   formaPagamentoId: z.string().uuid().optional(), clienteId: z.string().uuid().optional(),
+  ordenarPor: z.enum(['data','numero','total']).optional(),
+  direcao: z.enum(['asc','desc']).default('desc'),
 });
+const periodoValido = (f: { dataInicio?: string; dataFim?: string }) => !f.dataInicio || !f.dataFim || f.dataInicio <= f.dataFim;
+const erroPeriodo = { message: 'A data final deve ser igual ou posterior à data inicial.', path: ['dataFim'] };
 const identidadeSchema = z.object({ id: z.string().uuid(), versao: z.number().int().positive() });
 
 export const pedidosRouter = router({
   // Listar pedidos
   list: protectedProcedure
-    .input(filtrosSchema)
+    .input(filtrosSchema.refine(periodoValido, erroPeriodo))
     .query(async ({ ctx, input }) => {
-      const { limit, offset, ...filtros } = input;
-      const resultado = await executarRPC(ctx.supabase, 'pdv_listar_pedidos', {
+      const { limit, offset, ordenarPor, direcao, ...filtros } = input;
+      const resultado: { pedidos: (Database['public']['Views']['vw_pedidos_completos']['Row'] & { cpf?: string | null; telefone?: string | null })[]; total: number } = ordenarPor ? await (async () => {
+        // A RPC retorna uma relação protegida por RLS; PostgREST ordena antes do range.
+        const { data, error, count } = await ctx.supabase.rpc('pdv_filtrar_pedidos', { p_filtros: filtros }, { count: 'exact' })
+          .select('*').order(ordenarPor, { ascending: direcao === 'asc', nullsFirst: false })
+          .order('id', { ascending: direcao === 'asc' }).range(offset, offset + limit - 1);
+        if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Não foi possível ordenar os pedidos. Tente novamente.', cause: error });
+        return { pedidos: data || [], total: count ?? 0 };
+      })() : await executarRPC(ctx.supabase, 'pdv_listar_pedidos', {
         p_filtros: filtros, p_limite: limit, p_offset: offset,
       }) as { pedidos: (Database['public']['Views']['vw_pedidos_completos']['Row'] & { cpf?: string | null; telefone?: string | null })[]; total: number };
       return { total: resultado.total, pedidos: resultado.pedidos.map(pedido => {
@@ -142,7 +153,7 @@ export const pedidosRouter = router({
   removeItem: protectedProcedure.input(identidadeSchema).mutation(async ({ ctx, input }) => {
     await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'remover_item', p_item_id: input.id, p_versao: input.versao }); return { success: true };
   }),
-  estatisticas: protectedProcedure.input(filtrosSchema.omit({ limit: true, offset: true }))
+  estatisticas: protectedProcedure.input(filtrosSchema.omit({ limit: true, offset: true }).refine(periodoValido, erroPeriodo))
     .query(async ({ ctx, input }) => await executarRPC(ctx.supabase, 'pdv_estatisticas_pedidos', { p_filtros: input }) as { total: number; valorTotal: number; pendentes: number; finalizadas: number; canceladas: number; finalizadosHoje: number }),
   duplicar: protectedProcedure.input(identidadeSchema.extend({ chave_requisicao: z.string().uuid() })).mutation(async ({ ctx, input }) => {
     const pedido = await executarRPC(ctx.supabase, 'pdv_mutar_pedido', { p_acao: 'duplicar', p_id: input.id, p_versao: input.versao, p_chave: input.chave_requisicao }) as PedidoRow;

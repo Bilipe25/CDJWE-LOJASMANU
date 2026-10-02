@@ -7,7 +7,7 @@ const { clientesRouter } = carregar('src/server/routers/clientes.ts');
 const { pedidosRouter } = carregar('src/server/routers/pedidos.ts');
 const { produtosRouter } = carregar('src/server/routers/produtos.ts');
 const { clienteSchema, cpfValido } = carregar('src/lib/schemas/cliente.ts');
-const { validarFiltrosPedidos, filtrosDaUrl, urlComFiltros } = carregar('src/lib/schemas/filtros-pedidos.ts');
+const { validarFiltrosPedidos, filtrosDaUrl, urlComFiltros, erroPeriodoPedidos } = carregar('src/lib/schemas/filtros-pedidos.ts');
 const { buscarTodosFiltrados, empresaParaDocumento, pedidoParaDocumento } = carregar('src/lib/utils/documentos.ts');
 let banco, clientes, pedidos, produtos;
 before(async () => { banco = await criarBanco(); const ctx={supabase:banco.supabase,user:{id:banco.usuario},role:'ADMIN'};clientes=clientesRouter.createCaller(ctx);pedidos=pedidosRouter.createCaller(ctx);produtos=produtosRouter.createCaller(ctx); });
@@ -122,7 +122,9 @@ test('falha de Auth ou de consulta de permissões é indisponibilidade, conta n�
 test('URL/storage inválidos recebem defaults, datas civis e UUID são conferidos', () => {
  const f=validarFiltrosPedidos({page:-1,rowsPerPage:999,status:'HACK',dataInicio:'2026-02-30',dataFim:'x',formaPagamento:'inválido',clienteSelecionado:{id:'x',cpf:'não guardar'}});
  assert.equal(f.page,0);assert.equal(f.rowsPerPage,10);assert.equal(f.status,'');assert.equal(f.dataInicio,'');assert.equal(f.clienteSelecionado,null);
- assert.equal(validarFiltrosPedidos({page:'NaN'}).page,0);assert.equal(validarFiltrosPedidos({dataInicio:'2026-10-03',dataFim:'2026-10-01'}).dataFim,'');
+ assert.equal(validarFiltrosPedidos({page:'NaN'}).page,0);
+ const invertido=validarFiltrosPedidos({dataInicio:'2026-10-03',dataFim:'2026-10-01'});
+ assert.equal(invertido.dataInicio,'2026-10-03');assert.equal(invertido.dataFim,'2026-10-01');assert.ok(erroPeriodoPedidos(invertido));
  const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',url=urlComFiltros('/pedidos?id=preservar',validarFiltrosPedidos({clienteSelecionado:{id,nome:'Nome privado',cpf:'segredo'}}));
  assert.ok(url.includes('filtro_clienteId='+id));assert.ok(!url.includes('privado'));assert.ok(!url.includes('cpf'));assert.equal(filtrosDaUrl(new URLSearchParams(url.split('?')[1])).clienteSelecionado.nome,'');
  assert.ok(!urlComFiltros('/pedidos?filtro_clienteId='+id,validarFiltrosPedidos({})).includes('filtro_clienteId'));

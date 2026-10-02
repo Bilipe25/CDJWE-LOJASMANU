@@ -10,24 +10,28 @@ export const filtrosPedidosSchema = z.object({
   page: z.coerce.number().int().min(0).max(100000).catch(0),
   rowsPerPage: z.coerce.number().refine(v => [5,10,25,50,100].includes(v)).catch(10),
   filtrosExpanded: z.boolean().catch(false),
+  ordenarPor: z.enum(['data', 'numero', 'total']).catch('data'),
+  direcao: z.enum(['asc', 'desc']).catch('desc'),
 });
 export type FiltrosPedidos = z.infer<typeof filtrosPedidosSchema>;
 export function validarFiltrosPedidos(valor: unknown): FiltrosPedidos {
-  const filtro = filtrosPedidosSchema.parse(valor && typeof valor === 'object' ? valor : {});
-  if (filtro.dataInicio && filtro.dataFim && filtro.dataInicio > filtro.dataFim) { filtro.dataInicio=''; filtro.dataFim=''; }
-  return filtro;
+  return filtrosPedidosSchema.parse(valor && typeof valor === 'object' ? valor : {});
+}
+export function erroPeriodoPedidos(filtros: Pick<FiltrosPedidos, 'dataInicio' | 'dataFim'>) {
+  return filtros.dataInicio && filtros.dataFim && filtros.dataInicio > filtros.dataFim
+    ? 'A data final deve ser igual ou posterior à data inicial.' : '';
 }
 export function filtrosDaUrl(params: URLSearchParams) {
   let cliente: unknown = null;
   const id = params.get('filtro_clienteId');
   if (id) cliente = { id, nome: '' };
   else if (params.get('filtro_cliente')) { try { cliente = JSON.parse(decodeURIComponent(params.get('filtro_cliente')!)); } catch {} }
-  return validarFiltrosPedidos({ ...Object.fromEntries(['status','search','dataInicio','dataFim','tipoAtendimento','formaPagamento','page','rowsPerPage'].map(k => [k,params.get(`filtro_${k}`) ?? undefined])), clienteSelecionado: cliente, filtrosExpanded: true });
+  return validarFiltrosPedidos({ ...Object.fromEntries(['status','search','dataInicio','dataFim','tipoAtendimento','formaPagamento','page','rowsPerPage','ordenarPor','direcao'].map(k => [k,params.get(`filtro_${k}`) ?? undefined])), clienteSelecionado: cliente, filtrosExpanded: true });
 }
 export function urlComFiltros(base: string, filtros: FiltrosPedidos) {
   const [path,query] = base.split('?'); const params = new URLSearchParams(query);
   params.set('voltou_edicao','true');
-  for (const key of ['status','search','dataInicio','dataFim','tipoAtendimento','formaPagamento','page','rowsPerPage'] as const) params.set(`filtro_${key}`,String(filtros[key]));
+  for (const key of ['status','search','dataInicio','dataFim','tipoAtendimento','formaPagamento','page','rowsPerPage','ordenarPor','direcao'] as const) params.set(`filtro_${key}`,String(filtros[key]));
   params.delete('filtro_cliente'); params.delete('filtro_clienteId'); if (filtros.clienteSelecionado) params.set('filtro_clienteId',filtros.clienteSelecionado.id);
   return `${path}?${params}`;
 }

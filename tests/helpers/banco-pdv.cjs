@@ -67,7 +67,7 @@ async function criarBanco({ schemaProducao = false } = {}) {
   await pg.query('INSERT INTO pdv_operadores VALUES ($1,$2,true)', [usuario,'ADMIN']);
   await pg.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[usuario]);
 
-  const rpc = async (nome,args={}) => {
+  const executarRpc = async (nome,args={}) => {
     if (!/^[a-z_]+$/.test(nome)) throw new Error('RPC inválida');
     const campos = Object.keys(args);
     if (campos.some(c=>!/^p_[a-z_]+$/.test(c))) throw new Error('Argumento inválido');
@@ -76,9 +76,10 @@ async function criarBanco({ schemaProducao = false } = {}) {
       return { data: nome==='pdv_totais_clientes' ? (await pg.query('SELECT * FROM pdv_totais_clientes($1)',[args.p_ids])).rows : retorno.rows[0].data, error: null };
     } catch (error) { return { data: null,error:{message:error.message,code:error.code} }; }
   };
-  const supabase = { rpc, from(tabela) {
+  const rpc = (nome, args = {}) => nome === 'pdv_filtrar_pedidos' ? supabase.from(nome, args) : executarRpc(nome, args);
+  const supabase = { rpc, from(tabela, argsRpc) {
     if (!/^[a-z_]+$/.test(tabela)) throw new Error('Tabela inválida');
-    const filtros=[], valores=[], ordens=[]; let unico=false,head=false,inicio,limite;
+    const filtros=[], valores=argsRpc ? [JSON.stringify(argsRpc.p_filtros || {})] : [], ordens=[]; let unico=false,head=false,inicio,limite;
     const adicionar=(col,op,valor)=>{ valores.push(valor); filtros.push(`${col} ${op} $${valores.length}`); return q; };
     const q={
       select(col,opcoes) { head=!!opcoes?.head; return q; },
@@ -93,9 +94,9 @@ async function criarBanco({ schemaProducao = false } = {}) {
       single() { unico=true;return q; }, maybeSingle() { unico=true;return q; },
       async then(resolve,reject) {
         try {
-          const base=`FROM public.${tabela}`+(filtros.length?' WHERE '+filtros.join(' AND '):'');
+          const base=`FROM public.${tabela}${argsRpc ? '($1::jsonb)' : ''}`+(filtros.length?' WHERE '+filtros.join(' AND '):'');
           const count=Number((await pg.query('SELECT count(*) AS total '+base,valores)).rows[0].total);
-          const rows=(await pg.query('SELECT * '+base+(ordens.length?' ORDER BY '+ordens.join(','):'')+(limite!==undefined?` LIMIT ${limite} OFFSET ${inicio}`:''),valores)).rows.map(row => Object.fromEntries(Object.entries(row).map(([col,valor]) => [col,valor!==null && (['quantidade','valor_total','valor_unitario','desconto_valor','subtotal','total','valor_base','versao'].includes(col) || (col==='numero' && ['pedidos','vw_pedidos_completos'].includes(tabela))) ? Number(valor) : valor instanceof Date ? valor.toISOString().slice(0,10) : valor])));
+          const rows=(await pg.query('SELECT * '+base+(ordens.length?' ORDER BY '+ordens.join(','):'')+(limite!==undefined?` LIMIT ${limite} OFFSET ${inicio}`:''),valores)).rows.map(row => Object.fromEntries(Object.entries(row).map(([col,valor]) => [col,valor!==null && (['quantidade','valor_total','valor_unitario','desconto_valor','subtotal','total','valor_base','versao'].includes(col) || (col==='numero' && ['pedidos','vw_pedidos_completos','pdv_filtrar_pedidos'].includes(tabela))) ? Number(valor) : valor instanceof Date ? valor.toISOString().slice(0,10) : valor])));
           const error=unico && rows.length!==1 ? {message:'Registro não encontrado'} : null;
           return resolve({data:head?null:unico?rows[0]??null:rows,error,count});
         } catch(error) { return resolve({data:null,error:{message:error.message,code:error.code}}); }

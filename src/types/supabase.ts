@@ -541,6 +541,7 @@ export type Database = {
       }
     }
     Functions: {
+      pdv_filtrar_pedidos: { Args: { p_filtros?: Json }; Returns: Database['public']['Views']['vw_pedidos_completos']['Row'][] };
       pdv_listar_clientes: { Args: { p_busca?: string; p_ativo?: boolean | null; p_limite?: number; p_offset?: number }; Returns: Json };
       pdv_listar_produtos: { Args: { p_busca?: string; p_categoria?: string; p_limite?: number; p_offset?: number }; Returns: Json };
       pdv_listar_pedidos: { Args: { p_filtros?: Json; p_limite?: number; p_offset?: number }; Returns: Json };

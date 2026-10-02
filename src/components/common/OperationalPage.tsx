@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Typography, type SxProps, type Theme } from '@mui/material';
+import { Box, Typography, Skeleton, Tooltip, IconButton, type SxProps, type Theme } from '@mui/material';
+import { InfoOutlined } from '@mui/icons-material';
 import type { ReactNode } from 'react';
 
 // A mesma hierarquia nas consultas e no atendimento, sem alterar outras páginas.
@@ -22,12 +23,15 @@ export function OperationalHeader({ description, actions }: { description: strin
   </Box>;
 }
 
-export function OperationalSummary({ label, items, variant = 'inline' }: { label: string; items: { label: string; value: ReactNode }[]; variant?: 'inline' | 'cards' }) {
+export function OperationalSummary({ label, items, variant = 'inline', loading = false }: { label: string; items: { label: string; value: ReactNode; help?: string }[]; variant?: 'inline' | 'cards'; loading?: boolean }) {
   if (variant === 'cards') {
     return <Box aria-label={label} sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 2 }}>
       {items.map(item => <Box key={item.label} sx={{ ...operationalSurface, bgcolor: 'background.paper', minWidth: 0, px: 1.75, py: 1.25 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.35, minHeight: '2.7em' }}>{item.label}</Typography>
-        <Typography component="div" variant="h6" sx={{ color: 'primary.dark', fontWeight: 700, lineHeight: 1.25, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{item.value}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5, minHeight: 44 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>{item.label}</Typography>
+          {item.help && <Tooltip title={item.help} arrow><IconButton size="small" aria-label={'Sobre ' + item.label} sx={{ p: 0.5, color: 'text.secondary' }}><InfoOutlined fontSize="small" /></IconButton></Tooltip>}
+        </Box>
+        <Typography component="div" variant="h6" sx={{ color: 'primary.dark', fontWeight: 700, lineHeight: 1.25, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{loading ? <Skeleton width="65%" aria-label="Carregando indicador" /> : item.value}</Typography>
       </Box>)}
     </Box>;
   }

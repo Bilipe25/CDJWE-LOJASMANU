@@ -68,6 +68,17 @@ async function main() {
     if(falha)return json(res,{message:'Falha de conexão simulada',code:'XX000'},503);
     try{
       if(url.pathname.startsWith('/rest/v1/rpc/')){
+        if (url.pathname.endsWith('/pdv_filtrar_pedidos')) {
+          const consulta = banco.supabase.rpc('pdv_filtrar_pedidos', body).select('*', { count: 'exact' });
+          for (const ordem of (url.searchParams.get('order') || '').split(',').filter(Boolean)) {
+            const [coluna, direcao] = ordem.split('.'); consulta.order(coluna, { ascending: direcao !== 'desc' });
+          }
+          const offset = Number(url.searchParams.get('offset') || 0), limit = Number(url.searchParams.get('limit') || 1000);
+          const resultado = await consulta.range(offset, offset + limit - 1);
+          if (resultado.error) return json(res, resultado.error, 400);
+          res.setHeader('Content-Range', `${offset}-${offset + resultado.data.length - 1}/${resultado.count}`);
+          return json(res, resultado.data);
+        }
         const resultado=await banco.supabase.rpc(url.pathname.split('/').pop(),body);
         return resultado.error?json(res,resultado.error,400):json(res,resultado.data);
       }
