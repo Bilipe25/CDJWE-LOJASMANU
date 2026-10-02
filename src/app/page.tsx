@@ -1,420 +1,93 @@
 'use client';
 
-import { Grid, Card, CardContent, Box, Typography, CircularProgress, Chip, Table, TableBody, TableCell, TableHead, TableRow, Avatar, TableContainer, Fab, useMediaQuery, useTheme } from '@mui/material';
-import { useRouter } from 'next/navigation';
-import {
-  TrendingUp,
-  People,
-  ShoppingCart,
-  Receipt,
-  AttachMoney,
-} from '@mui/icons-material';
+import NextLink from 'next/link';
+import { Box, Typography, Button, Paper, Alert, Skeleton, Stack, Table, TableBody, TableCell, TableHead, TableRow, TableContainer } from '@mui/material';
+import { Refresh, PointOfSale, ArrowForward, PeopleOutline, Inventory2Outlined, ReceiptLongOutlined } from '@mui/icons-material';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import AppLayout from '@/components/layout/AppLayout';
-import PageHeader from '@/components/common/PageHeader';
-import StatCard from '@/components/common/StatCard';
-import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import { OperationalHeader, operationalSurface, operationalTable } from '@/components/common/OperationalPage';
+import StatusBadge from '@/components/common/StatusBadge';
 import { trpc } from '@/lib/trpc/client';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { formatDateBR } from '@/lib/utils/dateUtils';
 
+const moeda = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+const quantidade = (value: number) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(value);
+const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const painel = { ...operationalSurface, p: { xs: 2, sm: 2.5 }, minWidth: 0 };
+
 export default function HomePage() {
-  const router = useRouter();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { data: dashboard, isLoading } = trpc.relatorios.dashboard.useQuery({});
+  const { data, error, isLoading, isFetching, refetch } = trpc.relatorios.dashboard.useQuery({}, { refetchInterval: 60_000, staleTime: 30_000 });
+  const linkVendas = (inicio: string, fim: string) => `/pedidos?filtro_status=FINALIZADO&filtro_tipoAtendimento=ENTRADA&filtro_dataInicio=${inicio}&filtro_dataFim=${fim}`;
+  const resumo = [
+    { label: 'Vendas hoje', value: data ? moeda(data.vendasHoje) : '—', detail: data ? formatDateBR(data.dataReferencia) : 'Data do pedido', href: data ? linkVendas(data.dataReferencia, data.dataReferencia) : undefined },
+    { label: 'Vendas no mês', value: data ? moeda(data.vendasMes) : '—', detail: 'Até hoje · vendas finalizadas', href: data ? linkVendas(data.inicioMes, data.dataReferencia) : undefined },
+    { label: 'Pedidos pendentes', value: data ? quantidade(data.pedidosPendentes) : '—', detail: 'Todos os tipos de atendimento', href: '/pedidos?filtro_status=PENDENTE' },
+    { label: 'Clientes ativos', value: data ? quantidade(data.totalClientes) : '—', detail: 'Disponíveis para atendimento', href: '/clientes' },
+  ];
+  const serie = data?.serieSemana.map(d => ({ ...d, label: `${dias[new Date(`${d.data}T12:00:00Z`).getUTCDay()]} ${d.data.slice(8)}` })) ?? [];
+  const estado = (vazio: string) => isLoading ? <Stack spacing={1.5} aria-label="Carregando dados"><Skeleton height={36} /><Skeleton height={36} /><Skeleton height={36} /></Stack> : <Typography color="text.secondary" sx={{ py: 3 }}>{error ? 'Dados indisponíveis. Use Atualizar para tentar novamente.' : vazio}</Typography>;
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
-
-  // Processar dados de vendas da semana
-  const chartData = [];
-  if (dashboard?.vendasSemana) {
-    const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    const hoje = new Date();
-
-    for (let i = 6; i >= 0; i--) {
-      const data = new Date();
-      data.setDate(hoje.getDate() - i);
-
-      // Garantir formato correto da data
-      const year = data.getFullYear();
-      const month = String(data.getMonth() + 1).padStart(2, '0');
-      const day = String(data.getDate()).padStart(2, '0');
-      const dataStr = `${year}-${month}-${day}`;
-
-      const diaSemana = diasSemana[data.getDay()];
-
-      chartData.push({
-        name: `${diaSemana} ${data.getDate()}`,
-        vendas: dashboard.vendasSemana[dataStr] || 0,
-      });
-    }
-  }
-
-  return (
-    <ProtectedRoute>
-      <AppLayout>
-
-
-        {/* Cards de Estatísticas */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={6} sm={6} md={3}>
-            <StatCard
-              title="Vendas Hoje"
-              value={formatCurrency(dashboard?.vendasHoje || 0)}
-              icon={<AttachMoney sx={{ fontSize: { xs: 32, sm: 28 } }} />}
-              color="#10b981"
-              loading={isLoading}
-              trend={{ value: 12.5, isPositive: true }}
-            />
-          </Grid>
-
-          <Grid item xs={6} sm={6} md={3}>
-            <StatCard
-              title="Vendas do Mês"
-              value={formatCurrency(dashboard?.vendasMes || 0)}
-              icon={<TrendingUp sx={{ fontSize: { xs: 32, sm: 28 } }} />}
-              color="#0ea5e9"
-              loading={isLoading}
-              trend={{ value: 8.2, isPositive: true }}
-            />
-          </Grid>
-
-          <Grid item xs={6} sm={6} md={3}>
-            <StatCard
-              title="Pedidos Pendentes"
-              value={dashboard?.pedidosPendentes || 0}
-              icon={<Receipt sx={{ fontSize: { xs: 32, sm: 28 } }} />}
-              color="#f59e0b"
-              loading={isLoading}
-            />
-          </Grid>
-
-          <Grid item xs={6} sm={6} md={3}>
-            <StatCard
-              title="Total de Clientes"
-              value={dashboard?.totalClientes || 0}
-              icon={<People sx={{ fontSize: { xs: 32, sm: 28 } }} />}
-              color="#8b5cf6"
-              loading={isLoading}
-              trend={{ value: 3.1, isPositive: true }}
-            />
-          </Grid>
-        </Grid>
-
-        {/* Gráficos */}
-        <Grid container spacing={3}>
-          {/* Gráfico de Vendas da Semana */}
-          <Grid item xs={12} lg={8}>
-            <Card>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                  Vendas da Semana
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Performance de vendas dos últimos 7 dias
-                </Typography>
-
-                <Box sx={{ height: { xs: 200, sm: 250, md: 300 } }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="name" stroke="#64748b" style={{ fontSize: '12px' }} />
-                      <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#fff',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: 8,
-                        }}
-                        formatter={(value: number) => formatCurrency(value)}
-                      />
-                      <Bar dataKey="vendas" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Ações Rápidas */}
-          <Grid item xs={12} lg={4}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                  Ações Rápidas
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Acesse rapidamente as principais funções
-                </Typography>
-
-                <Grid container spacing={2}>
-                  <Grid item xs={4} sm={4} md={4}>
-                    <Card
-                      sx={{
-                        bgcolor: 'primary.main',
-                        color: 'white',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        height: '100%',
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          boxShadow: 4,
-                        },
-                      }}
-                      onClick={() => router.push('/pdv')}
-                    >
-                      <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: { xs: 0.5, sm: 1 }, py: { xs: 1.5, sm: 2 }, px: { xs: 1, sm: 2 }, textAlign: 'center' }}>
-                        <ShoppingCart sx={{ fontSize: { xs: 32, sm: 40 } }} />
-                        <Typography variant="body2" fontWeight="bold" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
-                          {isMobile ? 'Pedido' : 'Novo Pedido'}
-                        </Typography>
-                        <Typography variant="caption" sx={{ opacity: 0.9, fontSize: { xs: '0.65rem', sm: '0.75rem' }, display: { xs: 'none', sm: 'block' } }}>
-                          Iniciar venda
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={4} sm={4} md={4}>
-                    <Card
-                      sx={{
-                        bgcolor: 'success.main',
-                        color: 'white',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        height: '100%',
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          boxShadow: 4,
-                        },
-                      }}
-                      onClick={() => router.push('/clientes')}
-                    >
-                      <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: { xs: 0.5, sm: 1 }, py: { xs: 1.5, sm: 2 }, px: { xs: 1, sm: 2 }, textAlign: 'center' }}>
-                        <People sx={{ fontSize: { xs: 32, sm: 40 } }} />
-                        <Typography variant="body2" fontWeight="bold" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
-                          {isMobile ? 'Cliente' : 'Cadastrar Cliente'}
-                        </Typography>
-                        <Typography variant="caption" sx={{ opacity: 0.9, fontSize: { xs: '0.65rem', sm: '0.75rem' }, display: { xs: 'none', sm: 'block' } }}>
-                          Novo cliente
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={4} sm={4} md={4}>
-                    <Card
-                      sx={{
-                        bgcolor: 'warning.main',
-                        color: 'white',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        height: '100%',
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          boxShadow: 4,
-                        },
-                      }}
-                      onClick={() => router.push('/produtos')}
-                    >
-                      <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: { xs: 0.5, sm: 1 }, py: { xs: 1.5, sm: 2 }, px: { xs: 1, sm: 2 }, textAlign: 'center' }}>
-                        <Receipt sx={{ fontSize: { xs: 32, sm: 40 } }} />
-                        <Typography variant="body2" fontWeight="bold" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
-                          {isMobile ? 'Produto' : 'Cadastrar Produto'}
-                        </Typography>
-                        <Typography variant="caption" sx={{ opacity: 0.9, fontSize: { xs: '0.65rem', sm: '0.75rem' }, display: { xs: 'none', sm: 'block' } }}>
-                          Novo produto
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Últimos Pedidos */}
-          <Grid item xs={12} lg={7}>
-            <Card>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                  Últimos Pedidos
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Pedidos mais recentes do sistema
-                </Typography>
-
-                {isLoading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress />
-                  </Box>
-                ) : dashboard?.ultimosPedidos && dashboard.ultimosPedidos.length > 0 ? (
-                  <TableContainer sx={{ overflowX: 'auto' }}>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Pedido</TableCell>
-                          <TableCell>Cliente</TableCell>
-                          <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Data</TableCell>
-                          <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Status</TableCell>
-                          <TableCell align="right">Total</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {dashboard.ultimosPedidos.map((pedido: any) => (
-                          <TableRow
-                            key={pedido.id}
-                            hover
-                            sx={{
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              '&:hover': {
-                                bgcolor: 'action.hover',
-                                transform: 'scale(1.01)',
-                              }
-                            }}
-                            onClick={() => router.push(`/pedidos?id=${pedido.id}`)}
-                          >
-                            <TableCell>
-                              <Chip
-                                label={`#${pedido.numero}`}
-                                size="small"
-                                variant="outlined"
-                                sx={{ fontFamily: 'monospace', fontWeight: 600 }}
-                              />
-                            </TableCell>
-                            <TableCell>{pedido.cliente_nome || 'Sem cliente'}</TableCell>
-                            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                              {formatDateBR(pedido.data)}
-                            </TableCell>
-                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                              <Chip
-                                label={pedido.status}
-                                size="small"
-                                color={
-                                  pedido.status === 'FINALIZADO' ? 'success' :
-                                    pedido.status === 'PENDENTE' ? 'warning' :
-                                      pedido.status === 'CANCELADO' ? 'error' : 'default'
-                                }
-                              />
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600 }}>
-                              {formatCurrency(pedido.total || 0)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
-                    Nenhum pedido encontrado
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Top Produtos */}
-          <Grid item xs={12} lg={5}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                  Produtos Mais Vendidos
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Top 5 produtos com mais saídas
-                </Typography>
-
-                {isLoading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress />
-                  </Box>
-                ) : dashboard?.topProdutos && dashboard.topProdutos.length > 0 ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {dashboard.topProdutos.map((produto: any, index: number) => (
-                      <Card
-                        key={produto.produto_id}
-                        sx={{
-                          bgcolor: 'grey.50',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          '&:hover': {
-                            transform: 'translateX(4px)',
-                            boxShadow: 2,
-                          },
-                        }}
-                        onClick={() => router.push('/produtos')}
-                      >
-                        <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: { xs: 1.5, sm: 2 }, px: { xs: 2, sm: 3 } }}>
-                          <Avatar
-                            sx={{
-                              bgcolor: index === 0 ? 'warning.main' :
-                                index === 1 ? 'grey.400' :
-                                  index === 2 ? 'orange.300' : 'primary.main',
-                              fontWeight: 'bold',
-                              width: { xs: 32, sm: 40 },
-                              height: { xs: 32, sm: 40 },
-                              fontSize: { xs: '0.9rem', sm: '1rem' }
-                            }}
-                          >
-                            {index + 1}
-                          </Avatar>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="body1" fontWeight="600" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
-                              {produto.produto_nome}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {produto.categoria_nome || 'Sem categoria'}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ textAlign: 'right' }}>
-                            <Typography variant="h6" fontWeight="bold" color="primary.main" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
-                              {produto.quantidade_vendida}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
-                              vendidos
-                            </Typography>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </Box>
-                ) : (
-                  <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
-                    Nenhum produto vendido ainda
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        {/* FAB - Novo Pedido (Mobile Only) */}
-        {isMobile && (
-          <Fab
-            color="primary"
-            aria-label="novo pedido"
-            onClick={() => router.push('/pdv')}
-            sx={{
-              position: 'fixed',
-              bottom: { xs: 16, sm: 24 },
-              right: { xs: 16, sm: 24 },
-              width: 56,
-              height: 56,
-            }}
-          >
-            <ShoppingCart />
-          </Fab>
-        )}
-      </AppLayout>
-    </ProtectedRoute>
-  );
+  return <AppLayout>
+    <OperationalHeader description={data ? `Visão do atendimento · ${formatDateBR(data.dataReferencia)} · horário de Fortaleza` : 'Visão do atendimento'} actions={<>
+      <Button variant="outlined" startIcon={<Refresh />} onClick={() => void refetch()} disabled={isFetching}>{isFetching ? 'Atualizando…' : 'Atualizar'}</Button>
+      <Button component={NextLink} href="/pdv" variant="contained" startIcon={<PointOfSale />}>Abrir PDV</Button>
+    </>} />
+    {error && <Alert severity={data ? 'warning' : 'error'} sx={{ mb: 2 }} role="alert">{data ? 'Não foi possível atualizar. Os valores abaixo são da última consulta bem-sucedida.' : 'Não foi possível carregar o dashboard. Tente atualizar.'}</Alert>}
+    <Paper component="section" aria-label="Resumo do atendimento" sx={{ ...operationalSurface, mb: 2.5, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' } }}>
+      {resumo.map(item => <Box key={item.label} sx={{ p: { xs: 2, sm: 2.5 }, minWidth: 0 }}>
+        <Typography variant="body2" color="text.secondary">{item.label}</Typography>
+        {isLoading ? <Skeleton height={42} /> : <Typography sx={{ fontSize: { xs: '1.3rem', sm: '1.75rem' }, fontWeight: 700, fontVariantNumeric: 'tabular-nums', mt: .5, overflowWrap: 'anywhere' }}>{item.value}</Typography>}
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: .5 }}>{item.detail}</Typography>
+        {item.href && <Button component={NextLink} href={item.href} size="small" endIcon={<ArrowForward />} sx={{ mt: 1, ml: -1 }}>Consultar<span className="sr-only"> {item.label.toLowerCase()}</span></Button>}
+      </Box>)}
+    </Paper>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 2fr) minmax(280px, 1fr)' }, gap: 2.5 }}>
+      <Paper component="section" sx={painel} aria-labelledby="vendas-semana">
+        <Typography id="vendas-semana" component="h2" variant="h6">Vendas nos últimos 7 dias</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Vendas finalizadas de entrada, pela data do pedido.</Typography>
+        {!data ? estado('Sem dados para exibir.') : serie.every(d => d.vendas === 0) ? estado('Nenhuma venda finalizada neste período.') : <Box sx={{ height: 240, width: '100%' }}>
+          <ResponsiveContainer width="100%" height="100%"><BarChart data={serie} accessibilityLayer margin={{ top: 12, right: 8, left: 4, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+            <YAxis width={72} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1 }).format(v)} />
+            <Tooltip formatter={v => [moeda(Number(v)), 'Vendas']} labelFormatter={(_, payload) => payload[0]?.payload?.data ? formatDateBR(payload[0].payload.data) : ''} />
+            <Bar dataKey="vendas" fill="#0369a1" radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={false} />
+          </BarChart></ResponsiveContainer>
+        </Box>}
+        {data && <Box component="details" sx={{ mt: 2, '& summary': { cursor: 'pointer', color: 'primary.main', py: 1 } }}><summary>Ver valores por dia</summary>
+          <Table size="small" aria-label="Vendas por dia"><TableBody>{serie.map(d => <TableRow key={d.data}><TableCell component="th" scope="row">{formatDateBR(d.data)}</TableCell><TableCell align="right">{moeda(d.vendas)}</TableCell></TableRow>)}</TableBody></Table>
+        </Box>}
+      </Paper>
+      <Paper component="section" sx={painel} aria-labelledby="acoes-dashboard">
+        <Typography id="acoes-dashboard" component="h2" variant="h6">Atendimento</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Acesse as ferramentas da operação.</Typography>
+        <Stack spacing={1}>{[
+          { label: 'Consultar pedidos', detail: 'Conferir, editar e imprimir', href: '/pedidos', icon: <ReceiptLongOutlined /> },
+          { label: 'Clientes', detail: 'Consultar e cadastrar clientes', href: '/clientes', icon: <PeopleOutline /> },
+          { label: 'Produtos', detail: 'Consultar o catálogo e preços', href: '/produtos', icon: <Inventory2Outlined /> },
+        ].map(item => <Button key={item.href} component={NextLink} href={item.href} variant="outlined" startIcon={item.icon} endIcon={<ArrowForward />} sx={{ justifyContent: 'flex-start', textAlign: 'left', py: 1.5, '& .MuiButton-endIcon': { ml: 'auto' } }}><Box sx={{ px: 1 }}><Typography component="span" display="block" fontWeight={600}>{item.label}</Typography><Typography component="span" variant="caption" color="text.secondary">{item.detail}</Typography></Box></Button>)}</Stack>
+      </Paper>
+      <Paper component="section" sx={painel} aria-labelledby="pedidos-recentes">
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 1 }}><Typography id="pedidos-recentes" component="h2" variant="h6">Pedidos recentes</Typography><Button component={NextLink} href="/pedidos" size="small">Ver todos</Button></Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Últimos 5 pedidos por data, até hoje · todos os atendimentos.</Typography>
+        {!data || !data.ultimosPedidos.length ? estado('Nenhum pedido registrado até hoje.') : <TableContainer><Table size="small" sx={operationalTable} aria-label="Pedidos recentes">
+          <TableHead><TableRow><TableCell>Pedido / cliente</TableCell><TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Situação</TableCell><TableCell align="right">Total</TableCell></TableRow></TableHead>
+          <TableBody>{data.ultimosPedidos.map(p => <TableRow key={p.id} hover><TableCell>
+            <Button component={NextLink} href={`/pedidos?id=${p.id}`} size="small" sx={{ ml: -1 }} aria-label={`Abrir pedido ${p.numero}`}>#{p.numero}</Button>
+            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{p.cliente_nome || 'Cliente não informado'}</Typography>
+            <Typography variant="caption" color="text.secondary">{p.data ? formatDateBR(p.data) : 'Sem data'} · {p.tipo_atendimento_nome}</Typography>
+            <Box sx={{ display: { xs: 'block', sm: 'none' }, mt: .5 }}><StatusBadge status={p.status || ''} /></Box>
+          </TableCell><TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}><StatusBadge status={p.status || ''} /></TableCell><TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{moeda(Number(p.total ?? 0))}</TableCell></TableRow>)}</TableBody>
+        </Table></TableContainer>}
+      </Paper>
+      <Paper component="section" sx={painel} aria-labelledby="produtos-mes">
+        <Typography id="produtos-mes" component="h2" variant="h6">Produtos vendidos no mês</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Os 5 produtos com maior quantidade nas vendas finalizadas.</Typography>
+        {!data || !data.topProdutos.length ? estado('Nenhum produto vendido neste mês.') : <Stack component="ol" sx={{ listStyle: 'none', p: 0, m: 0 }} spacing={0}>{data.topProdutos.map((p, index) => <Box component="li" key={p.produto_id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, py: 1.5, borderBottom: index < data.topProdutos.length - 1 ? '1px solid' : undefined, borderColor: 'divider' }}>
+          <Typography color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>{index + 1}.</Typography><Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" fontWeight={600} sx={{ overflowWrap: 'anywhere' }}>{p.produto_nome}</Typography>{p.categoria_nome && <Typography variant="caption" color="text.secondary">{p.categoria_nome}</Typography>}</Box><Typography variant="body2" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{quantidade(p.quantidade_vendida)} {p.unidade}</Typography>
+        </Box>)}</Stack>}
+      </Paper>
+    </Box>
+    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>Atualização automática a cada minuto. Valores de vendas consideram apenas pedidos finalizados do tipo entrada; pedidos futuros ficam fora dos períodos.</Typography>
+  </AppLayout>;
 }

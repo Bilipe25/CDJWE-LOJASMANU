@@ -15,10 +15,9 @@ export const operationalTable: SxProps<Theme> = {
   '& td': { fontVariantNumeric: 'tabular-nums' },
 };
 
-export function OperationalHeader({ title, description, actions }: { title: string; description: string; actions?: ReactNode }) {
+export function OperationalHeader({ description, actions }: { description: string; actions?: ReactNode }) {
   return <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2.5 }}>
-    <Box><Typography component="h1" variant="h4" fontWeight={700}>{title}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{description}</Typography></Box>
+    <Typography variant="body2" color="text.secondary">{description}</Typography>
     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>{actions}</Box>
   </Box>;
 }

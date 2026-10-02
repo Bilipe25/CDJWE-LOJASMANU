@@ -1,27 +1,26 @@
 {
+  "id": "/",
   "name": "PDV Lojas Manu",
   "short_name": "PDV Manu",
-  "description": "Sistema de Ponto de Venda para Lojas Manu",
+  "description": "Vendas, pedidos e clientes das Lojas Manu",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#0ea5e9",
-  "orientation": "portrait",
+  "theme_color": "#0369a1",
+  "orientation": "any",
   "icons": [
-    {
-      "src": "/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Nova venda", "url": "/pdv", "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }] },
+    { "name": "Pedidos", "url": "/pedidos", "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }] },
+    { "name": "Clientes", "url": "/clientes", "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }] }
   ],
   "categories": ["business", "productivity"],
   "lang": "pt-BR",
-  "dir": "ltr"
+  "dir": "ltr",
+  "prefer_related_applications": false
 }

@@ -34,7 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch { if (active && atual === revisao) setAuthError('Não foi possível conectar ao serviço. Reconecte e tente novamente.'); }
       finally { if (active && atual === revisao) setIsLoading(false); }
     };
-    localStorage.removeItem('authenticated'); localStorage.removeItem('username');
+    try { localStorage.removeItem('authenticated'); localStorage.removeItem('username'); }
+    catch { /* Legacy flags are optional; blocked storage must not prevent authentication. */ }
     void supabase.auth.getSession().then(({ data }) => {
       if (active) void validarSessao(data.session);
     }).catch(() => { if (active) { setAuthError('Não foi possível restaurar a sessão. Reconecte e tente novamente.'); setIsLoading(false); } });

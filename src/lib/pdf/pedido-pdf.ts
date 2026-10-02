@@ -21,7 +21,8 @@ const formatDate = (dateString: string) => {
 export const gerarPedidoPDF = async (
   pedido: DadosPedido,
   empresa: DadosEmpresa,
-  acao: 'download' | 'print' = 'print'
+  acao: 'download' | 'print' = 'print',
+  janelaImpressao?: Window,
 ) => {
   // Converter logo para base64 se disponível
   let logoBase64 = null;
@@ -283,7 +284,8 @@ export const gerarPedidoPDF = async (
   };
 
   if (acao === 'print') {
-    pdfMake.createPdf(docDefinition).print();
+    if (janelaImpressao?.closed) throw new Error('A janela de impressão foi fechada. Clique em imprimir novamente.');
+    pdfMake.createPdf(docDefinition).print({}, janelaImpressao);
   } else {
     pdfMake.createPdf(docDefinition).download(`pedido-${pedido.numero || 'sn'}.pdf`);
   }

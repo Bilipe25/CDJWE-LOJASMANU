@@ -1,192 +1,51 @@
-# Configuração PWA - Progressive Web App
+# PWA — operação, instalação e manutenção
 
-Este projeto está configurado como uma Progressive Web App (PWA) profissional, permitindo instalação em dispositivos móveis e desktop.
+O aplicativo usa um manifest público estável, um service worker próprio e ícones derivados da imagem fornecida em 02/10/2026. A instalação não depende do Supabase ou de uma sessão autenticada.
 
-## ✨ Funcionalidades Implementadas
+## Instalação
 
-### 1. **Manifest Dinâmico**
-- O manifest é gerado dinamicamente usando os dados da empresa
-- Localizado em: `/api/manifest`
-- Usa nome da empresa, logo e cores do tema das configurações
+Publique normalmente com `npm run build`. O hook `prebuild` gera `public/sw.js` antes do build do Next.js, tanto com Turbopack quanto com webpack. Use HTTPS em produção; localhost também permite validação. Em desenvolvimento (`npm run dev`), o componente não registra o worker.
 
-### 2. **Service Worker**
-- Cache inteligente de recursos
-- Funcionamento offline
-- Atualização automática
-- Cache de imagens, fonts e recursos estáticos
+No Chrome/Edge, use o botão Instalar oferecido pelo app ou o menu do navegador. O navegador decide quando oferecer a instalação. No Safari do iPhone/iPad, o app explica Compartilhar → Adicionar à Tela de Início. A aplicação detecta execução standalone sem gravar um sinalizador permanente que impediria reinstalações. Ao dispensar a sugestão, ela fica oculta naquela sessão.
 
-### 3. **Componente de Instalação**
-- Prompt automático de instalação
-- Detecta se o app já está instalado
-- Aparece apenas para usuários que ainda não instalaram
+A identidade é `id: /`, nome PDV Lojas Manu, escopo `/`, entrada `/`, modo standalone, orientação livre e cor azul #0369a1. `/manifest.json` é a fonte única; `/api/manifest` mantém compatibilidade e devolve os mesmos dados. O logo configurado para documentos e dados da empresa não substitui o ícone instalado.
 
-### 4. **Página Offline**
-- Exibida quando não há conexão
-- Design profissional e amigável
-- Botão para tentar reconectar
+## Ícones
 
-## 🎨 Configurando os Ícones
+A fonte original está em `assets/pwa/logo-original.png`. Foram exportados:
 
-Você precisa adicionar os seguintes ícones na pasta `/public`:
+- `public/icon-192x192.png` e `public/icon-512x512.png`: ícones comuns;
+- `public/icon-maskable-512x512.png`: fundo branco opaco e toda a arte dentro da área circular segura;
+- `public/apple-touch-icon.png`: 180 × 180 para Apple;
+- `public/favicon-32x32.png`: aba do navegador.
 
-### Ícones Necessários:
+Para regenerar, execute `npm run pwa:icons` (usa Sharp, incluído na instalação padrão do Next.js) e depois `npm run build`. A exportação só redimensiona proporcionalmente e adiciona margens: a personagem original não é redesenhada. O fundo branco é necessário para a apresentação consistente em launchers.
 
-1. **icon-192x192.png** (192x192 pixels)
-   - Ícone principal para Android
-   - Usado em telas pequenas
-   
-2. **icon-512x512.png** (512x512 pixels)
-   - Ícone de alta resolução
-   - Usado em telas maiores e splash screens
-   
-3. **apple-touch-icon.png** (180x180 pixels)
-   - Ícone específico para iOS/Apple
-   - Usado quando o app é adicionado à tela inicial do iPhone/iPad
+Uma composição quadrada foi avaliada com a ferramenta integrada imagegen, com o prompt: “Preserve woman, face, hair, blue blazer and orange circle; adapt only to a square white canvas, centered with safe margins; no text, shadows or rounded corners.” A composição gerada não foi adotada: os arquivos finais conservam os pixels da ilustração original por exportação determinística.
 
-### Como Criar os Ícones:
+Ícones de apps já instalados podem demorar a atualizar, conforme navegador/SO. Primeiro feche e reabra o aplicativo após a publicação. Antes de eventual reinstalação, salve atendimentos pendentes. Não limpe os dados do site para atualizar o ícone: isso pode apagar o rascunho local.
 
-#### Opção 1: Usar o Logo da Empresa
-Se você já tem o logo configurado nas configurações da empresa:
-1. Acesse a página de Configurações
-2. Faça upload do logo no campo apropriado
-3. O sistema usará automaticamente esse logo no manifest
+## Rede, offline e privacidade
 
-#### Opção 2: Criar Ícones Manualmente
-1. Use o logo da empresa (formato PNG com fundo transparente ou branco)
-2. Redimensione para os tamanhos necessários:
-   - 192x192px
-   - 512x512px
-   - 180x180px
-3. Salve os arquivos na pasta `public/` com os nomes exatos
+O worker pré-carrega somente `offline.html` e os cinco PNGs públicos. Não armazena respostas do Supabase, tokens, clientes, pedidos, APIs, documentos de páginas autenticadas, payloads RSC, JavaScript ou CSS de releases. Navegações completas usam a rede; na falha da conexão, recebem o HTML offline independente de React, Next ou autenticação, mantendo a URL original para tentar novamente.
 
-#### Opção 3: Usar Ferramentas Online
-- **PWA Asset Generator**: https://www.pwabuilder.com/imageGenerator
-- **RealFaviconGenerator**: https://realfavicongenerator.net/
-- **Favicon.io**: https://favicon.io/
+Vendas e consultas precisam de internet. A tela offline não é um PDV funcional: o rascunho já persistido neste dispositivo é preservado, mas não há fila offline de gravação. Se o app já estiver aberto, os avisos de conexão e o bloqueio de salvar existentes no PDV continuam valendo. A navegação interna do Next usa a rede normalmente e pode apresentar erro enquanto desconectada.
 
-### Dicas para Ícones Profissionais:
+Na ativação, são removidos os caches conhecidos da integração anterior, inclusive `supabase-cache`, e versões antigas deste PWA. Cache Storage de outros aplicativos, localStorage e IndexedDB não são apagados.
 
-✅ **Recomendações:**
-- Use fundo sólido ou transparente
-- Evite muito texto ou detalhes pequenos
-- Certifique-se que o ícone fica legível em tamanhos pequenos
-- Use cores que combinem com a marca
-- Mantenha a proporção quadrada (1:1)
-- Formato PNG com boa qualidade
+## Atualizações
 
-❌ **Evite:**
-- Ícones pixelados ou de baixa qualidade
-- Muito texto ou informações
-- Bordas cortadas
-- Cores muito claras em fundo branco
+Cada build calcula uma revisão a partir dos arquivos do aplicativo, configuração, lockfile e recursos públicos do PWA. O worker é servido com MIME JavaScript, escopo raiz e `no-cache, no-store`; o registro usa `updateViaCache: none`.
 
-## 📱 Como Testar a Instalação
+Ao detectar uma nova versão, aparece Atualizar. O operador recebe uma confirmação para salvar/concluir atendimentos e formulários antes de recarregar. Não há recarga automática ao voltar a internet. Só a aba que confirmou recarrega após a ativação; as demais passam a ser atendidas pelo novo worker sem recarga forçada. Fechar todas as abas também permite ao navegador ativar uma atualização em espera.
 
-### No Chrome Desktop:
-1. Abra o app no Chrome
-2. Clique nos 3 pontos (⋮) no canto superior direito
-3. Selecione "Instalar [Nome do App]"
-4. O app será instalado como um aplicativo nativo
+## Verificação
 
-### No Chrome Mobile (Android):
-1. Abra o app no Chrome
-2. Um banner de instalação aparecerá automaticamente
-3. Clique em "Instalar" ou "Adicionar à tela inicial"
-4. O app será instalado no seu dispositivo
+- `npm test`: regressões operacionais e testes do PWA.
+- `npm run type-check`: tipos.
+- `npm run build`: artefato real de produção, incluindo `/sw.js`.
+- No DevTools → Application: confira manifest, cinco PNGs e um HTML no Cache Storage e worker com escopo raiz.
+- Abra o aplicativo online uma vez, corte a conexão e faça uma navegação completa: a tela offline deve oferecer Tentar novamente.
+- Teste a instalação final no endereço HTTPS publicado e em dispositivos reais. A validação local não confirma o comportamento de todos os sistemas operacionais ou do CDN de produção.
 
-### No Safari (iOS):
-1. Abra o app no Safari
-2. Toque no ícone de compartilhar (□↑)
-3. Role para baixo e toque em "Adicionar à Tela de Início"
-4. Confirme o nome e toque em "Adicionar"
-
-## 🔧 Configurações Avançadas
-
-### Modificar Cores do Tema:
-As cores são carregadas automaticamente das configurações da empresa:
-- `cor_primaria`: Cor principal do tema
-- `cor_secundaria`: Cor secundária
-
-Para alterar:
-1. Vá para Configurações → Dados da Empresa
-2. Edite as cores primária e secundária
-3. O manifest será atualizado automaticamente
-
-### Desabilitar PWA em Desenvolvimento:
-O PWA está automaticamente desabilitado em modo de desenvolvimento.
-Para testar em desenvolvimento, altere em `next.config.mjs`:
-```javascript
-disable: false, // ou remova essa linha
-```
-
-### Cache e Offline:
-O app cacheia automaticamente:
-- ✅ Imagens (30 dias)
-- ✅ Requisições do Supabase (24 horas)
-- ✅ Google Fonts (1 ano)
-- ✅ Arquivos JS/CSS (7 dias)
-
-## 🚀 Deployment
-
-Ao fazer deploy em produção:
-1. Execute `npm run build`
-2. Os arquivos do service worker serão gerados em `/public`
-3. O manifest estará disponível em `/api/manifest`
-4. O app estará pronto para instalação
-
-## 🎯 Atalhos do App
-
-Quando instalado, o app oferece atalhos rápidos:
-- **Novo Pedido**: Abre direto no PDV
-- **Pedidos**: Visualizar lista de pedidos
-- **Produtos**: Gerenciar produtos
-
-## 📊 Verificar Status PWA
-
-Use o Chrome DevTools para verificar:
-1. Abra DevTools (F12)
-2. Vá para a aba "Application"
-3. Verifique:
-   - Manifest
-   - Service Workers
-   - Cache Storage
-
-## 🔄 Atualizações
-
-O service worker verifica automaticamente por atualizações.
-Quando uma nova versão está disponível:
-- O cache é atualizado automaticamente
-- Usuários verão a nova versão no próximo carregamento
-
-## 🎨 Customização
-
-Para personalizar ainda mais o PWA:
-1. Edite `/src/app/api/manifest/route.ts`
-2. Modifique as configurações em `next.config.mjs`
-3. Ajuste o componente InstallPWA em `/src/components/InstallPWA.tsx`
-
-## ✅ Checklist de Configuração
-
-- [ ] Criar ícone 192x192px
-- [ ] Criar ícone 512x512px
-- [ ] Criar ícone Apple Touch 180x180px
-- [ ] Configurar nome da empresa nas configurações
-- [ ] Configurar logo da empresa nas configurações
-- [ ] Configurar cores do tema nas configurações
-- [ ] Testar instalação no Chrome Desktop
-- [ ] Testar instalação no Chrome Mobile
-- [ ] Testar instalação no Safari iOS
-- [ ] Verificar funcionamento offline
-- [ ] Testar atalhos do app
-
-## 🆘 Suporte
-
-Se você encontrar problemas:
-1. Verifique se todos os ícones estão na pasta `public/`
-2. Limpe o cache do navegador
-3. Verifique o console do DevTools
-4. Certifique-se que está usando HTTPS (obrigatório para PWA)
-
----
-
-**Nota**: PWAs funcionam apenas em HTTPS (ou localhost para desenvolvimento).
+Referências: [guia oficial Next.js](https://nextjs.org/docs/app/guides/progressive-web-apps), [zona segura de ícones adaptativos](https://web.dev/articles/maskable-icon), [atualização sem cache HTTP](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/updateViaCache).

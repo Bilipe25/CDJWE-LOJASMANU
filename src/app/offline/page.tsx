@@ -3,13 +3,10 @@
 import { Box, Container, Typography, Button } from '@mui/material';
 import WifiOffIcon from '@mui/icons-material/WifiOff';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useRouter } from 'next/navigation';
 
 export default function OfflinePage() {
-  const router = useRouter();
 
   const handleRefresh = () => {
-    router.refresh();
     window.location.reload();
   };
 
@@ -39,8 +36,9 @@ export default function OfflinePage() {
         </Typography>
         
         <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-          Parece que você perdeu a conexão com a internet. 
-          Algumas funcionalidades podem estar limitadas até que a conexão seja restabelecida.
+          O PDV precisa de internet para consultar clientes, pedidos e salvar vendas.
+          Reconecte este dispositivo e tente novamente. Seu rascunho salvo neste
+          dispositivo será retomado no PDV.
         </Typography>
         
         <Button

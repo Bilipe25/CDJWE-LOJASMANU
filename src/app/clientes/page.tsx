@@ -273,7 +273,7 @@ export default function ClientesPage() {
   };
   return (
     <AppLayout>
-      <OperationalHeader title="Clientes" description="Encontre o cadastro e retome o atendimento." actions={<Button variant="contained" startIcon={<Add />} onClick={handleNovoCliente}>Novo cliente</Button>} />
+      <OperationalHeader description="Encontre o cadastro e retome o atendimento." actions={<Button variant="contained" startIcon={<Add />} onClick={handleNovoCliente}>Novo cliente</Button>} />
       {erroEstatisticas && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => recarregarEstatisticas()}>Tentar novamente</Button>}>Indicadores indisponíveis.</Alert>}
       <OperationalSummary label="Indicadores gerais de clientes" items={[
         { label: 'Cadastros', value: erroEstatisticas ? '—' : stats?.total ?? '—' },

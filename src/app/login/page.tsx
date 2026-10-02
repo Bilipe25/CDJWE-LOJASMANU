@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box,
@@ -12,7 +12,6 @@ import {
   IconButton,
   CircularProgress,
   Alert,
-  Container,
 } from '@mui/material';
 import {
   Visibility,
@@ -20,10 +19,8 @@ import {
   Person,
   Lock,
   LoginOutlined,
-  CheckCircleOutline,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useConfiguracoes } from '@/hooks/useConfiguracoes';
 import { useAuth } from '@/contexts/AuthContext';
 import { getVersiculoDoDia } from '@/data/versiculos';
 import { format } from 'date-fns';
@@ -33,316 +30,53 @@ import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { configuracoes, nomeEmpresa, logoUrl, corPrimaria } = useConfiguracoes();
-  const { login, isAuthenticated, authError } = useAuth();
-  
+  // The public sign-in page must not depend on authenticated company settings.
+  const nomeEmpresa = 'Lojas Manu';
+  const logoUrl = '/icon-512x512.png';
+  const corPrimaria = '#0369a1';
+  const { login, isAuthenticated, isLoading: verificandoSessao, authError, retryAuth } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [pageLoading, setPageLoading] = useState(true);
-  const [loginSuccess, setLoginSuccess] = useState(false);
-  
-  const versiculoDoDia = getVersiculoDoDia();
-  const dataAtual = format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
+  const [falhaLogin, setFalhaLogin] = useState(false);
+  const [hoje, setHoje] = useState<Date | null>(null);
+  const enviando = useRef(false);
+  const redirecionado = useRef(false);
 
-  // Animação de carregamento inicial
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setPageLoading(false);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
+  // Date-dependent content is calculated after hydration in the device's local calendar.
+  useEffect(() => { setHoje(new Date()); }, []);
+  const versiculoDoDia = hoje ? getVersiculoDoDia(hoje) : null;
+  const dataAtual = hoje ? format(hoje, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR }) : '';
+  const mensagemErro = error || authError || (falhaLogin ? 'Não foi possível entrar. Confira email, senha e acesso ao PDV.' : '');
+  const ocupado = loading || verificandoSessao;
 
-  // Redirecionar se já estiver autenticado (mas não durante o login)
   useEffect(() => {
-    if (isAuthenticated && !authError && !loginSuccess && !loading) {
-      router.push('/');
+    if (isAuthenticated && !authError && !ocupado && !enviando.current && !redirecionado.current) {
+      redirecionado.current = true;
+      router.replace('/');
     }
-  }, [isAuthenticated, authError, loginSuccess, loading, router]);
+  }, [isAuthenticated, authError, ocupado, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    
-    if (!username || !password) {
-      setError('Por favor, preencha todos os campos');
-      return;
-    }
-
-    setLoading(true);
-
-    // Usar o contexto de autenticação
-    const success = await login(username, password);
-    
-    if (success) {
-      setLoginSuccess(true);
-      // Aguardar animação antes de redirecionar (mais tempo)
-      setTimeout(() => {
-        router.push('/');
-      }, 3500);
-    } else {
-      setError('Não foi possível entrar. Confira email, senha e acesso ao PDV.');
-      setLoading(false);
+    if (enviando.current || ocupado || redirecionado.current) return;
+    setError(''); setFalhaLogin(false);
+    const email = username.trim();
+    if (!email || !password) { setError('Preencha o email e a senha para entrar.'); return; }
+    enviando.current = true; setLoading(true);
+    try {
+      if (await login(email, password)) {
+        redirecionado.current = true;
+        router.replace('/');
+      } else { setFalhaLogin(true); }
+    } catch {
+      setError('Não foi possível conectar ao serviço. Reconecte e tente novamente.');
+    } finally {
+      enviando.current = false; setLoading(false);
     }
   };
-
-  // Tela de carregamento inicial
-  if (pageLoading) {
-    return (
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: `linear-gradient(135deg, ${corPrimaria || '#0ea5e9'}15 0%, ${corPrimaria || '#0ea5e9'}05 100%)`,
-          gap: 3,
-        }}
-      >
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{
-            type: 'spring',
-            stiffness: 260,
-            damping: 20,
-          }}
-        >
-          {logoUrl ? (
-            <Box
-              sx={{
-                position: 'relative',
-                width: 150,
-                height: 150,
-                borderRadius: 3,
-                overflow: 'hidden',
-                boxShadow: `0 8px 32px ${corPrimaria || '#0ea5e9'}40`,
-              }}
-            >
-              <Image
-                src={logoUrl}
-                alt={nomeEmpresa}
-                fill
-                style={{ objectFit: 'contain' }}
-                priority
-              />
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                width: 150,
-                height: 150,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 3,
-                background: `linear-gradient(135deg, ${corPrimaria || '#0ea5e9'} 0%, ${corPrimaria || '#0ea5e9'}80 100%)`,
-                boxShadow: `0 8px 32px ${corPrimaria || '#0ea5e9'}40`,
-              }}
-            >
-              <Typography
-                variant="h1"
-                sx={{
-                  color: 'white',
-                  fontWeight: 'bold',
-                  fontSize: '4rem',
-                }}
-              >
-                {nomeEmpresa.charAt(0)}
-              </Typography>
-            </Box>
-          )}
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.4 }}
-        >
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              color: corPrimaria || '#0ea5e9',
-              textAlign: 'center',
-            }}
-          >
-            {nomeEmpresa}
-          </Typography>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4, duration: 0.4 }}
-        >
-          <CircularProgress
-            size={40}
-            sx={{
-              color: corPrimaria || '#0ea5e9',
-            }}
-          />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6, duration: 0.4 }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              color: 'text.secondary',
-              textAlign: 'center',
-            }}
-          >
-            Carregando...
-          </Typography>
-        </motion.div>
-      </Box>
-    );
-  }
-
-  // Tela de sucesso após login
-  if (loginSuccess) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-      >
-        <Box
-          sx={{
-            minHeight: '100vh',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: `linear-gradient(135deg, ${corPrimaria || '#0ea5e9'}20 0%, ${corPrimaria || '#0ea5e9'}10 100%)`,
-            gap: 3,
-          }}
-        >
-          {/* Ícone de Sucesso */}
-          <motion.div
-            initial={{ scale: 0, rotate: -180 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{
-              type: 'spring',
-              stiffness: 150,
-              damping: 20,
-              delay: 0.2,
-            }}
-          >
-            <Box
-              sx={{
-                width: 120,
-                height: 120,
-                borderRadius: '50%',
-                background: `linear-gradient(135deg, #10b981 0%, #059669 100%)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 8px 32px rgba(16, 185, 129, 0.4)',
-              }}
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{
-                  delay: 0.5,
-                  type: 'spring',
-                  stiffness: 200,
-                }}
-              >
-                <CheckCircleOutline sx={{ fontSize: 80, color: 'white' }} />
-              </motion.div>
-            </Box>
-          </motion.div>
-
-          {/* Mensagem Principal */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8, duration: 0.6, ease: 'easeOut' }}
-          >
-            <Typography
-              variant="h4"
-              sx={{
-                fontWeight: 700,
-                color: '#10b981',
-                textAlign: 'center',
-                fontSize: { xs: '1.75rem', sm: '2.125rem' },
-              }}
-            >
-              Login realizado com sucesso!
-            </Typography>
-          </motion.div>
-
-          {/* Saudação */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.2, duration: 0.6, ease: 'easeOut' }}
-          >
-            <Typography
-              variant="h6"
-              sx={{
-                color: 'text.secondary',
-                textAlign: 'center',
-                fontWeight: 500,
-              }}
-            >
-              Bem-vindo(a), {username}!
-            </Typography>
-          </motion.div>
-
-          {/* Mensagem de Redirecionamento */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.6, duration: 0.5 }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginTop: 2 }}>
-              <CircularProgress
-                size={20}
-                sx={{
-                  color: corPrimaria || '#0ea5e9',
-                }}
-              />
-              <Typography
-                variant="body2"
-                sx={{
-                  color: 'text.secondary',
-                  textAlign: 'center',
-                }}
-              >
-                Redirecionando para o sistema...
-              </Typography>
-            </Box>
-          </motion.div>
-
-          {/* Efeito de Fade Out antes de redirecionar */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: [0, 0.5, 0] }}
-            transition={{ delay: 2.5, duration: 1, ease: 'easeInOut' }}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'white',
-              pointerEvents: 'none',
-            }}
-          />
-        </Box>
-      </motion.div>
-    );
-  }
 
   return (
     <Box
@@ -357,60 +91,6 @@ export default function LoginPage() {
         padding: 2,
       }}
     >
-      {/* Background decorativo animado */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 0.1 }}
-        transition={{ duration: 1 }}
-        style={{
-          position: 'absolute',
-          width: '100%',
-          height: '100%',
-          overflow: 'hidden',
-        }}
-      >
-        <motion.div
-          animate={{
-            scale: [1, 1.2, 1],
-            rotate: [0, 90, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: 'linear',
-          }}
-          style={{
-            position: 'absolute',
-            top: '-20%',
-            right: '-10%',
-            width: '500px',
-            height: '500px',
-            borderRadius: '50%',
-            background: `radial-gradient(circle, ${corPrimaria || '#0ea5e9'}40 0%, transparent 70%)`,
-          }}
-        />
-        <motion.div
-          animate={{
-            scale: [1, 1.3, 1],
-            rotate: [0, -90, 0],
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-            ease: 'linear',
-          }}
-          style={{
-            position: 'absolute',
-            bottom: '-20%',
-            left: '-10%',
-            width: '600px',
-            height: '600px',
-            borderRadius: '50%',
-            background: `radial-gradient(circle, ${corPrimaria || '#0ea5e9'}30 0%, transparent 70%)`,
-          }}
-        />
-      </motion.div>
-
       {/* Container Principal Centralizado */}
       <Box
         sx={{
@@ -440,8 +120,7 @@ export default function LoginPage() {
         >
           <Box sx={{ maxWidth: 500 }}>
             {/* Logo em destaque */}
-            {logoUrl ? (
-              <motion.div
+            <motion.div
                 initial={{ scale: 0, rotate: -10 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{
@@ -477,54 +156,13 @@ export default function LoginPage() {
                     src={logoUrl}
                     alt={nomeEmpresa}
                     fill
+                    sizes="140px"
+                    unoptimized
                     style={{ objectFit: 'contain', padding: '10px' }}
                     priority
                   />
                 </Box>
               </motion.div>
-            ) : (
-              <motion.div
-                initial={{ scale: 0, rotate: -10 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{
-                  type: 'spring',
-                  stiffness: 200,
-                  damping: 15,
-                  delay: 0.1,
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 140,
-                    height: 140,
-                    marginBottom: 3,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 4,
-                    background: `linear-gradient(135deg, ${corPrimaria || '#0ea5e9'} 0%, ${corPrimaria || '#0ea5e9'}90 100%)`,
-                    boxShadow: `0 8px 32px ${corPrimaria || '#0ea5e9'}50`,
-                    border: `3px solid ${corPrimaria || '#0ea5e9'}30`,
-                    transition: 'all 0.3s ease',
-                    '&:hover': {
-                      transform: 'scale(1.05)',
-                      boxShadow: `0 12px 48px ${corPrimaria || '#0ea5e9'}60`,
-                    },
-                  }}
-                >
-                  <Typography
-                    variant="h1"
-                    sx={{
-                      color: 'white',
-                      fontWeight: 'bold',
-                      fontSize: '4.5rem',
-                    }}
-                  >
-                    {nomeEmpresa.charAt(0)}
-                  </Typography>
-                </Box>
-              </motion.div>
-            )}
 
             {/* Saudação */}
             <motion.div
@@ -629,7 +267,7 @@ export default function LoginPage() {
                       fontStyle: 'italic',
                     }}
                   >
-                    &quot;{versiculoDoDia.texto}&quot;
+                    &quot;{versiculoDoDia?.texto}&quot;
                   </Typography>
 
                   <Typography
@@ -640,7 +278,7 @@ export default function LoginPage() {
                       fontSize: '0.8125rem',
                     }}
                   >
-                    — {versiculoDoDia.referencia}
+                    — {versiculoDoDia?.referencia}
                   </Typography>
                 </Box>
               </Card>
@@ -715,8 +353,7 @@ export default function LoginPage() {
                     marginBottom: 4,
                   }}
                 >
-                  {logoUrl ? (
-                    <motion.div
+                  <motion.div
                       whileHover={{ scale: 1.05 }}
                       transition={{ type: 'spring', stiffness: 300 }}
                     >
@@ -735,37 +372,13 @@ export default function LoginPage() {
                           src={logoUrl}
                           alt={nomeEmpresa}
                           fill
+                          sizes="140px"
+                          unoptimized
                           style={{ objectFit: 'contain' }}
                           priority
                         />
                       </Box>
                     </motion.div>
-                  ) : (
-                    <Box
-                      sx={{
-                        width: { xs: 120, sm: 140 },
-                        height: { xs: 120, sm: 140 },
-                        marginBottom: 3,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: 3,
-                        background: `linear-gradient(135deg, ${corPrimaria || '#0ea5e9'} 0%, ${corPrimaria || '#0ea5e9'}80 100%)`,
-                        boxShadow: `0 4px 20px ${corPrimaria || '#0ea5e9'}40`,
-                      }}
-                    >
-                      <Typography
-                        variant="h2"
-                        sx={{
-                          color: 'white',
-                          fontWeight: 'bold',
-                          fontSize: { xs: '2.5rem', sm: '3rem' },
-                        }}
-                      >
-                        {nomeEmpresa.charAt(0)}
-                      </Typography>
-                    </Box>
-                  )}
 
                   <Typography
                     variant="h5"
@@ -802,6 +415,7 @@ export default function LoginPage() {
               >
                 <Typography
                   variant="h4"
+                  component="h1"
                   sx={{
                     fontWeight: 700,
                     color: 'text.primary',
@@ -830,17 +444,21 @@ export default function LoginPage() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4, duration: 0.4 }}
             >
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} aria-busy={ocupado}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <TextField
                     fullWidth
                     label="Email"
+                    id="login-email"
+                    name="email"
+                    required
+                    inputProps={{ inputMode: 'email', autoCapitalize: 'none', spellCheck: false, maxLength: 254 }}
                     type="email"
                     autoComplete="username"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={(e) => { setUsername(e.target.value); setError(''); setFalhaLogin(false); }}
                     variant="outlined"
-                    disabled={loading}
+                    disabled={ocupado}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -866,11 +484,15 @@ export default function LoginPage() {
                   <TextField
                     fullWidth
                     label="Senha"
+                    id="login-password"
+                    name="password"
+                    autoComplete="current-password"
+                    required
                     type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => { setPassword(e.target.value); setError(''); setFalhaLogin(false); }}
                     variant="outlined"
-                    disabled={loading}
+                    disabled={ocupado}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -880,9 +502,13 @@ export default function LoginPage() {
                       endAdornment: (
                         <InputAdornment position="end">
                           <IconButton
-                            onClick={() => setShowPassword(!showPassword)}
+                            type="button"
+                            aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                            aria-pressed={showPassword}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => setShowPassword(value => !value)}
                             edge="end"
-                            disabled={loading}
+                            disabled={ocupado}
                           >
                             {showPassword ? <VisibilityOff /> : <Visibility />}
                           </IconButton>
@@ -905,31 +531,31 @@ export default function LoginPage() {
                   />
 
                   <AnimatePresence mode="wait">
-                    {(authError || error) && (
+                    {mensagemErro && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.3 }}
                       >
-                        <Alert severity="error" sx={{ borderRadius: 2 }}>
-                          {authError || error}
+                        <Alert severity="error" sx={{ borderRadius: 2 }} action={authError ? <Button color="inherit" size="small" disabled={ocupado} onClick={() => { setError(''); setFalhaLogin(false); retryAuth(); }}>Verificar sessão</Button> : undefined}>
+                          {mensagemErro}
                         </Alert>
                       </motion.div>
                     )}
                   </AnimatePresence>
 
                   <motion.div
-                    whileHover={{ scale: loading ? 1 : 1.02 }}
-                    whileTap={{ scale: loading ? 1 : 0.98 }}
+                    whileHover={{ scale: ocupado ? 1 : 1.02 }}
+                    whileTap={{ scale: ocupado ? 1 : 0.98 }}
                   >
                     <Button
                       type="submit"
                       fullWidth
                       variant="contained"
                       size="large"
-                      disabled={loading}
-                      startIcon={loading ? <CircularProgress size={20} /> : <LoginOutlined />}
+                      disabled={ocupado}
+                      startIcon={ocupado ? <CircularProgress size={20} color="inherit" aria-label={loading ? 'Entrando' : 'Verificando sessão'} /> : <LoginOutlined />}
                       sx={{
                         padding: '14px',
                         borderRadius: 2,
@@ -947,7 +573,7 @@ export default function LoginPage() {
                         },
                       }}
                     >
-                      {loading ? 'Entrando...' : 'Entrar'}
+                      {loading ? 'Entrando...' : verificandoSessao ? 'Verificando sessão…' : 'Entrar'}
                     </Button>
                   </motion.div>
                 </Box>
@@ -962,7 +588,7 @@ export default function LoginPage() {
             >
               <Box sx={{ marginTop: 4, textAlign: 'center' }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  © {new Date().getFullYear()} {nomeEmpresa}. Todos os direitos reservados.
+                  © {hoje?.getFullYear()} {nomeEmpresa}. Todos os direitos reservados.
                 </Typography>
               </Box>
             </motion.div>

@@ -12,4 +12,4 @@ Nova venda no PDV passa cliente validado e preserva rascunho existente mediante 
 
 Não literalizar: dados fictícios, contadores derivados só da página, disponibilidade de todos os comandos a qualquer perfil, cores sem verificação, imagem como evidência funcional. Cadastro/edição devem herdar a gramática e conservar todos os campos estruturados; esconder optional não significa apagar dados.
 
-Estado: composição aprovada, implementação ainda não iniciada. Sem mudanças de dados, migração, commit ou publicação nesta etapa.
+Estado em 02/10/2026: composição implementada e conferida em simulador local. Aprovação visual original preservada. Evidências e limites em docs/ux-2026-10-01/implementacao.md; revisão em .impeccable/review/finish-verdict.md.

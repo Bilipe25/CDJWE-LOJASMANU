@@ -68,6 +68,7 @@ import { trpc } from '@/lib/trpc/client';
 import { usePDVStore } from '@/stores/pdv-store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { OperationalHeader, operationalSurface, operationalTable } from '@/components/common/OperationalPage';
+import { comJanelaImpressao } from '@/lib/pdf/impressao-browser';
 import { arredondarMoeda } from '@/lib/utils/valores-pedido';
 import SaleSection from '@/components/common/SaleSection';
 import EnderecoFields from '@/components/common/EnderecoFields';
@@ -636,9 +637,11 @@ function PDVPageContent() {
     const dadosEmpresa = empresaParaDocumento(configuracoes);
 
     try {
-    const { gerarPedidoPDF } = await import('@/lib/pdf/pedido-pdf');
-    await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
-    } catch { toast.error('Não foi possível preparar a impressão. Tente novamente.'); }
+      await comJanelaImpressao(acao, async janela => {
+        const { gerarPedidoPDF } = await import('@/lib/pdf/pedido-pdf');
+        await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao, janela);
+      });
+    } catch (erro) { toast.error(erro instanceof Error ? erro.message : 'Não foi possível preparar a impressão. Tente novamente.'); }
   };
 
   if (falhaHidratacao || erroPedido || (pedidoEditId && pedidoParaEditar && ['CANCELADO','FINALIZADO'].includes(pedidoParaEditar.status ?? ''))) {
@@ -657,7 +660,7 @@ function PDVPageContent() {
   return (
     <AppLayout>
       {(erroProdutos || erroClientes || erroTipos || erroPagamentos) && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => { void recarregarProdutos(); void recarregarClientes(); void recarregarTipos(); void recarregarPagamentos(); }}>Tentar novamente</Button>}>Não foi possível carregar os dados da venda. Confira a conexão e tente novamente.</Alert>}
-      <OperationalHeader title="PDV" description={modoEdicao ? 'Confira as alterações antes de salvar.' : 'Monte a venda e confira os dados do pedido.'} actions={<>
+      <OperationalHeader description={modoEdicao ? 'Confira as alterações antes de salvar.' : 'Monte a venda e confira os dados do pedido.'} actions={<>
         <Chip label={modoEdicao ? 'Editando pedido' : 'Rascunho local'} size="small" variant="outlined" />
         <Button startIcon={<Keyboard />} onClick={() => setDialogAtalhos(true)}>Atalhos</Button>
       </>} />

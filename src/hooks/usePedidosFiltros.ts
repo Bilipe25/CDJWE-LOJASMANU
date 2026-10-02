@@ -10,7 +10,7 @@ export function usePedidosFiltros() {
   const [pronto,setPronto]=useState(false);
   useEffect(()=>{
     // Hidratação externa de URL/storage após SSR; uma atualização inicial controlada.
-    if (searchParams.get('voltou_edicao')==='true') {
+    if (searchParams.get('voltou_edicao')==='true' || Array.from(searchParams.keys()).some(key => key.startsWith('filtro_'))) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratar filtros externos uma vez após SSR
       setFiltros(filtrosDaUrl(new URLSearchParams(searchParams.toString())));setPronto(true);
       const timeout=setTimeout(()=>{

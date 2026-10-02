@@ -4,5 +4,5 @@ import ProtectedRoute from './ProtectedRoute';
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  return pathname === '/login' ? <>{children}</> : <ProtectedRoute>{children}</ProtectedRoute>;
+  return pathname === '/login' || pathname === '/offline' ? <>{children}</> : <ProtectedRoute>{children}</ProtectedRoute>;
 }

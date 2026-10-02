@@ -20,3 +20,11 @@ Nova venda no PDV passa cliente validado e preserva rascunho existente mediante 
 Não literalizar: dados fictícios, contadores derivados só da página, disponibilidade de todos os comandos a qualquer perfil, cores sem verificação, imagem como evidência funcional. Cadastro/edição devem herdar a gramática e conservar todos os campos estruturados; esconder optional não significa apagar dados.
 
 Estado: composição aprovada, implementação ainda não iniciada. Sem mudanças de dados, migração, commit ou publicação nesta etapa.
+
+## Estado implementado — 02/10/2026
+
+Esta seção atualiza o estado pré-implementação acima, preservando a decisão e a aprovação originais. Código atual: ficha com largura máxima desktop de 900 px, nome 24 px/peso 700, contato em grid `1fr 1.5fr 1fr` a partir de sm e empilhado abaixo; Endereços/Histórico 6/6 a partir de md, empilhados em telas menores. Endereços usam raio explícito de 12 px. Histórico consulta 25 registros por página; tabela com Número/Total/Ações, data e status dentro da primeira célula. Três registros na segunda página da captura são dados do cenário, não limite.
+
+Nova venda permanece condicionada a cliente ativo e confirmação de descarte quando há rascunho. Compras finalizadas não são soma irrestrita do histórico. Cadastro/edição mantêm campos e expansão dos endereços estruturados.
+
+Sistema extraído em `DESIGN.md` e `.impeccable/design.json`. Evidência: `review/clientes-ficha-desktop.png`, `review/clientes-ficha-mobile.png`, código e `review/finish-verdict.md`. Ship limita-se aos cinco achados resolvidos da revisão; não certifica todos os estados, WCAG ou leitor de tela. Dados locais fictícios. Sem nova aprovação, publicação ou alteração de regras nesta documentação.

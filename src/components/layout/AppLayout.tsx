@@ -276,7 +276,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <MenuIcon />
           </IconButton>
           <Typography 
-            variant="h6" 
+            variant="h6"
+            component={['/', '/pdv', '/pedidos', '/clientes'].includes(pathname) ? 'h1' : 'h6'}
             fontWeight="600" 
             sx={{ 
               flexGrow: 1,

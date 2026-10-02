@@ -514,7 +514,7 @@ function PedidosPageContent() {
 
   return (
     <AppLayout>
-      <OperationalHeader title="Pedidos" description="Consulte, confira e acompanhe os pedidos." actions={<>
+      <OperationalHeader description="Consulte, confira e acompanhe os pedidos." actions={<>
         <Button variant="outlined" startIcon={<FileDownload />} onClick={() => setDialogExportar(true)}>Exportar</Button>
         <Button variant="contained" startIcon={<Receipt />} onClick={() => router.push('/pdv')}>Novo pedido</Button>
       </>} />

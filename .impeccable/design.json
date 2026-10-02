@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T03:40:23Z",
+  "title": "Design System: PDV Lojas Manu",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Azul operacional"
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Papel branco"
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Fundo frio"
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Texto principal"
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Texto de apoio"
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Borda discreta"
+      },
+      "success": {
+        "role": "semantic",
+        "displayName": "Finalizado / ativo"
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Pendente"
+      },
+      "error": {
+        "role": "semantic",
+        "displayName": "Erro / cancelado"
+      },
+      "info": {
+        "role": "semantic",
+        "displayName": "Informação / confirmado"
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Título operacional",
+        "purpose": "Títulos de detalhes em escala de 24 px/peso 700. PDV, Pedidos e Clientes usam título único h1 na barra superior com aparência h6; pilha declarada, sem prova de carregamento de Inter."
+      },
+      "section": {
+        "displayName": "Seção",
+        "purpose": "Grupos de tarefa e consulta."
+      },
+      "total": {
+        "displayName": "Total persistente",
+        "purpose": "h5 no PDV; detalhe de Pedido usa override 24 px."
+      }
+    },
+    "shadows": [
+      {
+        "name": "operational-flat",
+        "value": "none",
+        "purpose": "Painéis operacionais em repouso e hover."
+      },
+      {
+        "name": "button-hover",
+        "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+        "purpose": "Hover de botões no theme."
+      },
+      {
+        "name": "paper-low",
+        "value": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
+        "purpose": "Paper elevation1 e AppBar."
+      },
+      {
+        "name": "toast",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+        "purpose": "Toasts da aplicação."
+      },
+      {
+        "name": "pdv-footer",
+        "value": "0 -4px 16px rgb(15 23 42 / 0.06)",
+        "purpose": "Separação do rodapé financeiro fixo."
+      }
+    ],
+    "motion": [
+      {
+        "name": "contained-hover",
+        "value": "background-color 0.2s ease",
+        "purpose": "Hover contained no theme."
+      },
+      {
+        "name": "navigation",
+        "value": "all 0.2s ease",
+        "purpose": "Transição de navegação existente."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "CSS global reduz animações e transições quando prefers-reduced-motion: reduce; MotionConfig usa reducedMotion=user."
+      }
+    ],
+    "focus": {
+      "value": "outline: 2px solid #0369a1; outline-offset: 3px",
+      "source": "src/app/globals.css :focus-visible"
+    },
+    "breakpointPolicy": "Breakpoints MUI herdados; projeto não redefine valores. PDV muda a 8/4 em lg e usa duas etapas abaixo de md; 1024 px foi capturado empilhado.",
+    "sourceFiles": [
+      "src/app/providers.tsx",
+      "src/app/globals.css",
+      "src/components/common/OperationalPage.tsx",
+      "src/components/common/StatusBadge.tsx",
+      "src/components/common/SaleSection.tsx",
+      "src/components/layout/AppLayout.tsx",
+      "src/app/pdv/page.tsx",
+      "src/app/pedidos/page.tsx",
+      "src/app/clientes/page.tsx"
+    ],
+    "evidenceLimits": "Capturas locais com dados fictícios. finish-verdict.md dá ship limitado aos cinco achados. Sem navegador nesta documentação, sem certificação WCAG ou prova de todos os estados. Sem rampas tonais sintetizadas ou tokens novos; snippets são recortes de estilos extraídos, não reproduzem o runtime MUI nem todos os detalhes/estados do componente."
+  },
+  "components": [
+    {
+      "name": "Ação principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Contained da ação principal; estilo extraído do theme.",
+      "html": "<button class=\"ds-primary\">Salvar pedido</button>",
+      "css": ".ds-primary{background:#0369a1;color:#ffffff;border:0;border-radius:10px;padding:10px 24px;font:600 14px Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;text-transform:none}.ds-primary:hover{background:#0369a1;box-shadow:0 4px 6px -1px rgb(0 0 0 / .1),0 2px 4px -2px rgb(0 0 0 / .1);transition:background-color .2s ease}.ds-primary:focus-visible{outline:2px solid #0369a1;outline-offset:3px}"
+    },
+    {
+      "name": "Superfície operacional",
+      "kind": "card",
+      "refersTo": "operational-surface",
+      "description": "Borda única e ausência de elevação, inclusive no hover.",
+      "html": "<section class=\"ds-surface\">Itens do pedido</section>",
+      "css": ".ds-surface{background:#ffffff;color:#0f172a;border:1px solid #e2e8f0;border-radius:12px;padding:20px;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:none}.ds-surface:hover{box-shadow:none}"
+    },
+    {
+      "name": "Campo de busca",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Recorte de contorno/foco; o runtime MUI cuida da label e estados completos.",
+      "html": "<label class=\"ds-field-label\">Buscar cliente<input class=\"ds-field\" placeholder=\"Nome, CPF, telefone ou e-mail\" /></label>",
+      "css": ".ds-field-label{display:grid;gap:8px;color:#475569;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif}.ds-field{border:1px solid #e2e8f0;border-radius:10px;background:transparent;color:#0f172a;caret-color:#0369a1}.ds-field::placeholder{color:#475569;opacity:1}.ds-field:hover{border-color:#0ea5e9}.ds-field:focus-visible{outline:2px solid #0369a1;outline-offset:3px}"
+    },
+    {
+      "name": "Página ativa",
+      "kind": "nav",
+      "refersTo": "navigation-active",
+      "description": "Cor e geometria da navegação atual; aria-current preservado.",
+      "html": "<a class=\"ds-nav\" href=\"/pdv\" aria-current=\"page\">PDV</a>",
+      "css": ".ds-nav{display:block;background:#0369a1;color:#ffffff;border-radius:24px;padding:12px 16px;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;text-decoration:none;transition:all .2s ease}.ds-nav:hover{background:#0369a1}.ds-nav:focus-visible{outline:2px solid #0369a1;outline-offset:3px}"
+    },
+    {
+      "name": "Estado Pendente",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "Recorte da semântica warning com rótulo, raio e peso do StatusBadge.",
+      "html": "<span class=\"ds-status\">Pendente</span>",
+      "css": ".ds-status{display:inline-block;color:#92400e;border:1px solid currentColor;border-radius:8px;font-weight:600;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif}"
+    },
+    {
+      "name": "Ação outlined",
+      "kind": "button",
+      "refersTo": "button-outlined",
+      "description": "Recorte do botão secundário; contorno e foco preservam hierarquia.",
+      "html": "<button class=\"ds-outlined\">Editar cliente</button>",
+      "css": ".ds-outlined{background:transparent;color:#0369a1;border:1px solid currentColor;border-radius:10px;padding:10px 24px;font-weight:600;font-family:Inter,-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif;text-transform:none}.ds-outlined:hover{box-shadow:0 4px 6px -1px rgb(0 0 0 / .1),0 2px 4px -2px rgb(0 0 0 / .1)}.ds-outlined:focus-visible{outline:2px solid #0369a1;outline-offset:3px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "",
+    "overview": "O mundo atual é **Operate**, dentro da identidade azul/MUI existente. A interface concentra busca, dados verificáveis e a próxima ação em superfícies claras. A densidade atende principalmente computador com teclado e mouse; telas estreitas reorganizam o trabalho e conservam acesso às ações.\n\nEste registro descreve o código após a rodada de implementação de `/pdv`, `/pedidos` e `/clientes`, incluindo componentes compartilhados. As composições locais continuam nos respectivos registros de superfície. Não foi escolhido um novo nome metafórico ou uma nova identidade nesta documentação.",
+    "keyCharacteristics": [
+      "Azul nas ações principais, navegação ativa e totais.",
+      "Branco e slate com bordas discretas e grupos compactos.",
+      "Sans da aplicação, valores tabulares e estados textuais.",
+      "MUI para controles, ícones, foco, diálogos e feedback."
+    ],
+    "rules": [
+      {
+        "name": "Estado explícito",
+        "body": "Salvar no PDV comunica Pendente; a apresentação não deve sugerir Finalizado. Indicadores de vendas finalizadas permanecem distintos do total de pedidos da consulta.",
+        "section": "colors"
+      },
+      {
+        "name": "Conferência numérica",
+        "body": "Tabelas operacionais, resumos e total do PDV usam numerais tabulares para facilitar a conferência. Manter valores e datas no formato brasileiro adotado pelo produto.",
+        "section": "typography"
+      },
+      {
+        "name": "Superfície operacional",
+        "body": "Usar o componente compartilhado para os painéis das três rotas; não acrescentar elevação no hover desses painéis.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** reutilizar superfícies, tabelas, cabeçalhos e estados compartilhados das rotas operacionais.",
+      "**Do** manter total e ação de salvar acessíveis no PDV com espaço reservado para o rodapé.",
+      "**Do** mostrar endereço histórico do pedido e endereços completos na ficha.",
+      "**Do** distinguir Pendente, Finalizado e os indicadores financeiros pelo critério real do servidor."
+    ],
+    "donts": [
+      "**Don't** transformar exemplos de quatro itens, dois endereços ou três linhas visíveis em limites do produto.",
+      "**Don't** esconder preço, cor, descontos, dados estruturados ou permissões para copiar o mockup.",
+      "**Don't** copiar dados fictícios ou controles flutuantes do ambiente de desenvolvimento.",
+      "**Don't** interpretar este registro como certificação WCAG ou validação de todos os estados da aplicação."
+    ]
+  }
+}

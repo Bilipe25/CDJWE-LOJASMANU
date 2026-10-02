@@ -45,7 +45,7 @@ As capturas foram abertas e inspecionadas; a ficha móvel inicialmente inválida
 - Nova venda com rascunho abre confirmação; cancelar preservou os quatro itens, pagamento, cliente, endereço e total.
 - Histórico mostrou 25 registros e depois 3, com total 28 após a venda de teste. Os contadores de vendas finalizadas são distintos do total de pedidos do histórico.
 - Limpar filtros acionado com Enter removeu situação e voltou à consulta de todos os status.
-- 65 testes automatizados passaram. Typecheck passou antes dos últimos textos/ordenação de pós-salvamento; verificação final e build em curso.
+- 65 testes automatizados passaram. Typecheck e build de produção passaram após os últimos ajustes da rodada. Lint sem erros e com 192 avisos do projeto.
 - Detector em nove alvos alterados retornou []; não há hook de design nesta execução.
 
 Limites: sem certificação WCAG, sem leitor de tela, sem benchmark de produção, sem intervenção no Supabase real. Avaliar também a semântica do resumo financeiro de Pedidos contra o critério da RPC: o campo de vendas não é necessariamente soma de todos os pedidos da consulta.

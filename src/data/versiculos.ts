@@ -129,15 +129,10 @@ export const versiculos: Versiculo[] = [
 ];
 
 // Função para obter o versículo do dia baseado na data
-export function getVersiculoDoDia(): Versiculo {
-  const hoje = new Date();
-  const inicioAno = new Date(hoje.getFullYear(), 0, 1);
-  const diff = hoje.getTime() - inicioAno.getTime();
-  const umDia = 1000 * 60 * 60 * 24;
-  const diaDoAno = Math.floor(diff / umDia);
-  
-  // Ciclo de 120 dias
-  const indice = diaDoAno % 120;
-  
-  return versiculos[indice];
+export function getVersiculoDoDia(hoje = new Date()): Versiculo {
+  // Count calendar days, independently of DST and the time within the selected day.
+  const dia = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const inicioAno = Date.UTC(hoje.getFullYear(), 0, 1);
+  const diaDoAno = Math.floor((dia - inicioAno) / 86_400_000);
+  return versiculos[diaDoAno % versiculos.length];
 }

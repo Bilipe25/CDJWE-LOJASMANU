@@ -20,3 +20,11 @@ Detalhes ainda precisam ser desenhados/validados: produto selecionado, carrinho 
 Não literalizar: ausência de Saídas Financeiras na navegação abreviada da imagem; botão Adicionar ativo com busca vazia; valores/cadastro fictícios; tons e gradientes gerados sem medição. Manter uma ação principal, sem mudar status PENDENTE para FINALIZADO por motivo visual.
 
 Estado desta entrega: mockup aprovado, implementação ainda não iniciada. As propostas de Pedidos e Clientes devem herdar esta linguagem e passar por aprovação visual antes do código.
+
+## Estado implementado — 02/10/2026
+
+Esta seção atualiza o estado pré-implementação acima, preservando a decisão e a aprovação originais. Código atual: duas áreas em 8/4 colunas em lg, empilhadas em 1024 px e duas etapas abaixo de md. Contexto desktop aberto e compacto; `SaleSection` permite Accordion na apresentação compacta. Superfícies operacionais planas com borda única e raio explícito de 12 px. Rodapé financeiro fixo, deslocado pela sidebar de 240 px no desktop, safe-area móvel e espaço reservado no conteúdo.
+
+Salvar cria PENDENTE; conferência e sucesso comunicam esse estado. Preservados itens, edição, preço/cor/desconto, duplicação, endereço, atendimento/pagamento e rascunho ao cancelar. Total e ação de salvar permanecem acessíveis. Toasts de atalhos/busca usam ícones MUI.
+
+Sistema extraído em `DESIGN.md` e `.impeccable/design.json`. Evidência: `review/pdv-desktop.png`, `review/pdv-1366.png`, `review/pdv-1024.png`, `review/pdv-mobile.png`, código e `review/finish-verdict.md`. O cenário de quatro itens/sete unidades prova a composição desse cenário, sem fixar limite. Ship limita-se aos cinco achados resolvidos; não certifica todos os estados, WCAG ou leitor de tela. Dados locais fictícios. Sem nova aprovação, publicação ou alteração de regras nesta documentação.

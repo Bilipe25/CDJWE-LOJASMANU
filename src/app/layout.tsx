@@ -6,10 +6,10 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'PDV Lojas Manu',
   description: 'Sistema de Ponto de Venda para Lojas Manu',
-  manifest: '/api/manifest',
+  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'default',
     title: 'PDV Lojas Manu',
   },
   applicationName: 'PDV Lojas Manu',
@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
       { url: '/icon-192x192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icon-512x512.png', sizes: '512x512', type: 'image/png' },
     ],
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0ea5e9',
+  themeColor: '#0369a1',
   width: 'device-width',
   initialScale: 1,
 };

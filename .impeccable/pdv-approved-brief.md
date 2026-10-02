@@ -12,4 +12,4 @@ Detalhes ainda precisam ser desenhados/validados: produto selecionado, carrinho 
 
 Não literalizar: ausência de Saídas Financeiras na navegação abreviada da imagem; botão Adicionar ativo com busca vazia; valores/cadastro fictícios; tons e gradientes gerados sem medição. Manter uma ação principal, sem mudar status PENDENTE para FINALIZADO por motivo visual.
 
-Estado desta entrega: mockup aprovado, implementação ainda não iniciada. As propostas de Pedidos e Clientes devem herdar esta linguagem e passar por aprovação visual antes do código.
+Estado em 02/10/2026: composição implementada e conferida em simulador local. Aprovação visual original preservada. Evidências e limites em docs/ux-2026-10-01/implementacao.md; revisão em .impeccable/review/finish-verdict.md.

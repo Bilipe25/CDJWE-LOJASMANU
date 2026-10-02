@@ -1,104 +1,112 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Box, Button, Snackbar, Alert, IconButton } from '@mui/material';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Snackbar } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import GetAppIcon from '@mui/icons-material/GetApp';
-import { useConfiguracoes } from '@/hooks/useConfiguracoes';
+import { registrarPWA } from '@/lib/pwa/registro';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+function wasDismissed() {
+  try { return sessionStorage.getItem('pwa-install-dismissed') === 'true'; } catch { return false; }
+}
+function rememberDismissal() {
+  try { sessionStorage.setItem('pwa-install-dismissed', 'true'); } catch { /* Storage may be unavailable. */ }
+}
+
 export function InstallPWA() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-  const { nomeEmpresa } = useConfiguracoes();
+  const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [ios, setIos] = useState(false);
+  const [installVisible, setInstallVisible] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [instructions, setInstructions] = useState(false);
+  const [update, setUpdate] = useState<ServiceWorkerRegistration | null>(null);
+  const [confirmUpdate, setConfirmUpdate] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState('');
+  const updateRequested = useRef(false);
 
   useEffect(() => {
-    // Verificar se está no cliente (browser)
-    if (typeof window === 'undefined') return;
-    
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      
-      // Mostrar prompt apenas se não foi instalado antes
-      const wasInstalled = localStorage.getItem('pwa-installed');
-      if (!wasInstalled) {
-        setShowInstallPrompt(true);
-      }
+    const installed = () => { setPrompt(null); setInstallVisible(false); setInstructions(false); };
+    const beforeInstall = (event: Event) => {
+      if (isStandalone()) return;
+      event.preventDefault();
+      setPrompt(event as BeforeInstallPromptEvent);
+      if (!wasDismissed()) setInstallVisible(true);
     };
-
-    window.addEventListener('beforeinstallprompt', handler);
-
-    // Verificar se já está instalado
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      localStorage.setItem('pwa-installed', 'true');
+    // iPadOS can identify itself as a Mac. Only Safari uses this manual installation flow.
+    const appleDevice = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const safari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+    if (appleDevice && safari && !isStandalone() && !wasDismissed()) {
+      setIos(true); setInstallVisible(true);
     }
-
+    window.addEventListener('beforeinstallprompt', beforeInstall);
+    window.addEventListener('appinstalled', installed);
+    const changed = () => {
+      if (updateRequested.current) window.location.reload();
+    };
+    navigator.serviceWorker?.addEventListener('controllerchange', changed);
+    const dispose = process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator && window.isSecureContext
+      ? registrarPWA(setUpdate) : undefined;
     return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
+      dispose?.();
+      window.removeEventListener('beforeinstallprompt', beforeInstall);
+      window.removeEventListener('appinstalled', installed);
+      navigator.serviceWorker?.removeEventListener('controllerchange', changed);
     };
   }, []);
 
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === 'accepted') {
-      localStorage.setItem('pwa-installed', 'true');
-      console.log('PWA instalado com sucesso');
-    }
-
-    setDeferredPrompt(null);
-    setShowInstallPrompt(false);
+  const closeInstall = () => { setInstallVisible(false); rememberDismissal(); };
+  const install = async () => {
+    if (ios && !prompt) { setInstructions(true); return; }
+    if (!prompt || installing) return;
+    setInstalling(true); setError('');
+    try {
+      await prompt.prompt();
+      await prompt.userChoice;
+      closeInstall();
+    } catch { setError('Não foi possível abrir a instalação. Tente pelo menu do navegador.'); }
+    finally { setPrompt(null); setInstalling(false); }
+  };
+  const applyUpdate = () => {
+    if (!update?.waiting) { setUpdate(null); setConfirmUpdate(false); return; }
+    updateRequested.current = true;
+    setUpdating(true); setConfirmUpdate(false);
+    update.waiting.postMessage({ type: 'SKIP_WAITING' });
   };
 
-  const handleClose = () => {
-    setShowInstallPrompt(false);
-  };
-
-  if (!showInstallPrompt || !deferredPrompt) {
-    return null;
-  }
-
-  return (
-    <Snackbar
-      open={showInstallPrompt}
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      sx={{ bottom: { xs: 80, sm: 24 } }}
-    >
-      <Alert
-        severity="info"
-        variant="filled"
-        action={
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            <Button
-              color="inherit"
-              size="small"
-              startIcon={<GetAppIcon />}
-              onClick={handleInstallClick}
-              sx={{ fontWeight: 'bold' }}
-            >
-              Instalar
-            </Button>
-            <IconButton
-              size="small"
-              aria-label="close"
-              color="inherit"
-              onClick={handleClose}
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        }
-      >
-        Instale o app <strong>{nomeEmpresa}</strong> no seu dispositivo!
+  return <>
+    <Snackbar open={!!update || (installVisible && (!!prompt || ios))} anchorOrigin={{ vertical: 'top', horizontal: 'center' }} sx={{ top: { xs: 72, sm: 80 }, maxWidth: 620 }}>
+      <Alert severity="info" variant="filled" action={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        {update ? <Button color="inherit" size="small" disabled={updating} onClick={() => setConfirmUpdate(true)}>{updating ? 'Atualizando…' : 'Atualizar'}</Button> : <>
+          <Button color="inherit" size="small" startIcon={<GetAppIcon />} disabled={installing} onClick={() => { void install(); }}>{installing ? 'Aguarde…' : 'Instalar'}</Button>
+          <IconButton size="small" color="inherit" aria-label="Dispensar sugestão de instalação" onClick={closeInstall}><CloseIcon fontSize="small" /></IconButton>
+        </>}
+      </Box>}>
+        {update ? 'Uma nova versão está disponível.' : 'PDV Manu: acesso direto pelo seu dispositivo.'}
       </Alert>
     </Snackbar>
-  );
+    <Snackbar open={!!error} autoHideDuration={8000} onClose={() => setError('')} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+      <Alert severity="error" onClose={() => setError('')}>{error}</Alert>
+    </Snackbar>
+    <Dialog open={instructions} onClose={() => setInstructions(false)} aria-labelledby="pwa-install-title">
+      <DialogTitle id="pwa-install-title">Instalar PDV Manu</DialogTitle>
+      <DialogContent><DialogContentText>No Safari, toque em Compartilhar e depois em Adicionar à Tela de Início. Confirme o nome e toque em Adicionar.</DialogContentText></DialogContent>
+      <DialogActions><Button onClick={() => { setInstructions(false); closeInstall(); }}>Entendi</Button></DialogActions>
+    </Dialog>
+    <Dialog open={confirmUpdate} onClose={() => setConfirmUpdate(false)} aria-labelledby="pwa-update-title">
+      <DialogTitle id="pwa-update-title">Atualizar o aplicativo?</DialogTitle>
+      <DialogContent><DialogContentText>Esta aba será recarregada. Conclua ou salve o atendimento e os formulários abertos antes de continuar. A atualização também passará a atender as outras abas deste sistema.</DialogContentText></DialogContent>
+      <DialogActions><Button onClick={() => setConfirmUpdate(false)}>Continuar atendimento</Button><Button variant="contained" onClick={applyUpdate}>Atualizar agora</Button></DialogActions>
+    </Dialog>
+  </>;
 }
