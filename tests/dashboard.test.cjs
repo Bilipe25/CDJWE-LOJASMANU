@@ -2,7 +2,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { carregar } = require('./helpers/carregar.cjs');
 const { criarBanco } = require('./helpers/banco-pdv.cjs');
-const { consultarDashboard, referenciaDashboard } = carregar('src/server/dashboard.ts');
+const { consultarDashboard, referenciaDashboard, consultarVendasDashboard, consultarClientesDashboard, consultarPedidosDashboard, consultarPendentesDashboard, consultarProdutosDashboard } = carregar('src/server/dashboard.ts');
 const { filtrosDaUrl } = carregar('src/lib/schemas/filtros-pedidos.ts');
 let banco;
 before(async () => { banco = await criarBanco(); });
@@ -61,4 +61,36 @@ test('atalho de pendentes hidrata filtros sem exigir retorno da edição', () =>
  assert.equal(f.status,'PENDENTE'); assert.equal(f.search,''); assert.equal(f.page,0);
  const vendas=filtrosDaUrl(new URLSearchParams('filtro_status=FINALIZADO&filtro_tipoAtendimento=ENTRADA&filtro_dataInicio=2026-10-01&filtro_dataFim=2026-10-01'));
  assert.equal(vendas.tipoAtendimento,'ENTRADA'); assert.equal(vendas.dataInicio,'2026-10-01');
+});
+
+test('falha e lentidão no ranking não bloqueiam vendas, clientes, recentes ou pendentes', async () => {
+ const local = await criarBanco();
+ try {
+  await local.pg.query("INSERT INTO pedidos(numero,data,status,total,subtotal,tipo_atendimento_id) VALUES(nextval('numero_pedido'),'2026-10-01','FINALIZADO',55,55,$1)",[local.atendimento]);
+  await local.pg.exec("INSERT INTO clientes(nome,ativo) VALUES('Cliente ativo',true)");
+  let liberar;
+  const respostaItens = new Promise(resolve => { liberar=resolve; });
+  const lento = {...local.supabase,from:()=>({select(){return this;},in(){return this;},order(){return this;},range(){return respostaItens;}})};
+  const ranking = consultarProdutosDashboard(lento,agora);
+  const [vendas,clientes,recentes,pendentes] = await Promise.all([consultarVendasDashboard(lento,agora),consultarClientesDashboard(lento),consultarPedidosDashboard(lento,agora),consultarPendentesDashboard(lento)]);
+  assert.equal(vendas.vendasHoje,55); assert.equal(clientes.totalClientes,1);
+  assert.equal(recentes.ultimosPedidos.length,1); assert.equal(pendentes.pedidosPendentes,0);
+  liberar({data:null,error:{message:'Falha de itens'},count:null});
+  await assert.rejects(ranking,/produtos vendidos/);
+ } finally { await local.close(); }
+});
+
+test('fila usa cinco pendentes mais antigos, com contagem global e desempate por número', async () => {
+ const local = await criarBanco();
+ try {
+  for(const data of ['2026-10-03','2026-10-02','2026-10-01','2026-09-30','2026-09-29','2026-09-28','2026-09-28']) {
+   await local.pg.query("INSERT INTO pedidos(numero,data,status,total,subtotal,tipo_atendimento_id) VALUES(nextval('numero_pedido'),$1,'PENDENTE',10,10,$2)",[data,local.atendimento]);
+  }
+  await local.pg.query("INSERT INTO pedidos(numero,data,status,total,subtotal,tipo_atendimento_id) VALUES(nextval('numero_pedido'),'2026-01-01','FINALIZADO',20,20,$1)",[local.atendimento]);
+  const fila=await consultarPendentesDashboard(local.supabase);
+  assert.equal(fila.pedidosPendentes,7); assert.equal(fila.pedidos.length,5);
+  assert.deepEqual(fila.pedidos.map(p=>p.data),['2026-09-28','2026-09-28','2026-09-29','2026-09-30','2026-10-01']);
+  assert.ok(fila.pedidos[0].numero<fila.pedidos[1].numero);
+  assert.ok(fila.pedidos.every(p=>p.status==='PENDENTE'));
+ } finally { await local.close(); }
 });

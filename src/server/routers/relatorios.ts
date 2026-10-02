@@ -1,4 +1,4 @@
-import { consultarDashboard } from '@/server/dashboard';
+import { consultarDashboard, consultarVendasDashboard, consultarClientesDashboard, consultarPedidosDashboard, consultarPendentesDashboard, consultarProdutosDashboard } from '@/server/dashboard';
 import { z } from 'zod';
 import { router, protectedProcedure } from '@/lib/trpc/server';
 
@@ -43,6 +43,11 @@ export const relatoriosRouter = router({
 
   // Dashboard uses protected filters and the business calendar.
   dashboard: protectedProcedure.input(z.object({})).query(({ ctx }) => consultarDashboard(ctx.supabase)),
+  dashboardVendas: protectedProcedure.query(({ ctx }) => consultarVendasDashboard(ctx.supabase)),
+  dashboardClientes: protectedProcedure.query(({ ctx }) => consultarClientesDashboard(ctx.supabase)),
+  dashboardPedidos: protectedProcedure.query(({ ctx }) => consultarPedidosDashboard(ctx.supabase)),
+  dashboardPendentes: protectedProcedure.query(({ ctx }) => consultarPendentesDashboard(ctx.supabase)),
+  dashboardProdutos: protectedProcedure.query(({ ctx }) => consultarProdutosDashboard(ctx.supabase)),
   // Relatório anual
   relatorioAnual: protectedProcedure
     .input(

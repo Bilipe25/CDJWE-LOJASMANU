@@ -2,6 +2,7 @@
 import ConnectionStatus from '@/components/common/ConnectionStatus';
 
 import { useState, useEffect } from 'react';
+import NextLink from 'next/link';
 import {
   Box,
   Drawer,
@@ -35,7 +36,7 @@ import {
   Logout,
   Person,
 } from '@mui/icons-material';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useConfiguracoes } from '@/hooks/useConfiguracoes';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -51,7 +52,7 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-  { title: 'Dashboard', path: '/', icon: <Home /> },
+  { title: 'Visão geral', path: '/', icon: <Home /> },
   { title: 'PDV', path: '/pdv', icon: <ShoppingCart /> },
   { title: 'Pedidos', path: '/pedidos', icon: <Receipt /> },
   { title: 'Clientes', path: '/clientes', icon: <People /> },
@@ -65,7 +66,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const pathname = usePathname();
-  const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { nomeSistema, nomeEmpresa, logoUrl } = useConfiguracoes();
@@ -82,13 +82,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
-  };
-
-  const handleNavigate = (path: string) => {
-    router.push(path);
-    if (isMobile) {
-      setMobileOpen(false);
-    }
   };
 
   const drawer = (
@@ -130,8 +123,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           return (
             <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
+                component={NextLink}
+                href={item.path}
                 aria-current={isActive ? 'page' : undefined}
-                onClick={() => handleNavigate(item.path)}
+                onClick={() => { if (isMobile) setMobileOpen(false); }}
                 sx={{
                   borderRadius: 2,
                   py: 1.5,
@@ -162,7 +157,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     label={item.badge}
                     size="small"
                     color="error"
-                    sx={{ height: 20, fontSize: '0.75rem' }}
+                    sx={{ height: 20, fontSize: theme.typography.caption.fontSize }}
                   />
                 )}
               </ListItemButton>
@@ -190,7 +185,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               width: 36,
               height: 36,
               bgcolor: 'primary.main',
-              fontSize: '0.875rem',
             }}
           >
             <Person fontSize="small" />
@@ -232,7 +226,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             primary="Sair"
             primaryTypographyProps={{
               fontWeight: 600,
-              fontSize: '0.875rem',
+              variant: 'body2',
             }}
           />
         </ListItemButton>
@@ -241,7 +235,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Footer */}
       <Box sx={{ p: 2, bgcolor: 'background.default' }}>
         <Typography variant="caption" color="text.secondary" align="center" display="block">
-          © 2025 {nomeEmpresa}
+          © {currentDate.getFullYear()} {nomeEmpresa}
         </Typography>
         <Typography variant="caption" color="text.secondary" align="center" display="block">
           v1.0.0
@@ -252,6 +246,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default', overflowX: 'hidden', maxWidth: '100vw' }}>
+      <Box component="a" href="#conteudo-principal" sx={{ position: 'fixed', top: 8, left: 8, zIndex: theme.zIndex.modal + 1, transform: 'translateY(-200%)', '&:focus': { transform: 'none' }, bgcolor: 'background.paper', color: 'primary.main', p: 1.5, border: '1px solid', borderColor: 'primary.main', borderRadius: '10px', fontWeight: 600 }}>Ir para conteúdo</Box>
       {/* AppBar */}
       <AppBar
         position="fixed"
@@ -287,7 +282,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               whiteSpace: 'nowrap'
             }}
           >
-            {menuItems.find((item) => item.path === pathname)?.title || 'Dashboard'}
+            {menuItems.find((item) => item.path === pathname)?.title || 'Visão geral'}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -352,11 +347,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <Box
         component="main"
+        id="conteudo-principal"
+        tabIndex={-1}
         sx={{
           flexGrow: 1,
           p: { xs: 2, sm: 3 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
           mt: 8,
+          scrollMarginTop: 80,
           overflowX: 'hidden',
           maxWidth: '100%',
         }}

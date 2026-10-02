@@ -47,7 +47,7 @@ async function main() {
   const user={id:banco.usuario,email,aud:'authenticated',role:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:new Date().toISOString()};
   const token=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url')+'.'+Buffer.from(JSON.stringify({sub:user.id,email,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated',aud:'authenticated'})).toString('base64url')+'.assinatura-somente-local';
   const session=()=>({access_token:token,refresh_token:'refresh-local',token_type:'bearer',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600,user});
-  let falha=false;
+  let falha=false, falhaProdutos=false, semVendas=false;
   const server=http.createServer(async(req,res)=>{
     res.setHeader('Access-Control-Allow-Origin','http://127.0.0.1:3110');
     res.setHeader('Access-Control-Allow-Headers',req.headers['access-control-request-headers'] ?? 'authorization,apikey,content-type,x-client-info,x-supabase-api-version,prefer,range,accept');
@@ -58,6 +58,7 @@ async function main() {
     let body={};try{const chunks=[];for await(const chunk of req)chunks.push(chunk);if(chunks.length)body=JSON.parse(Buffer.concat(chunks).toString());}catch{return json(res,{message:'Corpo inválido'},400);}
     if(url.pathname==='/__estado')return json(res,{clienteId:cliente.data.id,pedidoId:pedido.data.id,pedido:(await banco.pg.query('SELECT * FROM pedidos ORDER BY numero')).rows.map(p=>({id:p.id,numero:p.numero,total:p.total,desconto:p.desconto_valor,versao:p.versao})),falha});
     if(url.pathname==='/__falha' && req.method==='POST'){falha=!!body.ativo;return json(res,{falha});}
+    if(url.pathname==='/__dashboard' && req.method==='POST'){falhaProdutos=!!body.falhaProdutos;semVendas=!!body.semVendas;return json(res,{falhaProdutos,semVendas});}
     if(url.pathname==='/auth/v1/token'){
       if((body.email===email && body.password===senha) || body.refresh_token==='refresh-local')return json(res,session());
       return json(res,{message:'Credenciais de teste inválidas',error_code:'invalid_credentials'},400);
@@ -68,6 +69,7 @@ async function main() {
     if(falha)return json(res,{message:'Falha de conexão simulada',code:'XX000'},503);
     try{
       if(url.pathname.startsWith('/rest/v1/rpc/')){
+        if(semVendas && url.pathname.endsWith('/pdv_listar_pedidos') && body.p_filtros?.status==='FINALIZADO')return json(res,{pedidos:[],total:0});
         if (url.pathname.endsWith('/pdv_filtrar_pedidos')) {
           const consulta = banco.supabase.rpc('pdv_filtrar_pedidos', body).select('*', { count: 'exact' });
           for (const ordem of (url.searchParams.get('order') || '').split(',').filter(Boolean)) {
@@ -83,6 +85,7 @@ async function main() {
         return resultado.error?json(res,resultado.error,400):json(res,resultado.data);
       }
       const tabela=url.pathname.split('/').pop();
+      if(falhaProdutos && tabela==='vw_itens_pedido_completos')return json(res,{message:'Falha simulada no ranking de produtos',code:'XX000'},503);
       if(tabela==='configuracoes_empresa')return json(res,(await banco.pg.query('SELECT * FROM configuracoes_empresa')).rows[0]);
       const q=banco.supabase.from(tabela).select('*',{head:req.method==='HEAD'});
       for(const [campo,filtro] of url.searchParams){
