@@ -27,9 +27,7 @@ import {
   DialogContent,
   DialogActions,
   MenuItem,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
+  Menu,
   FormControl,
   InputLabel,
   Select,
@@ -38,8 +36,6 @@ import {
   Tooltip,
   useMediaQuery,
   useTheme,
-  Breadcrumbs,
-  Link,
 } from '@mui/material';
 import {
   Add,
@@ -49,14 +45,12 @@ import {
   ShoppingCart,
   Person,
   Receipt,
-  Clear,
   Check,
   Search,
   Edit,
   Percent,
   Palette,
   AttachMoney,
-  ExpandMore,
   LocationOn,
   Payment,
   Phone,
@@ -67,13 +61,15 @@ import {
   Download,
   ContentCopy,
   Keyboard,
+  MoreVert,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import { trpc } from '@/lib/trpc/client';
 import { usePDVStore } from '@/stores/pdv-store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
+import { OperationalHeader, operationalSurface, operationalTable } from '@/components/common/OperationalPage';
 import { arredondarMoeda } from '@/lib/utils/valores-pedido';
+import SaleSection from '@/components/common/SaleSection';
 import EnderecoFields from '@/components/common/EnderecoFields';
 import ClienteDadosFields from '@/components/common/ClienteDadosFields';
 import { clienteSchema } from '@/lib/schemas/cliente';
@@ -102,6 +98,7 @@ function PDVPageContent() {
   useEffect(() => { setRascunhoPronto(true); }, []);
   const salvandoRef = useRef(false);
   const [salvando, setSalvando] = useState(false);
+  const [pedidoSalvo, setPedidoSalvo] = useState<{ id: string; numero: number | null } | null>(null);
   const edicaoHidratada = useRef<string | null>(null);
   const [falhaHidratacao, setFalhaHidratacao] = useState('');
   const atualizarItem = (index: number, item: Parameters<typeof atualizarItemStore>[1]) => {
@@ -151,6 +148,7 @@ function PDVPageContent() {
   const [novoClienteEndereco, setNovoClienteEndereco] = useState<EnderecoFormulario>({ ...enderecoVazio });
   const [accordionExpandido, setAccordionExpandido] = useState<string | false>('cliente');
   const [dialogAtalhos, setDialogAtalhos] = useState(false);
+  const [itemMenu, setItemMenu] = useState<{ anchor: HTMLElement; index: number } | null>(null);
 
   // Mobile Steps: 0 = Itens/Carrinho, 1 = Pagamento/Dados
   const [activeStep, setActiveStep] = useState(0);
@@ -267,13 +265,13 @@ function PDVPageContent() {
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // Não executar atalhos se estiver em um dialog
-      const emDialog = dialogFinalizar || dialogNovoCliente || dialogNovoProduto || dialogAtalhos || itemEdicaoMovel !== null || !!(e.target as HTMLElement | null)?.closest('[role="dialog"]');
+      const emDialog = dialogFinalizar || !!pedidoSalvo || !!itemMenu || dialogNovoCliente || dialogNovoProduto || dialogAtalhos || itemEdicaoMovel !== null || !!(e.target as HTMLElement | null)?.closest('[role="dialog"]');
 
       // F2 - Focar no campo de busca de produtos
       if (e.key === 'F2' && !emDialog) {
         e.preventDefault();
         setActiveStep(0); requestAnimationFrame(() => produtoInputRef.current?.focus());
-        toast('Campo de produtos focado (F2)', { icon: '🔍' });
+        toast('Campo de produtos focado (F2)', { icon: <Search /> });
       }
 
       // F3 - Focar no campo de busca de clientes
@@ -281,7 +279,7 @@ function PDVPageContent() {
         e.preventDefault();
         setActiveStep(1); setAccordionExpandido('cliente');
         requestAnimationFrame(() => clienteInputRef.current?.focus());
-        toast('Campo de clientes focado (F3)', { icon: '👤' });
+        toast('Campo de clientes focado (F3)', { icon: <Person /> });
       }
 
       // F10 or F12 - Finalizar pedido (se válido)
@@ -289,9 +287,9 @@ function PDVPageContent() {
         e.preventDefault();
         if (pedidoAtual.itens.length > 0) {
           handleFinalizarPedido();
-          toast('Finalizando pedido (F10)', { icon: '✅' });
+          toast('Conferência do pedido aberta (F10)');
         } else {
-          toast.error('Adicione itens antes de finalizar');
+          toast.error('Adicione itens antes de salvar');
         }
       }
 
@@ -310,13 +308,13 @@ function PDVPageContent() {
       if (e.ctrlKey && e.key === 'p' && !emDialog) {
         e.preventDefault();
         setDialogNovoProduto(true);
-        toast('Atalho: Cadastrar novo produto', { icon: '➕' });
+        toast('Atalho: Cadastrar novo produto', { icon: <Add /> });
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [produtoSelecionado, dialogFinalizar, dialogNovoCliente, dialogNovoProduto, dialogAtalhos, itemEdicaoMovel, redeDisponivel, quantidade, pedidoAtual.itens.length, valorUnitario, descontoItem, tipoDescontoItem, corSelecionada, tipoAtendimentoId, formaPagamentoId, pedidoAtual.desconto_valor, clienteSelecionado]);
+  }, [produtoSelecionado, dialogFinalizar, pedidoSalvo, itemMenu, dialogNovoCliente, dialogNovoProduto, dialogAtalhos, itemEdicaoMovel, redeDisponivel, quantidade, pedidoAtual.itens.length, valorUnitario, descontoItem, tipoDescontoItem, corSelecionada, tipoAtendimentoId, formaPagamentoId, pedidoAtual.desconto_valor, clienteSelecionado]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -506,11 +504,12 @@ function PDVPageContent() {
           itens,
         });
 
-        toast.success(`Pedido #${pedidoCriado.numero} criado com sucesso!`, { id: toastId });
+        toast.success(`Pedido #${pedidoCriado.numero} salvo · Pendente`, { id: toastId });
         setDialogFinalizar(false);
-        await utils.invalidate();
         novoPedido();
         limparCamposVenda();
+        setPedidoSalvo({ id: pedidoCriado.id, numero: pedidoCriado.numero });
+        await utils.invalidate();
       }
     } catch (error: unknown) {
       console.error('Erro ao salvar pedido:', error);
@@ -604,7 +603,7 @@ function PDVPageContent() {
       setNovoProdutoUnidade('UN');
 
       toast.success(`Produto ${novoProdutoNome} cadastrado com sucesso!`, { id: toastId });
-    } catch (error) {
+    } catch {
       toast.error('Erro ao cadastrar produto. Tente novamente.', { id: toastId });
     }
   };
@@ -625,8 +624,8 @@ function PDVPageContent() {
       cliente_cpf: clienteSelecionado?.cpf ?? undefined,
       cliente_telefone: telefoneContato,
       endereco: enderecoCompleto,
-      tipo_atendimento: tiposAtendimento?.find((t: any) => t.id === tipoAtendimentoId)?.nome,
-      forma_pagamento: formasPagamento?.find((f: any) => f.id === formaPagamentoId)?.nome,
+      tipo_atendimento: tiposAtendimento?.find((t) => t.id === tipoAtendimentoId)?.nome,
+      forma_pagamento: formasPagamento?.find((f) => f.id === formaPagamentoId)?.nome,
       observacoes: observacoes,
       itens: pedidoAtual.itens,
       subtotal: pedidoAtual.subtotal,
@@ -636,7 +635,10 @@ function PDVPageContent() {
 
     const dadosEmpresa = empresaParaDocumento(configuracoes);
 
+    try {
+    const { gerarPedidoPDF } = await import('@/lib/pdf/pedido-pdf');
     await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
+    } catch { toast.error('Não foi possível preparar a impressão. Tente novamente.'); }
   };
 
   if (falhaHidratacao || erroPedido || (pedidoEditId && pedidoParaEditar && ['CANCELADO','FINALIZADO'].includes(pedidoParaEditar.status ?? ''))) {
@@ -655,38 +657,12 @@ function PDVPageContent() {
   return (
     <AppLayout>
       {(erroProdutos || erroClientes || erroTipos || erroPagamentos) && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => { void recarregarProdutos(); void recarregarClientes(); void recarregarTipos(); void recarregarPagamentos(); }}>Tentar novamente</Button>}>Não foi possível carregar os dados da venda. Confira a conexão e tente novamente.</Alert>}
-      <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb" sx={{ mb: 3 }}>
-        <Link underline="hover" color="inherit" href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-          Dashboard
-        </Link>
-        <Typography color="text.primary">PDV</Typography>
-      </Breadcrumbs>
-
-
-      {redeDisponivel === false && <Alert severity="warning" sx={{mb:2}}>Sem conexão. O rascunho está salvo neste dispositivo; reconecte para enviar.</Alert>}
-      {isMobile && <Box sx={{display:'flex',gap:1,mb:2}}><Button variant={activeStep===0?'contained':'outlined'} onClick={()=>setActiveStep(0)}>Itens</Button><Button variant={activeStep===1?'contained':'outlined'} onClick={()=>{setActiveStep(1);setAccordionExpandido('cliente');}}>Cliente e pagamento</Button></Box>}
-      {/* Badge de Ajuda com Atalhos */}
-      <Box sx={{ position: 'fixed', bottom: { xs: 16, sm: 24 }, right: { xs: 16, sm: 24 }, zIndex: 1000 }}>
-        <Tooltip title="Ver atalhos de teclado">
-          <IconButton
-            color="primary"
-            onClick={() => setDialogAtalhos(true)}
-            sx={{
-              bgcolor: 'primary.main',
-              color: 'white',
-              width: { xs: 48, sm: 56 },
-              height: { xs: 48, sm: 56 },
-              boxShadow: 3,
-              '&:hover': {
-                bgcolor: 'primary.dark',
-                boxShadow: 6,
-              },
-            }}
-          >
-            <Keyboard fontSize="large" />
-          </IconButton>
-        </Tooltip>
-      </Box>
+      <OperationalHeader title="PDV" description={modoEdicao ? 'Confira as alterações antes de salvar.' : 'Monte a venda e confira os dados do pedido.'} actions={<>
+        <Chip label={modoEdicao ? 'Editando pedido' : 'Rascunho local'} size="small" variant="outlined" />
+        <Button startIcon={<Keyboard />} onClick={() => setDialogAtalhos(true)}>Atalhos</Button>
+      </>} />
+      {redeDisponivel === false && <Alert severity="warning" sx={{ mb: 2 }}>Sem conexão. O rascunho está salvo neste dispositivo; reconecte para enviar.</Alert>}
+      {isMobile && <Box sx={{ display: 'flex', gap: 1, mb: 2 }}><Button variant={activeStep === 0 ? 'contained' : 'outlined'} onClick={() => setActiveStep(0)}>Itens</Button><Button variant={activeStep === 1 ? 'contained' : 'outlined'} onClick={() => { setActiveStep(1); setAccordionExpandido('cliente'); }}>Cliente e pagamento</Button></Box>}
 
       {modoEdicao && (
         <Alert
@@ -700,22 +676,31 @@ function PDVPageContent() {
         </Alert>
       )}
 
-      <Grid container spacing={3} sx={{ position: 'relative' }}>
+      <Grid container spacing={2} sx={{ position: 'relative', pb: { xs: 22, sm: 18, lg: 14 } }}>
         {/* Área de Produtos */}
         <Grid
           item
           xs={12}
-          lg={7}
+          lg={8}
           sx={{
             order: 1,
             display: { xs: activeStep === 0 ? 'block' : 'none', md: 'block' }
           }}
         >
-          <Card sx={{ p: 2, height: '100%', minHeight: { md: '80vh' } }}>
+          <Card sx={{ ...operationalSurface, p: { xs: 1.5, sm: 2.5 }, height: '100%', minHeight: { lg: 'calc(100dvh - 250px)' } }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <ShoppingCart /> Adicionar Produtos
               </Typography>
+                <Button
+                      variant="text"
+                    size="large"
+                    startIcon={<Add />}
+                    onClick={() => setDialogNovoProduto(true)}
+                    sx={{ height: 56 }}
+                  >
+                    Novo
+                  </Button>
               {modoEdicao && (
                 <Chip
                   label="EDITANDO"
@@ -730,7 +715,7 @@ function PDVPageContent() {
 
             {/* Seleção de Produto */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} md={10}>
+              <Grid item xs={8} md={9}>
                 <Autocomplete
                   clearText="Limpar produto"
                   autoHighlight
@@ -767,9 +752,9 @@ function PDVPageContent() {
                     />
                   )}
                   renderOption={(props, option) => {
-                    const { key, ...otherProps } = props as any;
+                    const { key, ...otherProps } = props;
                     return (
-                      <li key={option.id} {...otherProps}>
+                      <li key={key} {...otherProps}>
                         <Box>
                           <Typography variant="body2" fontWeight={600}>
                             {option.nome}
@@ -785,19 +770,22 @@ function PDVPageContent() {
                 />
               </Grid>
 
-              <Grid item xs={12} sm={6} md={2}>
-                <Tooltip title="Cadastrar novo produto (Ctrl+P)">
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    size="large"
-                    startIcon={<Add />}
-                    onClick={() => setDialogNovoProduto(true)}
-                    sx={{ height: 56 }}
-                  >
-                    Novo
-                  </Button>
-                </Tooltip>
+              <Grid item xs={4} md={3}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  size="large"
+                  startIcon={<Add />}
+                  onClick={handleAdicionarProduto}
+                  disabled={salvando || !produtoSelecionado || quantidade <= 0 || valorUnitario < 0}
+                  sx={{
+                    height: { xs: 48, sm: 56 },
+                    fontWeight: 'bold',
+                    fontSize: { xs: '0.9rem', sm: '1rem' }
+                  }}
+                >
+                  Adicionar
+                </Button>
               </Grid>
 
               {produtoSelecionado && (
@@ -905,31 +893,15 @@ function PDVPageContent() {
                 </>
               )}
 
-              <Grid item xs={12}>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  size="large"
-                  startIcon={<Add />}
-                  onClick={handleAdicionarProduto}
-                  disabled={salvando || !produtoSelecionado || quantidade <= 0 || valorUnitario < 0}
-                  sx={{
-                    height: { xs: 48, sm: 56 },
-                    fontWeight: 'bold',
-                    fontSize: { xs: '0.9rem', sm: '1rem' }
-                  }}
-                >
-                  {isMobile ? 'Adicionar' : 'Adicionar ao Pedido'}
-                </Button>
-              </Grid>
+
             </Grid>
 
             {produtoSelecionado && (
-              <Card
+              <Box
                 component={motion.div}
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
-                sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'primary.main', color: 'white', mb: 3 }}
+                sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'primary.main', color: 'primary.contrastText', mb: 2, borderRadius: 2 }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: { xs: 0.5, sm: 1 } }}>
                   <Box>
@@ -967,11 +939,11 @@ function PDVPageContent() {
                     })())}
                   </Typography>
                 </Box>
-              </Card>
+              </Box>
             )}
 
             {/* Lista de Itens */}
-            <Box sx={{ bgcolor: 'background.default', borderRadius: 2, p: 2, minHeight: 300 }}>
+            <Box sx={{ mt: 2, minHeight: 240 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary">
                   Itens do Pedido ({pedidoAtual.itens.length})
@@ -1001,18 +973,18 @@ function PDVPageContent() {
                       color: 'text.secondary',
                     }}
                   >
-                    <ShoppingCart sx={{ fontSize: 64, opacity: 0.3, mb: 2 }} />
-                    <Typography>Nenhum item adicionado</Typography>
+                    <ShoppingCart sx={{ fontSize: 40, mb: 2 }} />
+                    <Typography fontWeight={600}>Comece buscando um produto</Typography><Typography variant="body2" sx={{ mt: 1 }}>Use o nome ou código, selecione a quantidade e adicione ao pedido.</Typography>
                   </Box>
                 ) : (
                   <TableContainer sx={{ overflowX: 'auto' }}>
-                    <Table size="small">
+                    <Table size="small" sx={operationalTable}>
                       <TableHead>
                         <TableRow>
                           <TableCell>Produto</TableCell>
                           <TableCell align="center">Qtd</TableCell>
-                          <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Valor Unit.</TableCell>
-                          <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Desconto</TableCell>
+                          <TableCell align="right" sx={{ display: { xs: 'none', xl: 'table-cell' } }}>Valor Unit.</TableCell>
+<TableCell align="right" sx={{ display: 'none' }}>Desconto</TableCell>
                           <TableCell align="right">Total</TableCell>
                           <TableCell align="center">Ações</TableCell>
                         </TableRow>
@@ -1030,11 +1002,10 @@ function PDVPageContent() {
                               <Typography variant="body2" fontWeight={600}>
                                 {item.produto_nome}
                               </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', xl: 'none' } }}>{formatCurrency(item.valor_unitario)} por unidade{item.desconto_valor > 0 ? ' · Desconto ' + formatCurrency(item.desconto_valor) : ''}</Typography>
                               <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
                                 {item.produto_codigo && (
-                                  <Typography variant="caption" color="text.secondary">
-                                    Cód: {item.produto_codigo}
-                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">Cód: {item.produto_codigo}</Typography>
                                 )}
                                 {item.cor_descricao && (
                                   <Chip
@@ -1050,6 +1021,7 @@ function PDVPageContent() {
                               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
                                 <IconButton
                                   size="small"
+                                  sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                                   aria-label="Diminuir quantidade"
                                   onClick={() =>
                                     atualizarItem(index, { quantidade: Math.max(0.01, item.quantidade - 1) })
@@ -1062,13 +1034,14 @@ function PDVPageContent() {
                                 </Typography>
                                 <IconButton
                                   size="small"
+                                  sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                                   aria-label="Aumentar quantidade" onClick={() => atualizarItem(index, { quantidade: item.quantidade + 1 })}
                                 >
                                   <Add fontSize="small" />
                                 </IconButton>
                               </Box>
                             </TableCell>
-                            <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                            <TableCell align="right" sx={{ display: { xs: 'none', xl: 'table-cell' } }}>
                               {editandoItem === index ? (
                                 <TextField
                                   size="small"
@@ -1091,7 +1064,7 @@ function PDVPageContent() {
                                 </Box>
                               )}
                             </TableCell>
-                            <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+<TableCell align="right" sx={{ display: 'none' }}>
                               <TextField
                                 size="small"
                                 type="number"
@@ -1117,32 +1090,7 @@ function PDVPageContent() {
                                 alignItems: 'center'
                               }}>
                                 <Tooltip title="Editar item"><IconButton aria-label="Editar quantidade, preço e desconto do item" onClick={()=>abrirEdicaoItem(index)}><Edit /></IconButton></Tooltip>
-                                <Tooltip title="Duplicar">
-                                  <IconButton
-                                    size={isMobile ? "medium" : "small"}
-                                    sx={{
-                                      color: 'success.main',
-                                      minWidth: { xs: 44, sm: 'auto' },
-                                      minHeight: { xs: 44, sm: 'auto' }
-                                    }}
-                                    aria-label="Duplicar item" onClick={() => handleDuplicarLinha(index)}
-                                  >
-                                    <ContentCopy fontSize={isMobile ? "medium" : "small"} />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Remover">
-                                  <IconButton
-                                    size={isMobile ? "medium" : "small"}
-                                    color="error"
-                                    sx={{
-                                      minWidth: { xs: 44, sm: 'auto' },
-                                      minHeight: { xs: 44, sm: 'auto' }
-                                    }}
-                                    aria-label="Remover item" onClick={() => removerItem(index)}
-                                  >
-                                    <Delete fontSize={isMobile ? "medium" : "small"} />
-                                  </IconButton>
-                                </Tooltip>
+                                <IconButton aria-label={'Mais ações do item ' + item.produto_nome} aria-haspopup="menu" onClick={e => setItemMenu({ anchor: e.currentTarget, index })}><MoreVert fontSize="small" /></IconButton>
                               </Box>
                             </TableCell>
                           </TableRow>
@@ -1177,13 +1125,13 @@ function PDVPageContent() {
         <Grid
           item
           xs={12}
-          lg={5}
+          lg={4}
           sx={{
             order: 2,
             display: { xs: activeStep === 1 ? 'block' : 'none', md: 'block' }
           }}
         >
-          <Card sx={{ p: 3, position: { lg: 'sticky' }, top: 84 }}>
+          <Card sx={{ ...operationalSurface, p: { xs: 1.5, sm: 2.5 }, '& .MuiAccordion-root': { boxShadow: 'none', bgcolor: 'transparent', '&:before': { display: 'none' }, borderBottom: '1px solid', borderColor: 'divider' }, '& .MuiAccordionSummary-root': { px: 0 }, '& .MuiAccordionDetails-root': { px: 0 } }}>
             {isMobile && (
               <Button
                 startIcon={<NavigateNext sx={{ transform: 'rotate(180deg)' }} />}
@@ -1193,28 +1141,15 @@ function PDVPageContent() {
                 Voltar para Produtos
               </Button>
             )}
-            <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Receipt /> Resumo do Pedido
-            </Typography>
-
-            <Divider sx={{ my: 2 }} />
-
             {/* Dados do Cliente */}
-            <Accordion
-              expanded={accordionExpandido === 'cliente'}
-              onChange={(_, isExpanded) => setAccordionExpandido(isExpanded ? 'cliente' : false)}
-              sx={{ mb: 2, boxShadow: 1 }}
-            >
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SaleSection compact={isMobile} expanded={accordionExpandido === 'cliente'} onChange={open => setAccordionExpandido(open ? 'cliente' : false)} title={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Person color="primary" />
                   <Typography fontWeight="bold">
-                    Cliente {clienteSelecionado && `- ${clienteSelecionado.nome}`}
+                    Cliente
                   </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Grid container spacing={2}>
+                </Box>}>
+
+                <Grid container spacing={1.5}>
                   <Grid item xs={12}>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       <Autocomplete
@@ -1281,6 +1216,7 @@ function PDVPageContent() {
                             <Select labelId="pdv-endereco-label"
                               value={enderecoSelecionado?.id || ''}
                               label="Endereço de Entrega"
+                              renderValue={() => enderecoSelecionado ? enderecoSelecionado.principal ? 'Endereço principal' : 'Outro endereço selecionado' : 'Sem endereço'}
                               sx={{ '& .MuiSelect-select': { whiteSpace: 'normal', overflowWrap: 'anywhere' } }}
                               onChange={(e) => {
                                 const endereco = clienteCompleto.enderecos.find((end) => end.id === e.target.value);
@@ -1301,27 +1237,21 @@ function PDVPageContent() {
                               ))}
                             </Select>
                           </FormControl>
+                          {enderecoSelecionado && <Typography variant="body2" sx={{ mt: 1, overflowWrap: 'anywhere' }}>{formatarEndereco(enderecoSelecionado)}</Typography>}
                         </Grid>
                       )}
                     </>
                   )}
                 </Grid>
-              </AccordionDetails>
-            </Accordion>
+
+            </SaleSection>
 
             {/* Tipo de Atendimento e Pagamento */}
-            <Accordion
-              expanded={accordionExpandido === 'atendimento'}
-              onChange={(_, isExpanded) => setAccordionExpandido(isExpanded ? 'atendimento' : false)}
-              sx={{ mb: 2, boxShadow: 1 }}
-            >
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SaleSection compact={isMobile} expanded={accordionExpandido === 'atendimento'} onChange={open => setAccordionExpandido(open ? 'atendimento' : false)} title={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Category color="primary" />
                   <Typography fontWeight="bold">Tipo de Atendimento e Pagamento</Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
+                </Box>}>
+
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
                     <FormControl fullWidth size="small">
@@ -1368,26 +1298,19 @@ function PDVPageContent() {
                     </FormControl>
                   </Grid>
                 </Grid>
-              </AccordionDetails>
-            </Accordion>
+
+            </SaleSection>
 
             {/* Observações */}
-            <Accordion
-              expanded={accordionExpandido === 'observacoes'}
-              onChange={(_, isExpanded) => setAccordionExpandido(isExpanded ? 'observacoes' : false)}
-              sx={{ mb: 2, boxShadow: 1 }}
-            >
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SaleSection compact={isMobile} expanded={accordionExpandido === 'observacoes'} onChange={open => setAccordionExpandido(open ? 'observacoes' : false)} title={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Notes color="primary" />
                   <Typography fontWeight="bold">Observações</Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
+                </Box>}>
+
                 <TextField
                   fullWidth
                   multiline
-                  rows={3}
+                  rows={2}
                   label="Observações sobre o pedido"
                   placeholder="Digite aqui observações adicionais..."
                   value={observacoes}
@@ -1396,11 +1319,11 @@ function PDVPageContent() {
                     setPedidoAtual({ observacao: e.target.value });
                   }}
                 />
-              </AccordionDetails>
-            </Accordion>
+
+            </SaleSection>
 
             {/* Desconto Geral */}
-            <Box sx={{ bgcolor: 'background.default', borderRadius: 2, p: 2, mb: 2 }}>
+            <Box sx={{ bgcolor: 'background.default', borderRadius: '12px', p: 1.5 }}>
               <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Percent /> Desconto Geral
               </Typography>
@@ -1442,103 +1365,48 @@ function PDVPageContent() {
               </Grid>
             </Box>
 
-            {/* Totais */}
-            <Box sx={{ bgcolor: 'background.default', borderRadius: 2, p: 2, mb: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography>Subtotal:</Typography>
-                <Typography fontWeight="bold" sx={{ color: 'success.main' }}>
-                  {formatCurrency(pedidoAtual.subtotal)}
-                </Typography>
-              </Box>
-              {pedidoAtual.desconto_valor > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography>Desconto:</Typography>
-                  <Typography fontWeight="bold" sx={{ color: 'error.main' }}>
-                    - {formatCurrency(pedidoAtual.desconto_valor)}
-                  </Typography>
-                </Box>
-              )}
-              <Divider sx={{ my: 1 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="h6" fontWeight="bold">
-                  Total:
-                </Typography>
-                <Typography variant="h6" fontWeight="bold" sx={{ color: 'primary.main' }}>
-                  {formatCurrency(pedidoAtual.total)}
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* Informações Adicionais */}
-            <Box sx={{ mb: 3 }}>
-              <Chip
-                label={`${pedidoAtual.itens.length} ${pedidoAtual.itens.length === 1 ? 'item' : 'itens'}`}
-                color="primary"
-                sx={{ mr: 1 }}
-              />
-              <Chip
-                label={`${pedidoAtual.itens.reduce((acc, item) => acc + item.quantidade, 0)} unidades`}
-                variant="outlined"
-              />
-            </Box>
-
-            {/* Ações */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Button
-                fullWidth
-                variant="contained"
-                size="large"
-                startIcon={<Check />}
-                onClick={handleFinalizarPedido}
-                disabled={pedidoAtual.itens.length === 0}
-                sx={{ py: 1.5 }}
-              >
-                {modoEdicao ? 'Salvar Alterações' : 'Finalizar Pedido'}
-              </Button>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                size="large"
-                startIcon={<Print />}
-                onClick={() => handleImprimirPedido('print')}
-                disabled={pedidoAtual.itens.length === 0}
-                color="primary"
-              >
-                Imprimir Pedido
-              </Button>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                size="large"
-                startIcon={<Clear />}
-                onClick={() => {
-                  if (confirm('Deseja cancelar este pedido?')) {
-                    limparCarrinho();
-                    limparCamposVenda();
-                  }
-                }}
-                disabled={pedidoAtual.itens.length === 0}
-                color="error"
-              >
-                Cancelar Pedido
-              </Button>
-            </Box>
           </Card>
         </Grid>
       </Grid>
 
+      <Box component="section" aria-label="Resumo financeiro e ações do pedido" sx={{ position: 'fixed', bottom: 0, left: { xs: 0, md: 240 }, right: 0, zIndex: theme.zIndex.appBar + 1, bgcolor: 'background.paper', borderTop: '1px solid', borderColor: 'divider', px: { xs: 2, sm: 3 }, py: 1.5, pb: 'max(12px, env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', boxShadow: '0 -4px 16px rgb(15 23 42 / 0.06)' }}>
+        <Box sx={{ flex: 1, minWidth: 180 }}>
+          <Typography variant="caption" color="text.secondary">{pedidoAtual.itens.length} itens · {pedidoAtual.itens.reduce((acc, item) => acc + item.quantidade, 0)} unidades</Typography>
+          <Typography variant="body2" color="text.secondary">Subtotal {formatCurrency(pedidoAtual.subtotal)} · Desconto geral {formatCurrency(pedidoAtual.desconto_valor)}</Typography>
+        </Box>
+        <Box sx={{ minWidth: 130 }}><Typography variant="caption" fontWeight={600}>Total</Typography><Typography variant="h5" color="primary.main" fontWeight={700} sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(pedidoAtual.total)}</Typography></Box>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' } }}>
+          <Button variant="contained" startIcon={<Check />} onClick={handleFinalizarPedido} disabled={salvando || redeDisponivel === false || pedidoAtual.itens.length === 0}>{modoEdicao ? 'Salvar alterações' : 'Salvar pedido'}</Button>
+          <Button sx={{ display: { xs: 'none', sm: 'inline-flex' } }} variant="outlined" startIcon={<Print />} onClick={() => { void handleImprimirPedido('print'); }} disabled={pedidoAtual.itens.length === 0}>{modoEdicao ? 'Imprimir prévia' : 'Imprimir rascunho'}</Button>
+          <Button sx={{ display: { xs: 'none', sm: 'inline-flex' } }} color="error" onClick={() => { if (confirm('Descartar o rascunho deste pedido?')) { limparCarrinho(); limparCamposVenda(); } }} disabled={salvando || pedidoAtual.itens.length === 0}>Descartar</Button>
+          <Tooltip title={modoEdicao ? 'Imprimir prévia' : 'Imprimir rascunho'}><span><IconButton sx={{ display: { xs: 'inline-flex', sm: 'none' } }} aria-label={modoEdicao ? 'Imprimir prévia' : 'Imprimir rascunho'} onClick={() => { void handleImprimirPedido('print'); }} disabled={pedidoAtual.itens.length === 0}><Print /></IconButton></span></Tooltip>
+          <Tooltip title="Descartar rascunho"><span><IconButton color="error" sx={{ display: { xs: 'inline-flex', sm: 'none' } }} aria-label="Descartar rascunho" onClick={() => { if (confirm('Descartar o rascunho deste pedido?')) { limparCarrinho(); limparCamposVenda(); } }} disabled={salvando || pedidoAtual.itens.length === 0}><Delete /></IconButton></span></Tooltip>
+        </Box>
+      </Box>
+
+      <Menu anchorEl={itemMenu?.anchor} open={!!itemMenu} onClose={() => setItemMenu(null)}>
+        <MenuItem onClick={() => { if (itemMenu) handleDuplicarLinha(itemMenu.index); setItemMenu(null); }}><ContentCopy fontSize="small" sx={{ mr: 1 }} />Duplicar item</MenuItem>
+        <MenuItem sx={{ color: 'error.main' }} onClick={() => { if (itemMenu) removerItem(itemMenu.index); setItemMenu(null); }}><Delete fontSize="small" sx={{ mr: 1 }} />Remover item</MenuItem>
+      </Menu>
+      <Dialog open={!!pedidoSalvo} onClose={() => setPedidoSalvo(null)} fullWidth maxWidth="sm" aria-labelledby="pdv-pedido-salvo-titulo">
+        <DialogTitle id="pdv-pedido-salvo-titulo">Pedido #{pedidoSalvo?.numero} salvo</DialogTitle>
+        <DialogContent><Alert severity="success">Pedido salvo como Pendente. A finalização está disponível em Pedidos.</Alert></DialogContent>
+        <DialogActions sx={{ p: 2.5, gap: 1, flexWrap: 'wrap' }}>
+          <Button onClick={() => { if (pedidoSalvo) router.push('/pedidos?id=' + pedidoSalvo.id); }}>Abrir pedido e imprimir</Button>
+          <Button variant="contained" onClick={() => { setPedidoSalvo(null); setActiveStep(0); produtoInputRef.current?.focus(); }}>Nova venda</Button>
+        </DialogActions>
+      </Dialog>
       {/* Dialog de Finalização */}
-      <Dialog open={dialogFinalizar} onClose={() => { if (!salvandoRef.current) setDialogFinalizar(false); }} maxWidth="md" fullWidth fullScreen={isMobile}>
-        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
+      <Dialog aria-labelledby="pdv-conferir-titulo" open={dialogFinalizar} onClose={() => { if (!salvandoRef.current) setDialogFinalizar(false); }} maxWidth="md" fullWidth fullScreen={isMobile}>
+        <DialogTitle id="pdv-conferir-titulo" sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Receipt />
-            Resumo da Venda
+            Conferir pedido
           </Box>
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 3 }}>
+            {!modoEdicao && <Alert severity="info" sx={{ mb: 2 }}>O pedido será salvo como Pendente. Você poderá finalizá-lo em Pedidos.</Alert>}
             {/* Valor Total */}
             <Box sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', p: 3, borderRadius: 2, mb: 3, textAlign: 'center' }}>
               <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>
@@ -1585,7 +1453,7 @@ function PDVPageContent() {
                       Tipo de Atendimento:
                     </Typography>
                     <Typography fontWeight="bold">
-                      {tiposAtendimento?.find((t: any) => t.id === tipoAtendimentoId)?.nome || '-'}
+                      {tiposAtendimento?.find((t) => t.id === tipoAtendimentoId)?.nome || '-'}
                     </Typography>
                   </Box>
                   <Box>
@@ -1593,7 +1461,7 @@ function PDVPageContent() {
                       Forma de Pagamento:
                     </Typography>
                     <Typography fontWeight="bold">
-                      {formasPagamento?.find((f: any) => f.id === formaPagamentoId)?.nome || '-'}
+                      {formasPagamento?.find((f) => f.id === formaPagamentoId)?.nome || '-'}
                     </Typography>
                   </Box>
                 </Card>
@@ -1706,7 +1574,7 @@ function PDVPageContent() {
               startIcon={<Check />}
               autoFocus
             >
-              Confirmar Venda
+              Salvar pedido
             </Button>
           </Box>
         </DialogActions>
@@ -1934,7 +1802,7 @@ function PDVPageContent() {
               </Grid>
               <Grid item xs={8}>
                 <Typography variant="body2">
-                  <strong>Finalizar Pedido</strong><br />
+                  <strong>Salvar pedido</strong><br />
                   <Typography variant="caption" color="text.secondary">
                     Abre a tela de finalização
                   </Typography>

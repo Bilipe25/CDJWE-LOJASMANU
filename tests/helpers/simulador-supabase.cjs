@@ -20,6 +20,30 @@ async function main() {
   const endereco=(await banco.pg.query('SELECT id FROM enderecos WHERE cliente_id=$1',[cliente.data.id])).rows[0];
   const pedido=await banco.supabase.rpc('pdv_mutar_pedido',{p_acao:'criar',p_chave:crypto.randomUUID(),p_dados:{data:'2026-09-28',cliente_id:cliente.data.id,endereco_id:endereco.id,tipo_atendimento_id:banco.atendimento,forma_pagamento_id:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',telefone_contato:'00000000000',observacao:'Pedido local para validar edição',desconto_valor:2,itens:[{produto_id:banco.produto,quantidade:2,valor_unitario:10,desconto_valor:1,ordem:0}]}});
   if(pedido.error)throw new Error(pedido.error.message);
+  if (process.env.PDV_UX_FIXTURE === '1') {
+    // Cenário opt-in para inspeção visual e paginação. Nenhum dado de produção.
+    await banco.pg.exec(`
+      UPDATE configuracoes_empresa SET nome_empresa='Lojas Manu · teste local';
+      UPDATE produtos SET nome='Produto A — modelo padrão de demonstração',valor_base=89.90;
+      INSERT INTO produtos(id,nome,codigo,unidade,valor_base) VALUES
+        ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','Produto B — variação azul','DEMO-02','UN',59.90),
+        ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2','Produto C — kit de demonstração','DEMO-03','UN',19.90),
+        ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3','Produto D — modelo compacto','DEMO-04','UN',39.90);
+    `);
+    const segundoEndereco = await banco.supabase.rpc('pdv_salvar_cliente', { p_id: cliente.data.id, p_dados: { enderecos: [
+      { id: endereco.id, logradouro: 'Rua das Flores', numero: '123', complemento: 'Apto 2', bairro: 'Centro', cidade: 'Fortaleza', estado: 'CE', cep: '60000-000', principal: true, ativo: true },
+      { logradouro: 'Avenida de demonstração', numero: '456', bairro: 'Aldeota', cidade: 'Fortaleza', estado: 'CE', cep: '60150-000', principal: false, ativo: true },
+    ] } });
+    if(segundoEndereco.error)throw new Error(segundoEndereco.error.message);
+    for(let i=0;i<26;i++) {
+      const criado=await banco.supabase.rpc('pdv_mutar_pedido', { p_acao:'criar', p_chave:crypto.randomUUID(), p_dados:{ data:'2026-10-01', cliente_id:cliente.data.id, endereco_id:endereco.id, tipo_atendimento_id:banco.atendimento, forma_pagamento_id:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', itens:[{produto_id:banco.produto,quantidade:1,valor_unitario:89.90,desconto_valor:0,ordem:0}] } });
+      if(criado.error)throw new Error(criado.error.message);
+      if(i%3===0) { const finalizado=await banco.supabase.rpc('pdv_mutar_pedido',{ p_acao:'finalizar',p_id:criado.data.id,p_versao:criado.data.versao }); if(finalizado.error)throw new Error(finalizado.error.message); }
+    }
+    for(const [nome,ativo] of [['Cliente B — demonstração',true],['Cliente C — cadastro inativo',false]]) {
+      const criado=await banco.supabase.rpc('pdv_salvar_cliente',{ p_dados:{nome,ativo,telefone:'00000000000'} }); if(criado.error)throw new Error(criado.error.message);
+    }
+  }
   const user={id:banco.usuario,email,aud:'authenticated',role:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:new Date().toISOString()};
   const token=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url')+'.'+Buffer.from(JSON.stringify({sub:user.id,email,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated',aud:'authenticated'})).toString('base64url')+'.assinatura-somente-local';
   const session=()=>({access_token:token,refresh_token:'refresh-local',token_type:'bearer',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600,user});

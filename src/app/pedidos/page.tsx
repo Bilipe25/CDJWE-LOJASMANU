@@ -36,19 +36,15 @@ import {
   Menu,
   ListItemIcon,
   ListItemText,
-  Accordion,
-  AccordionSummary,
   AccordionDetails,
   useMediaQuery,
   useTheme,
   Checkbox,
+  Collapse,
   FormControlLabel,
-  Breadcrumbs,
-  Link,
 } from '@mui/material';
 import {
   Search,
-  NavigateNext,
   Visibility,
   Print,
   ContentCopy,
@@ -63,10 +59,7 @@ import {
   Notes,
   Check,
   Delete,
-  TrendingUp,
-  Timer,
   MoreVert,
-  ExpandMore,
   FileDownload,
   TableChart,
   PictureAsPdf,
@@ -78,8 +71,7 @@ import PrintConfirmDialog from '@/components/common/PrintConfirmDialog';
 import StatusBadge from '@/components/common/StatusBadge';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import { trpc } from '@/lib/trpc/client';
-import { motion } from 'framer-motion';
-import { gerarPedidoPDF } from '@/lib/pdf/pedido-pdf';
+import { OperationalHeader, OperationalSummary, operationalSurface, operationalTable } from '@/components/common/OperationalPage';
 import type { PedidoListado as Pedido } from '@/server/routers/pedidos';
 import { empresaParaDocumento, pedidoParaDocumento, buscarTodosFiltrados } from '@/lib/utils/documentos';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -92,6 +84,8 @@ function PedidosPageContent() {
   const utils = trpc.useUtils();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { data: operador } = trpc.auth.me.useQuery();
+  const podeExcluir = operador?.papel === 'ADMIN';
 
   // Hook customizado para gerenciar filtros com persistência
   const {
@@ -162,7 +156,7 @@ function PedidosPageContent() {
     if (voltouDeEdicao && temFiltrosAtivos) {
       toast.success('Filtros restaurados!', {
         duration: 2000,
-        icon: '🔍',
+        icon: <Search />,
       });
     }
   }, [searchParams, temFiltrosAtivos]);
@@ -308,6 +302,7 @@ function PedidosPageContent() {
       const dadosPedido = pedidoParaDocumento(pedidoCompleto);
       const dadosEmpresa = empresaParaDocumento(configuracoes);
 
+      const { gerarPedidoPDF } = await import('@/lib/pdf/pedido-pdf');
       await gerarPedidoPDF(dadosPedido, dadosEmpresa, acao);
       toast.dismiss(toastId);
     } catch (error) {
@@ -519,272 +514,21 @@ function PedidosPageContent() {
 
   return (
     <AppLayout>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        {erroEstatisticas && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => recarregarEstatisticas()}>Tentar novamente</Button>}>Indicadores indisponíveis. Tente novamente.</Alert>}
-      <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
-          <Link underline="hover" color="inherit" href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            Dashboard
-          </Link>
-          <Typography color="text.primary">Pedidos</Typography>
-        </Breadcrumbs>
-
-        <Button
-          variant="contained"
-          startIcon={<FileDownload />}
-          onClick={() => setDialogExportar(true)}
-        >
-          Exportar
-        </Button>
-      </Box>
-
-      {/* Cards de Estatísticas - Design Sutil */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={6} sm={6} md={3}>
-          <motion.div
-            initial={false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Card
-              variant="outlined"
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                transition: 'all 0.2s',
-                '&:hover': {
-                  boxShadow: 2,
-                  transform: 'translateY(-2px)',
-                },
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
-                <Box
-                  sx={{
-                    p: 1,
-                    borderRadius: 1.5,
-                    bgcolor: 'action.selected',
-                    display: 'flex',
-                  }}
-                >
-                  <Receipt sx={{ fontSize: 20, color: 'primary.main' }} />
-                </Box>
-              </Box>
-              <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
-                {erroEstatisticas ? '—' : estatisticas.totalPedidos ?? '—'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
-                Pedidos
-              </Typography>
-            </Card>
-          </motion.div>
-        </Grid>
-
-        <Grid item xs={6} sm={6} md={3}>
-          <motion.div
-            initial={false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: 0.05 }}
-          >
-            <Card
-              variant="outlined"
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                transition: 'all 0.2s',
-                '&:hover': {
-                  boxShadow: 2,
-                  transform: 'translateY(-2px)',
-                },
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
-                <Box
-                  sx={{
-                    p: 1,
-                    borderRadius: 1.5,
-                    bgcolor: 'warning.light',
-                    display: 'flex',
-                  }}
-                >
-                  <Timer sx={{ fontSize: 20, color: 'warning.main' }} />
-                </Box>
-              </Box>
-              <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
-                {erroEstatisticas ? '—' : estatisticas.pedidosPendentes ?? '—'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
-                Pendentes
-              </Typography>
-            </Card>
-          </motion.div>
-        </Grid>
-
-        <Grid item xs={6} sm={6} md={3}>
-          <motion.div
-            initial={false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: 0.1 }}
-          >
-            <Card
-              variant="outlined"
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                transition: 'all 0.2s',
-                '&:hover': {
-                  boxShadow: 2,
-                  transform: 'translateY(-2px)',
-                },
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
-                <Box
-                  sx={{
-                    p: 1,
-                    borderRadius: 1.5,
-                    bgcolor: 'success.light',
-                    display: 'flex',
-                  }}
-                >
-                  <TrendingUp sx={{ fontSize: 20, color: 'success.main' }} />
-                </Box>
-              </Box>
-              <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5, fontSize: '1.25rem' }}>
-                {erroEstatisticas || estatisticas.totalVendas === undefined ? '—' : formatCurrency(estatisticas.totalVendas)}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
-                Vendas finalizadas
-              </Typography>
-            </Card>
-          </motion.div>
-        </Grid>
-
-        <Grid item xs={6} sm={6} md={3}>
-          <motion.div
-            initial={false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: 0.15 }}
-          >
-            <Card
-              variant="outlined"
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                transition: 'all 0.2s',
-                '&:hover': {
-                  boxShadow: 2,
-                  transform: 'translateY(-2px)',
-                },
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
-                <Box
-                  sx={{
-                    p: 1,
-                    borderRadius: 1.5,
-                    bgcolor: 'info.light',
-                    display: 'flex',
-                  }}
-                >
-                  <CheckCircle sx={{ fontSize: 20, color: 'info.main' }} />
-                </Box>
-              </Box>
-              <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
-                {erroEstatisticas ? '—' : estatisticas.finalizadosHoje ?? '—'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>
-                Finalizados hoje
-              </Typography>
-            </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
-      <Card sx={{ overflow: 'hidden', maxWidth: '100%' }}>
-        {/* Filtros Avançados */}
-        <Accordion
-          expanded={filtrosExpanded}
-          onChange={() => atualizarFiltro('filtrosExpanded', !filtrosExpanded)}
-          sx={{
-            boxShadow: 'none',
-            '&:before': { display: 'none' },
-            borderBottom: '1px solid',
-            borderColor: 'divider'
-          }}
-        >
-          <AccordionSummary
-            expandIcon={<ExpandMore />}
-            sx={{
-              px: 3,
-              '& .MuiAccordionSummary-content': {
-                alignItems: 'center',
-                gap: 1,
-                my: 2
-              }
-            }}
-          >
-            <FilterList color="primary" />
-            <Typography variant="h6" fontWeight="bold">
-              Filtros {temFiltrosAtivos && (
-                <Chip
-                  label={contarFiltrosAtivos}
-                  size="small"
-                  color="primary"
-                  sx={{ ml: 1 }}
-                />
-              )}
-            </Typography>
-            {!filtrosExpanded && (
-              <Box sx={{ ml: 2, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                {temFiltrosAtivos && (
-                  <>
-                    {search && <Chip label={`Busca: ${search.substring(0, 15)}${search.length > 15 ? '...' : ''}`} size="small" />}
-                    {status && <Chip label={`Status: ${status}`} size="small" color="primary" />}
-                    {tipoAtendimento && <Chip label={`Tipo: ${tipoAtendimento}`} size="small" color="secondary" />}
-                    {formaPagamento && <Chip label="Forma Pgto." size="small" color="warning" />}
-                    {clienteSelecionado && <Chip label={`Cliente: ${nomeClienteFiltro.substring(0, 15)}${nomeClienteFiltro.length > 15 ? '...' : ''}`} size="small" color="success" />}
-                    {(dataInicio || dataFim) && <Chip label="Período" size="small" color="info" />}
-                  </>
-                )}
-              </Box>
-            )}
-            <Box
-              component="span"
-              onClick={(e) => {
-                if (temFiltrosAtivos) {
-                  e.stopPropagation();
-                  limparFiltros();
-                }
-              }}
-              sx={{
-                ml: 'auto',
-                opacity: temFiltrosAtivos ? 1 : 0.5,
-                cursor: temFiltrosAtivos ? 'pointer' : 'not-allowed',
-                pointerEvents: 'auto',
-              }}
-            >
-              <Tooltip title={temFiltrosAtivos ? "Limpar todos os filtros" : ""}>
-                <Chip
-                  label={isMobile ? "Limpar" : "Limpar Filtros"}
-                  size="small"
-                  color={temFiltrosAtivos ? "error" : "default"}
-                  variant={temFiltrosAtivos ? "filled" : "outlined"}
-                  onDelete={temFiltrosAtivos ? () => { } : undefined}
-                  deleteIcon={<Close />}
-                  sx={{
-                    pointerEvents: 'none',
-                    fontWeight: 600,
-                  }}
-                />
-              </Tooltip>
-            </Box>
-          </AccordionSummary>
-
-          <AccordionDetails sx={{ px: 3, pb: 3 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={3}>
+      <OperationalHeader title="Pedidos" description="Consulte, confira e acompanhe os pedidos." actions={<>
+        <Button variant="outlined" startIcon={<FileDownload />} onClick={() => setDialogExportar(true)}>Exportar</Button>
+        <Button variant="contained" startIcon={<Receipt />} onClick={() => router.push('/pdv')}>Novo pedido</Button>
+      </>} />
+      {erroEstatisticas && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => recarregarEstatisticas()}>Tentar novamente</Button>}>Indicadores indisponíveis.</Alert>}
+      <OperationalSummary label="Indicadores da consulta" items={[
+        { label: 'Pedidos na consulta', value: erroEstatisticas ? '—' : estatisticas.totalPedidos ?? '—' },
+        { label: 'Pendentes', value: erroEstatisticas ? '—' : estatisticas.pedidosPendentes ?? '—' },
+        { label: 'Vendas finalizadas na consulta', value: erroEstatisticas || estatisticas.totalVendas === undefined ? '—' : formatCurrency(estatisticas.totalVendas) },
+        { label: 'Finalizados hoje na consulta', value: erroEstatisticas ? '—' : estatisticas.finalizadosHoje ?? '—' },
+      ]} />
+      <Card sx={{ ...operationalSurface, overflow: 'hidden', maxWidth: '100%' }}>
+<Box sx={{ p: 2.5 }}><Grid container spacing={2} alignItems="center">              <Grid item xs={12} sm={6} md={6}>
                 <TextField
-                  fullWidth
+                  fullWidth size="small"
                   label="Buscar pedido"
                   placeholder="Número, cliente..."
                   value={search}
@@ -801,8 +545,8 @@ function PedidosPageContent() {
                 />
               </Grid>
 
-              <Grid item xs={12} sm={6} md={2}>
-                <FormControl fullWidth>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
                   <InputLabel id="pedidos-select-1">Status</InputLabel>
                     <Select labelId="pedidos-select-1"
                     value={status}
@@ -822,6 +566,31 @@ function PedidosPageContent() {
                 </FormControl>
               </Grid>
 
+
+    <Grid item xs={12} md={3}><Button fullWidth variant="outlined" startIcon={<FilterList />} aria-expanded={filtrosExpanded} aria-controls="pedidos-filtros-adicionais" onClick={() => atualizarFiltro('filtrosExpanded', !filtrosExpanded)}>Filtros adicionais {contarFiltrosAtivos > 0 ? '(' + contarFiltrosAtivos + ')' : ''}</Button></Grid>
+    </Grid>
+    {temFiltrosAtivos && <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2, alignItems: 'center' }}>
+      {search && <Chip size="small" variant="outlined" label={'Busca: ' + search} onDelete={() => atualizarFiltro('search', '')} />}
+      {status && <StatusBadge status={status} onDelete={() => atualizarFiltro('status', '')} />}
+      {tipoAtendimento && <Chip size="small" label={'Tipo: ' + tipoAtendimento} onDelete={() => atualizarFiltro('tipoAtendimento', '')} />}
+      {formaPagamento && <Chip size="small" label={'Pagamento: ' + (formasPagamento?.find(f => f.id === formaPagamento)?.nome || 'Carregando…')} onDelete={() => atualizarFiltro('formaPagamento', '')} />}
+      {clienteSelecionado && <Chip size="small" label={'Cliente: ' + nomeClienteFiltro} onDelete={() => atualizarFiltro('clienteSelecionado', null)} />}
+      {(dataInicio || dataFim) && <Chip size="small" label={(dataInicio ? formatDate(dataInicio) : 'Início livre') + ' a ' + (dataFim ? formatDate(dataFim) : 'Fim livre')} />}
+      <Button size="small" startIcon={<Close />} onClick={limparFiltros}>Limpar filtros</Button>
+    </Box>}
+    </Box>
+        {/* Filtros Avançados */}
+        <Collapse
+          in={filtrosExpanded}
+          sx={{
+            boxShadow: 'none',
+            '&:before': { display: 'none' },
+            borderBottom: '1px solid',
+            borderColor: 'divider'
+          }}
+        >
+          <AccordionDetails id="pedidos-filtros-adicionais" sx={{ px: 2.5, pb: 2.5 }}>
+            <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={2}>
                 <FormControl fullWidth>
                   <InputLabel id="pedidos-select-2">Tipo</InputLabel>
@@ -923,7 +692,7 @@ function PedidosPageContent() {
               </Grid>
             </Grid>
           </AccordionDetails>
-        </Accordion>
+        </Collapse>
 
         {erroPedidoUrl && <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarPedidoUrl()}>Tentar novamente</Button>}>Não foi possível abrir o pedido solicitado.</Alert>}
         {/* Loading do pedido da URL */}
@@ -936,9 +705,7 @@ function PedidosPageContent() {
 
         {/* Tabela */}
         {erroLista ? <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarLista()}>Tentar novamente</Button>}>Não foi possível carregar os pedidos. Confira a conexão e tente novamente.</Alert> : isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress />
-          </Box>
+          <Box sx={{ p: 2 }}><LoadingSkeleton type="table" rows={5} /></Box>
         ) : pedidos.length === 0 ? (
           <EmptyState
             icon={<Receipt />}
@@ -952,28 +719,24 @@ function PedidosPageContent() {
         ) : (
           <>
             <TableContainer>
-              <Table>
+              <Table size="small" sx={operationalTable}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Número</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Número</TableCell>
                     <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Data</TableCell>
                     <TableCell>Cliente</TableCell>
                     <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Tipo</TableCell>
                     <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Pagamento</TableCell>
                     <TableCell align="right" sx={{ display: { xs: 'none', xl: 'table-cell' } }}>Itens</TableCell>
                     <TableCell align="right">Total</TableCell>
-                    <TableCell align="center">Status</TableCell>
+                    <TableCell align="center" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Status</TableCell>
                     <TableCell align="right">Ações</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {pedidos.map((pedido, index) => (
+                  {pedidos.map((pedido) => (
                     <TableRow
                       key={pedido.id}
-                      component={motion.tr}
-                      initial={false}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.15, delay: Math.min(index, 4) * 0.02 }}
                       hover
                       onClick={() => handleVisualizarPedido(pedido)}
                       sx={{
@@ -983,19 +746,21 @@ function PedidosPageContent() {
                         }
                       }}
                     >
-                      <TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                         <Chip
                           label={`#${pedido.numero}`}
                           size="small"
                           variant="outlined"
                           color="primary"
-                          sx={{ fontFamily: 'monospace', fontWeight: 600 }}
+                          sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
                         />
                       </TableCell>
                       <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{formatDate(pedido.data)}</TableCell>
                       <TableCell>
                         <Box>
+<Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', sm: 'none' } }}>#{pedido.numero} · {formatDate(pedido.data)}</Typography>
                           <Box sx={{ fontWeight: 600 }}>{pedido.cliente_nome || 'Cliente não informado'}</Box>
+<Box sx={{ display: { xs: 'block', sm: 'none' }, my: 0.5 }}><StatusBadge status={pedido.status || 'Não informado'} /></Box>
                           {pedido.cliente_telefone && (
                             <Box sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
                               {pedido.cliente_telefone}
@@ -1008,11 +773,8 @@ function PedidosPageContent() {
                           label={pedido.tipo_atendimento_nome || 'Sem Tipo'}
                           size="small"
                           color={getTipoChipColor(pedido.tipo_atendimento_nome)}
-                          variant="filled"
-                          sx={{
-                            fontWeight: 600,
-                            color: 'white',
-                          }}
+                          variant="outlined"
+                          sx={{ fontWeight: 600 }}
                         />
                       </TableCell>
                       <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
@@ -1046,15 +808,16 @@ function PedidosPageContent() {
                           {formatCurrency(pedido.total)}
                         </Box>
                       </TableCell>
-                      <TableCell align="center">
+                      <TableCell align="center" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                         <StatusBadge status={pedido.status || 'Não informado'} />
                       </TableCell>
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                          <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                          <Box>
                             <Tooltip title="Visualizar">
                               <IconButton
                                 size="small"
+                                aria-label={'Abrir pedido #' + pedido.numero}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleVisualizarPedido(pedido);
@@ -1068,6 +831,8 @@ function PedidosPageContent() {
                           <Tooltip title="Mais ações">
                             <IconButton
                               size="small"
+                              aria-label={'Mais ações do pedido #' + pedido.numero}
+                              aria-haspopup="menu"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenMenu(e, pedido);
@@ -1162,7 +927,7 @@ function PedidosPageContent() {
           </>
         )}
 
-        <MenuItem onClick={() => handleMenuAction(() => handleExcluirPedido(pedidoSelecionado))} disabled={['CANCELADO','FINALIZADO'].includes(pedidoSelecionado?.status)}>
+        {podeExcluir && <MenuItem onClick={() => handleMenuAction(() => handleExcluirPedido(pedidoSelecionado))} disabled={['CANCELADO','FINALIZADO'].includes(pedidoSelecionado?.status)}>
           <ListItemIcon>
             <Delete fontSize="small" sx={{ color: 'error.main' }} />
           </ListItemIcon>
@@ -1170,7 +935,7 @@ function PedidosPageContent() {
             primary="Excluir Pedido"
             primaryTypographyProps={{ sx: { color: 'error.main' } }}
           />
-        </MenuItem>
+        </MenuItem>}
       </Menu>
 
       {/* Dialog de Detalhes do Pedido */}
@@ -1180,11 +945,12 @@ function PedidosPageContent() {
         maxWidth="md"
         fullWidth
         fullScreen={isMobile}
+        aria-labelledby="pedido-detalhes-titulo"
       >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <DialogTitle id="pedido-detalhes-titulo" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Receipt color="primary" />
-            <Typography variant="h6" fontWeight="bold">
+            <Typography component="span" sx={{ fontSize: 24, fontWeight: 700 }}>
               Pedido #{pedidoDetalhes?.numero}
             </Typography>
             {pedidoDetalhes && <StatusBadge status={pedidoDetalhes.status || 'Não informado'} />}
@@ -1204,58 +970,28 @@ function PedidosPageContent() {
             </Box>
           ) : pedidoCompleto ? (
             <Box sx={{ pt: 2 }}>
-              {/* Informações Gerais */}
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Card variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Informações do Pedido
-                    </Typography>
-                    <Box sx={{ mb: 1 }}>
-                      <Typography variant="caption" color="text.secondary">Data:</Typography>
-                      <Typography fontWeight="bold">{formatDate(pedidoCompleto.data)}</Typography>
-                    </Box>
-                    <Box sx={{ mb: 1 }}>
-                      <Typography variant="caption" color="text.secondary">Tipo de Atendimento:</Typography>
-                      <Typography fontWeight="bold">{pedidoCompleto.tipo_atendimento_nome || '-'}</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">Forma de Pagamento:</Typography>
-                      <Typography fontWeight="bold">{pedidoCompleto.forma_pagamento_nome || '-'}</Typography>
-                    </Box>
-                  </Card>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{formatDate(pedidoCompleto.data)}</Typography>
+              <Grid container spacing={2} sx={{ p: 2, bgcolor: 'background.default', borderRadius: '12px' }}>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="caption" color="text.secondary">Cliente</Typography>
+                  <Typography fontWeight={600}>{pedidoCompleto.cliente_nome || 'Não informado'}</Typography>
+                  <Typography variant="body2">{pedidoCompleto.cliente_telefone || 'Telefone não informado'}</Typography>
                 </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Card variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Cliente
-                    </Typography>
-                    <Box sx={{ mb: 1 }}>
-                      <Typography fontWeight="bold">
-                        {pedidoCompleto.cliente_nome || 'Não informado'}
-                      </Typography>
-                    </Box>
-                    {pedidoCompleto.cliente_telefone && (
-                      <Box sx={{ mb: 1 }}>
-                        <Typography variant="caption" color="text.secondary">Telefone:</Typography>
-                        <Typography>{pedidoCompleto.cliente_telefone}</Typography>
-                      </Box>
-                    )}
-                    {formatarEndereco(pedidoCompleto.endereco) && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">Endereço:</Typography>
-                        <Typography>{formatarEndereco(pedidoCompleto.endereco)}</Typography>
-                      </Box>
-                    )}
-                  </Card>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="caption" color="text.secondary">Endereço do pedido</Typography>
+                  <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{formatarEndereco(pedidoCompleto.endereco) || 'Não informado'}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="caption" color="text.secondary">Atendimento e pagamento</Typography>
+                  <Typography fontWeight={600}>{pedidoCompleto.tipo_atendimento_nome || '-'}</Typography>
+                  <Typography variant="body2">{pedidoCompleto.forma_pagamento_nome || '-'}</Typography>
                 </Grid>
               </Grid>
 
               {/* Itens do Pedido */}
               <Box sx={{ mt: 3 }}>
                 <Typography variant="h6" gutterBottom>Itens do Pedido</Typography>
-                <TableContainer component={Card} variant="outlined">
+                <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
@@ -1305,7 +1041,7 @@ function PedidosPageContent() {
               </Box>
 
               {/* Totais */}
-              <Card variant="outlined" sx={{ mt: 3, p: 2 }}>
+              <Box sx={{ mt: 3, p: 2, ml: 'auto', width: { xs: '100%', sm: 320 }, bgcolor: 'background.default', borderRadius: '12px' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography>Subtotal:</Typography>
                   <Typography fontWeight="bold">{formatCurrency(pedidoCompleto.subtotal || 0)}</Typography>
@@ -1321,20 +1057,20 @@ function PedidosPageContent() {
                 <Divider sx={{ my: 1 }} />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="h6" fontWeight="bold">Total:</Typography>
-                  <Typography variant="h6" fontWeight="bold" color="primary">
+                  <Typography sx={{ fontSize: 24, fontWeight: 700 }} color="primary">
                     {formatCurrency(pedidoCompleto.total ?? 0)}
                   </Typography>
                 </Box>
-              </Card>
+              </Box>
 
               {/* Observações */}
               {pedidoCompleto.observacao && (
-                <Card variant="outlined" sx={{ mt: 2, p: 2 }}>
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                     Observações
                   </Typography>
                   <Typography>{pedidoCompleto.observacao}</Typography>
-                </Card>
+                </Box>
               )}
             </Box>
           ) : (
@@ -1342,80 +1078,16 @@ function PedidosPageContent() {
           )}
         </DialogContent>
 
-        <DialogActions sx={{ p: 3, justifyContent: 'space-between' }}>
-          <Button onClick={handleFecharDialogDetalhes} variant="outlined">
-            Fechar
-          </Button>
-
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              onClick={() => {
-                setPrintDialog({ open: true, pedido: pedidoCompleto || pedidoDetalhes });
-                handleFecharDialogDetalhes();
-              }}
-              variant="outlined"
-              color="primary"
-              startIcon={<Print />}
-            >
-              Imprimir
-            </Button>
-
-            {pedidoDetalhes && !['CANCELADO','FINALIZADO'].includes(pedidoDetalhes.status || '') && (
-              <Button
-                onClick={() => {
-                  handleEditarPedido(pedidoDetalhes);
-                  handleFecharDialogDetalhes();
-                }}
-                variant="outlined"
-                startIcon={<Edit />}
-              >
-                Editar
-              </Button>
-            )}
-
-            {['PENDENTE','CONFIRMADO'].includes(pedidoDetalhes?.status || '') && (
-              <>
-                <Button
-                  onClick={() => {
-                    handleFinalizarPedido(pedidoDetalhes);
-                    handleFecharDialogDetalhes();
-                  }}
-                  variant="contained"
-                  color="success"
-                  startIcon={<CheckCircle />}
-                >
-                  Finalizar
-                </Button>
-                <Button
-                  onClick={() => {
-                    handleCancelarPedido(pedidoDetalhes);
-                    handleFecharDialogDetalhes();
-                  }}
-                  variant="outlined"
-                  color="error"
-                  startIcon={<Cancel />}
-                >
-                  Cancelar
-                </Button>
-              </>
-            )}
-
-            <Button
-              onClick={() => {
-                handleExcluirPedido(pedidoDetalhes);
-                handleFecharDialogDetalhes();
-              }}
-              variant="outlined"
-              color="error"
-              startIcon={<Delete />}
-            >
-              Excluir
-            </Button>
-          </Box>
+        <DialogActions sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider', gap: 1, flexWrap: 'wrap' }}>
+          <Button onClick={handleFecharDialogDetalhes} sx={{ mr: 'auto' }}>Fechar</Button>
+          <Button aria-haspopup="menu" startIcon={<MoreVert />} disabled={!pedidoCompleto || !!erroDetalhes} onClick={e => handleOpenMenu(e, pedidoCompleto || pedidoDetalhes)}>Mais ações</Button>
+          <Button variant="outlined" startIcon={<Print />} disabled={!pedidoCompleto || !!erroDetalhes} onClick={() => { setPrintDialog({ open: true, pedido: pedidoCompleto || pedidoDetalhes }); handleFecharDialogDetalhes(); }}>Imprimir</Button>
+          {pedidoCompleto && !['CANCELADO', 'FINALIZADO'].includes(pedidoCompleto.status || '') && <Button variant="outlined" startIcon={<Edit />} onClick={() => { handleEditarPedido(pedidoCompleto); handleFecharDialogDetalhes(); }}>Editar</Button>}
+          {pedidoCompleto && ['PENDENTE', 'CONFIRMADO'].includes(pedidoCompleto.status || '') && <Button variant="contained" startIcon={<CheckCircle />} disabled={finalizarMutation.isPending} onClick={() => { void handleFinalizarPedido(pedidoCompleto); handleFecharDialogDetalhes(); }}>Finalizar pedido</Button>}
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Edição de Pedido */}
+      {/* Dialog de Edição de Pedido */}      {/* Dialog de Edição de Pedido */}
       <Dialog
         open={dialogEditar}
         onClose={() => setDialogEditar(false)}

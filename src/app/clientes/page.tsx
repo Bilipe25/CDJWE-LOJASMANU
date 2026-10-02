@@ -18,7 +18,6 @@ import {
   TablePagination,
   Tooltip,
   CircularProgress,
-  Avatar,
   Grid,
   Dialog,
   DialogTitle,
@@ -29,28 +28,24 @@ import {
   Switch,
   Divider,
   useMediaQuery,
-  Breadcrumbs,
-  Link,
   useTheme,
   Typography,
   Alert,
   MenuItem,
+  Menu,
 } from '@mui/material';
 import {
   Search,
   Add,
   Edit,
-  Delete,
   Phone,
   Person,
   LocationOn,
   Visibility,
-  TrendingUp,
-  CheckCircle,
   ShoppingCart,
-  History,
-  NavigateNext,
   OpenInNew,
+  MoreVert,
+  Close,
 } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import EmptyState from '@/components/common/EmptyState';
@@ -58,7 +53,9 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import StatusBadge from '@/components/common/StatusBadge';
 import { trpc } from '@/lib/trpc/client';
-import { motion } from 'framer-motion';
+import { OperationalHeader, OperationalSummary, operationalSurface, operationalTable } from '@/components/common/OperationalPage';
+import { usePDVStore } from '@/stores/pdv-store';
+import { formatarEndereco } from '@/lib/utils/endereco';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import ClienteDadosFields from '@/components/common/ClienteDadosFields';
@@ -78,11 +75,12 @@ export default function ClientesPage() {
   const [dialogNovo, setDialogNovo] = useState(false);
   const [dialogEditar, setDialogEditar] = useState(false);
   const [dialogDetalhes, setDialogDetalhes] = useState(false);
-  const [dialogHistorico, setDialogHistorico] = useState(false);
   const [paginaHistorico, setPaginaHistorico] = useState(0);
   const [clienteEditando, setClienteEditando] = useState<Cliente | null>(null);
   const [clienteDetalhes, setClienteDetalhes] = useState<Cliente | null>(null);
-  const [clienteHistorico, setClienteHistorico] = useState<Cliente | null>(null);
+  const [clienteMenu, setClienteMenu] = useState<Cliente | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [abrindoVenda, setAbrindoVenda] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -118,10 +116,13 @@ export default function ClientesPage() {
 
   // Query para pedidos do cliente (só busca quando dialog está aberto)
   const { data: pedidosCliente, isLoading: loadingPedidos, error: erroHistorico, refetch: recarregarHistorico } = trpc.pedidos.listByCliente.useQuery(
-    { clienteId: clienteHistorico?.id || '', limit: 25, offset: paginaHistorico * 25 },
-    { enabled: !!clienteHistorico?.id && dialogHistorico }
+    { clienteId: clienteDetalhes?.id || '', limit: 25, offset: paginaHistorico * 25 },
+    { enabled: !!clienteDetalhes?.id && dialogDetalhes }
   );
 
+  const { data: clienteFicha, isLoading: loadingFicha, error: erroFicha, refetch: recarregarFicha } = trpc.clientes.getById.useQuery(
+    { id: clienteDetalhes?.id || '' }, { enabled: !!clienteDetalhes?.id && dialogDetalhes }
+  );
   const clientes = data?.clientes || [];
   const total = data?.total || 0;
 
@@ -204,15 +205,12 @@ export default function ClientesPage() {
   };
 
   const handleVisualizarCliente = (cliente: Cliente) => {
+    setPaginaHistorico(0);
     setClienteDetalhes(cliente);
     setDialogDetalhes(true);
   };
 
-  const handleHistoricoPedidos = (cliente: Cliente) => {
-    setPaginaHistorico(0);
-    setClienteHistorico(cliente);
-    setDialogHistorico(true);
-  };
+  const handleHistoricoPedidos = (cliente: Cliente) => handleVisualizarCliente(cliente);
 
   const handleVerPedido = (pedidoId: string) => {
     router.push(`/pedidos?id=${pedidoId}`);
@@ -255,114 +253,40 @@ export default function ClientesPage() {
   const handleReativar = (cliente: Cliente) => setConfirmDialog({ open: true, title: 'Reativar cliente', message: 'Reativar ' + cliente.nome + '? O cadastro voltará a aparecer no PDV.', onConfirm: async () => {
     try { await atualizarMutation.mutateAsync({ id: cliente.id, ativo: true }); setConfirmDialog(c => ({ ...c, open: false })); toast.success('Cliente reativado.'); } catch (e) { toast.error(e instanceof Error ? e.message : 'Não foi possível reativar.'); }
   }});
+  const handleNovaVenda = async (cliente: Cliente) => {
+    if (abrindoVenda || !cliente.ativo) return;
+    setAbrindoVenda(true);
+    try {
+      const cadastro = await utils.clientes.getById.fetch({ id: cliente.id }, { staleTime: 0 });
+      if (!cadastro.ativo) { toast.error('Este cliente está inativo. Reative o cadastro para iniciar uma venda.'); return; }
+      const iniciar = () => {
+        usePDVStore.getState().novoPedido();
+        usePDVStore.getState().setPedidoAtual({ cliente: { id: cadastro.id, nome: cadastro.nome, telefone: cadastro.telefone, cpf: cadastro.cpf }, cliente_id: cadastro.id, cliente_nome: cadastro.nome, telefone_contato: cadastro.telefone || undefined });
+        router.push('/pdv');
+      };
+      const rascunho = usePDVStore.getState().pedidoAtual;
+      if (rascunho.itens.length || rascunho.cliente_id || rascunho.tipo_atendimento_id || rascunho.forma_pagamento_id || rascunho.observacao?.trim() || rascunho.telefone_contato?.trim() || rascunho.id) {
+        setConfirmDialog({ open: true, title: 'Iniciar uma nova venda?', message: 'Há um pedido em montagem no PDV. Iniciar esta venda descarta esse rascunho. Para continuar o pedido existente, cancele e abra o PDV.', onConfirm: () => { iniciar(); setConfirmDialog(c => ({ ...c, open: false })); } });
+      } else iniciar();
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Não foi possível verificar o cliente. Tente novamente.'); }
+    finally { setAbrindoVenda(false); }
+  };
   return (
     <AppLayout>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        {erroEstatisticas && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => recarregarEstatisticas()}>Tentar novamente</Button>}>Indicadores indisponíveis. Tente novamente.</Alert>}
-      <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
-          <Link underline="hover" color="inherit" href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            Dashboard
-          </Link>
-          <Typography color="text.primary">Clientes</Typography>
-        </Breadcrumbs>
-
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={handleNovoCliente}
-          size="large"
-        >
-          Novo Cliente
-        </Button>
-      </Box>
-
-      {/* Cards de Estatísticas */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={6} sm={6} md={3}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 }, height: '100%' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
-              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'primary.light', color: 'primary.main' }}>
-                <Person sx={{ fontSize: { xs: 28, sm: 24 } }} />
-              </Box>
-              <Box>
-                <Box sx={{ fontSize: { xs: 20, sm: 24 }, fontWeight: 700, whiteSpace: 'nowrap', maxWidth: '100%', overflowX: 'auto', fontVariantNumeric: 'tabular-nums' }}>{erroEstatisticas ? '—' : stats?.total ?? '—'}</Box>
-                <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Total de Clientes</Box>
-              </Box>
-            </Box>
-          </Card>
-        </Grid>
-        <Grid item xs={6} sm={6} md={3}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 }, height: '100%' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
-              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'success.light', color: 'success.main' }}>
-                <CheckCircle sx={{ fontSize: { xs: 28, sm: 24 } }} />
-              </Box>
-              <Box>
-                <Box sx={{ fontSize: { xs: 20, sm: 24 }, fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                  {erroEstatisticas ? '—' : stats?.ativos ?? '—'}
-                </Box>
-                <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Clientes Ativos</Box>
-              </Box>
-            </Box>
-          </Card>
-        </Grid>
-        <Grid item xs={6} sm={6} md={3}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 }, height: '100%' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
-              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'warning.light', color: 'warning.main' }}>
-                <ShoppingCart sx={{ fontSize: { xs: 28, sm: 24 } }} />
-              </Box>
-              <Box>
-                <Box sx={{ fontSize: { xs: 20, sm: 24 }, fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                  {erroEstatisticas ? '—' : stats?.totalPedidos ?? '—'}
-                </Box>
-                <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Total de Pedidos</Box>
-              </Box>
-            </Box>
-          </Card>
-        </Grid>
-        <Grid item xs={6} sm={6} md={3}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 }, height: '100%' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
-              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'info.light', color: 'info.main' }}>
-                <TrendingUp sx={{ fontSize: { xs: 28, sm: 24 } }} />
-              </Box>
-              <Box>
-                <Box sx={{ fontSize: { xs: 20, sm: 24 }, fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                  {erroEstatisticas || !stats ? '—' : formatCurrency(stats.valorTotalCompras)}
-                </Box>
-                <Box sx={{ fontSize: 12, color: 'text.secondary' }}>Total em Compras</Box>
-              </Box>
-            </Box>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <Card>
+      <OperationalHeader title="Clientes" description="Encontre o cadastro e retome o atendimento." actions={<Button variant="contained" startIcon={<Add />} onClick={handleNovoCliente}>Novo cliente</Button>} />
+      {erroEstatisticas && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => recarregarEstatisticas()}>Tentar novamente</Button>}>Indicadores indisponíveis.</Alert>}
+      <OperationalSummary label="Indicadores gerais de clientes" items={[
+        { label: 'Cadastros', value: erroEstatisticas ? '—' : stats?.total ?? '—' },
+        { label: 'Ativos', value: erroEstatisticas ? '—' : stats?.ativos ?? '—' },
+        { label: 'Vendas finalizadas', value: erroEstatisticas ? '—' : stats?.totalPedidos ?? '—' },
+        { label: 'Compras finalizadas', value: erroEstatisticas || !stats ? '—' : formatCurrency(stats.valorTotalCompras) },
+      ]} />
+      <Card sx={operationalSurface}>
         {/* Barra de Pesquisa */}
-        <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid', borderColor: 'divider' }}>
-          <TextField
-            fullWidth
-            label="Buscar cliente"
-            placeholder="Buscar por nome, CPF ou telefone..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-          />
+        <Box sx={{ p: 2.5, display: 'flex', gap: 2, flexWrap: 'wrap', borderBottom: '1px solid', borderColor: 'divider' }}>
+          <TextField size="small" label="Buscar cliente" placeholder="Nome, CPF, telefone ou e-mail" value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} sx={{ flex: 1, minWidth: { xs: '100%', sm: 240 } }} InputProps={{ startAdornment: <InputAdornment position="start"><Search /></InputAdornment> }} />
+          <TextField size="small" select label="Situação" sx={{ width: { xs: '100%', sm: 180 } }} value={filtroAtivo} onChange={e => { setFiltroAtivo(e.target.value as typeof filtroAtivo); setPage(0); }}><MenuItem value="ativos">Ativos</MenuItem><MenuItem value="inativos">Inativos</MenuItem><MenuItem value="todos">Todos</MenuItem></TextField>
         </Box>
-
-        <Box sx={{ px: 2, pb: 2 }}><TextField select label="Situação dos clientes" fullWidth value={filtroAtivo} onChange={e => { setFiltroAtivo(e.target.value as typeof filtroAtivo); setPage(0); }}>
-          <MenuItem value="ativos">Ativos</MenuItem><MenuItem value="inativos">Inativos</MenuItem><MenuItem value="todos">Todos</MenuItem>
-        </TextField></Box>
         {/* Tabela */}
         {erroLista ? <Alert severity="error" action={<Button color="inherit" onClick={() => recarregarLista()}>Tentar novamente</Button>}>Não foi possível carregar os clientes. Confira a conexão e tente novamente.</Alert> : isLoading ? (
           <Box sx={{ p: 2 }}>
@@ -389,7 +313,7 @@ export default function ClientesPage() {
         ) : (
           <>
             <TableContainer>
-              <Table>
+              <Table size="small" sx={operationalTable}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Cliente</TableCell>
@@ -402,13 +326,9 @@ export default function ClientesPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {clientes.map((cliente, index) => (
+                  {clientes.map((cliente) => (
                     <TableRow
                       key={cliente.id}
-                      component={motion.tr}
-                      initial={false}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.15, delay: Math.min(index, 4) * 0.02 }}
                       hover
                       onClick={() => handleVisualizarCliente(cliente)}
                       sx={{
@@ -416,19 +336,15 @@ export default function ClientesPage() {
                         transition: 'all 0.2s',
                         '&:hover': {
                           bgcolor: 'action.hover',
-                          transform: 'scale(1.01)',
                         }
                       }}
                     >
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
-                          <Avatar sx={{ bgcolor: 'primary.main' }}>
-                            {cliente.nome?.charAt(0).toUpperCase()}
-                          </Avatar>
                           <Box>
                             <Box sx={{ fontWeight: 600 }}>{cliente.nome}</Box>
                             <Box sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-                              {cliente.total_pedidos || 0} pedidos
+                              {cliente.telefone || 'Telefone não informado'} · {cliente.total_pedidos || 0} vendas finalizadas
                             </Box>
                           </Box>
                         </Box>
@@ -459,54 +375,11 @@ export default function ClientesPage() {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <Tooltip title="Histórico de Pedidos">
-                          <IconButton
-                            size="small"
-                            color="info"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleHistoricoPedidos(cliente);
-                            }}
-                          >
-                            <History fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>
-                          <Tooltip title="Visualizar">
-                            <IconButton
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleVisualizarCliente(cliente);
-                              }}
-                            >
-                              <Visibility fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <Tooltip title="Abrir ficha"><IconButton aria-label={'Abrir ficha de ' + cliente.nome} onClick={e => { e.stopPropagation(); handleVisualizarCliente(cliente); }}><Visibility fontSize="small" /></IconButton></Tooltip>
+                          <Tooltip title="Editar cliente"><IconButton aria-label={'Editar ' + cliente.nome} onClick={e => { e.stopPropagation(); void handleEditarCliente(cliente); }} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}><Edit fontSize="small" /></IconButton></Tooltip>
+                          <IconButton aria-label={'Mais ações de ' + cliente.nome} aria-haspopup="menu" onClick={e => { e.stopPropagation(); setClienteMenu(cliente); setMenuAnchor(e.currentTarget); }}><MoreVert fontSize="small" /></IconButton>
                         </Box>
-                        <Tooltip title="Editar">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditarCliente(cliente);
-                            }}
-                          >
-                            <Edit fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={cliente.ativo ? "Desativar cliente" : "Reativar cliente"}>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (cliente.ativo) handleDeletarCliente(cliente); else handleReativar(cliente);
-                            }}
-                          >
-                            {cliente.ativo ? <Delete fontSize="small" /> : <CheckCircle fontSize="small" />}
-                          </IconButton>
-                        </Tooltip>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -599,91 +472,38 @@ export default function ClientesPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog Detalhes do Cliente */}
-      <Dialog open={dialogDetalhes} onClose={() => setDialogDetalhes(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
-        <DialogTitle>Detalhes do Cliente</DialogTitle>
-        <DialogContent>
-          {clienteDetalhes && (
-            <Box sx={{ pt: 2 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, pb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-                    <Avatar sx={{ bgcolor: 'primary.main', width: 56, height: 56, fontSize: 24 }}>
-                      {clienteDetalhes.nome?.charAt(0).toUpperCase()}
-                    </Avatar>
-                    <Box>
-                      <Box sx={{ fontSize: 20, fontWeight: 700, mb: 0.5 }}>
-                        {clienteDetalhes.nome}
-                      </Box>
-                      <Chip
-                        label={clienteDetalhes.ativo ? 'Ativo' : 'Inativo'}
-                        color={clienteDetalhes.ativo ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </Box>
-                  </Box>
-                </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ color: 'text.secondary', fontSize: 12, mb: 0.5 }}>CPF</Box>
-                  <Box sx={{ fontWeight: 600 }}>{clienteDetalhes.cpf || '-'}</Box>
-                </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ color: 'text.secondary', fontSize: 12, mb: 0.5 }}>Telefone</Box>
-                  <Box sx={{ fontWeight: 600 }}>{clienteDetalhes.telefone || '-'}</Box>
-                </Grid>
-                <Grid item xs={12}>
-                  <Box sx={{ color: 'text.secondary', fontSize: 12, mb: 0.5 }}>E-mail</Box>
-                  <Box sx={{ fontWeight: 600 }}>{clienteDetalhes.email || '-'}</Box>
-                </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ color: 'text.secondary', fontSize: 12, mb: 0.5 }}>Total de Pedidos</Box>
-                  <Box sx={{ fontWeight: 700, color: 'warning.main', fontSize: 18 }}>
-                    {clienteDetalhes.total_pedidos || 0}
-                  </Box>
-                </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ color: 'text.secondary', fontSize: 12, mb: 0.5 }}>Total em Compras</Box>
-                  <Box sx={{ fontWeight: 700, color: 'success.main', fontSize: 18 }}>
-                    {formatCurrency(clienteDetalhes.valor_total_compras)}
-                  </Box>
-                </Grid>
-                {clienteDetalhes.endereco_principal_completo && (
-                  <Grid item xs={12}>
-                    <Box sx={{ color: 'text.secondary', fontSize: 12, mb: 0.5 }}>Endereço Principal</Box>
-                    <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, fontSize: 14 }}>
-                      {clienteDetalhes.endereco_principal_completo}
-                    </Box>
-                  </Grid>
-                )}
-              </Grid>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogDetalhes(false)}>Fechar</Button>
-          <Button
-            onClick={() => {
-              setDialogDetalhes(false);
-              if (clienteDetalhes) handleEditarCliente(clienteDetalhes);
-            }}
-            variant="contained"
-            startIcon={<Edit />}
-          >
-            Editar
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog Histórico de Pedidos */}
-      <Dialog open={dialogHistorico} onClose={() => setDialogHistorico(false)} maxWidth="md" fullWidth fullScreen={isMobile}>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <History />
-            Histórico de Pedidos - {clienteHistorico?.nome}
-          </Box>
+      <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+        <MenuItem onClick={() => { setMenuAnchor(null); if (clienteMenu) handleHistoricoPedidos(clienteMenu); }}>Abrir ficha e histórico</MenuItem>
+        <MenuItem onClick={() => { setMenuAnchor(null); if (clienteMenu) void handleEditarCliente(clienteMenu); }}>Editar cliente</MenuItem>
+        <MenuItem onClick={() => { setMenuAnchor(null); if (clienteMenu) { if (clienteMenu.ativo) handleDeletarCliente(clienteMenu); else handleReativar(clienteMenu); } }} sx={{ color: clienteMenu?.ativo ? 'error.main' : 'primary.main' }}>{clienteMenu?.ativo ? 'Desativar cliente' : 'Reativar cliente'}</MenuItem>
+      </Menu>
+      {/* Ficha do cliente: contato, endereços e histórico na mesma consulta. */}
+      <Dialog open={dialogDetalhes} onClose={() => setDialogDetalhes(false)} maxWidth={false} fullWidth fullScreen={isMobile} PaperProps={{ sx: { maxWidth: { sm: 900 } } }} aria-labelledby="cliente-ficha-titulo">
+        <DialogTitle id="cliente-ficha-titulo" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Person color="primary" /><Box sx={{ flex: 1, minWidth: 0 }}><Typography component="span" sx={{ fontSize: 24, fontWeight: 700 }}>{clienteDetalhes?.nome}</Typography><Typography variant="body2" color="text.secondary">Ficha do cliente</Typography></Box>
+          <StatusBadge status={clienteFicha ? clienteFicha.ativo ? 'ATIVO' : 'INATIVO' : clienteDetalhes?.ativo ? 'ATIVO' : 'INATIVO'} />
+          <IconButton aria-label="Fechar ficha do cliente" onClick={() => setDialogDetalhes(false)}><Close /></IconButton>
         </DialogTitle>
-        <DialogContent>
-          {loadingPedidos ? (
+        <DialogContent sx={{ pt: '24px !important' }}>
+          {clienteDetalhes && <>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1.5fr 1fr' }, gap: 2, mb: 3, p: 2, bgcolor: 'background.default', borderRadius: '12px' }}>
+              <Box><Typography variant="caption" color="text.secondary">Telefone</Typography><Typography>{(clienteFicha ?? clienteDetalhes).telefone || 'Não informado'}</Typography></Box>
+              <Box><Typography variant="caption" color="text.secondary">E-mail</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{(clienteFicha ?? clienteDetalhes).email || 'Não informado'}</Typography></Box>
+              <Box><Typography variant="caption" color="text.secondary">CPF</Typography><Typography>{(clienteFicha ?? clienteDetalhes).cpf || 'Não informado'}</Typography></Box>
+            </Box>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Typography component="h3" variant="h6" sx={{ mb: 2 }}>Endereços</Typography>
+                {loadingFicha ? <LoadingSkeleton type="form" rows={2} /> : erroFicha ? <Alert severity="error" action={<Button onClick={() => recarregarFicha()}>Tentar novamente</Button>}>Não foi possível carregar os endereços.</Alert> : clienteFicha?.enderecos.length ? clienteFicha.enderecos.map(endereco => <Box key={endereco.id} sx={{ p: 2, mb: 1.5, bgcolor: 'background.default', borderRadius: '12px' }}>
+                  <Box sx={{ display: 'flex', gap: 1, mb: 1 }}><LocationOn fontSize="small" color="primary" />{endereco.principal && endereco.ativo && <Chip size="small" label="Principal" color="primary" variant="outlined" />}{!endereco.ativo && <Chip size="small" label="Inativo" />}</Box>
+                  <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{formatarEndereco(endereco)}</Typography>
+                </Box>) : <Typography color="text.secondary" variant="body2">Nenhum endereço cadastrado.</Typography>}
+                <Button startIcon={<Edit />} onClick={() => { setDialogDetalhes(false); void handleEditarCliente(clienteDetalhes); }}>Editar endereços</Button>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography component="h3" variant="h6">Histórico de pedidos</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>{pedidosCliente?.total ?? '…'} pedidos no histórico · Compras finalizadas: {formatCurrency(clienteDetalhes.valor_total_compras)}</Typography>
+                          {loadingPedidos ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
             </Box>
@@ -693,12 +513,10 @@ export default function ClientesPage() {
             </Box>
           ) : (
             <TableContainer>
-              <Table>
+              <Table size="small" sx={operationalTable}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Número</TableCell>
-                    <TableCell>Data</TableCell>
-                    <TableCell>Status</TableCell>
                     <TableCell align="right">Total</TableCell>
                     <TableCell align="center">Ações</TableCell>
                   </TableRow>
@@ -711,22 +529,10 @@ export default function ClientesPage() {
                           label={`#${pedido.numero}`}
                           size="small"
                           variant="outlined"
-                          sx={{ fontFamily: 'monospace', fontWeight: 600 }}
+                          sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
                         />
-                      </TableCell>
-                      <TableCell>
-                        {formatDateBR(pedido.data)}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={pedido.status}
-                          size="small"
-                          color={
-                            pedido.status === 'FINALIZADO' ? 'success' :
-                              pedido.status === 'PENDENTE' ? 'warning' :
-                                pedido.status === 'CANCELADO' ? 'error' : 'default'
-                          }
-                        />
+                        <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>{formatDateBR(pedido.data)}</Typography>
+                        <StatusBadge status={pedido.status || 'Não informado'} sx={{ mt: 0.5 }} />
                       </TableCell>
                       <TableCell align="right">
                         <Box sx={{ fontWeight: 600, color: 'success.main' }}>
@@ -737,6 +543,7 @@ export default function ClientesPage() {
                         <Tooltip title="Ver Detalhes do Pedido">
                           <IconButton
                             size="small"
+                            aria-label={'Abrir pedido #' + pedido.numero}
                             color="primary"
                             onClick={() => handleVerPedido(pedido.id)}
                           >
@@ -750,9 +557,16 @@ export default function ClientesPage() {
               </Table>
             </TableContainer>
           )}
+
+                {pedidosCliente && <TablePagination component="div" count={pedidosCliente.total} page={paginaHistorico} rowsPerPage={25} rowsPerPageOptions={[25]} onPageChange={(_, p) => setPaginaHistorico(p)} labelRowsPerPage="Por página" />}
+              </Grid>
+            </Grid>
+          </>}
         </DialogContent>
-        <DialogActions>
-          <TablePagination component="div" count={pedidosCliente?.total ?? 0} page={paginaHistorico} rowsPerPage={25} rowsPerPageOptions={[25]} onPageChange={(_,p) => setPaginaHistorico(p)} labelRowsPerPage="Por página" /><Button onClick={() => setDialogHistorico(false)}>Fechar</Button>
+        <DialogActions sx={{ p: 2.5, gap: 1, flexWrap: 'wrap', borderTop: '1px solid', borderColor: 'divider' }}>
+          <Button onClick={() => setDialogDetalhes(false)} sx={{ mr: 'auto' }}>Fechar</Button>
+          <Button variant="outlined" startIcon={<Edit />} onClick={() => { setDialogDetalhes(false); if (clienteDetalhes) void handleEditarCliente(clienteDetalhes); }}>Editar cliente</Button>
+          <Button variant="contained" startIcon={<ShoppingCart />} disabled={abrindoVenda || loadingFicha || !!erroFicha || !clienteFicha?.ativo} onClick={() => { if (clienteDetalhes) void handleNovaVenda(clienteDetalhes); }}>{abrindoVenda ? 'Verificando…' : 'Nova venda'}</Button>
         </DialogActions>
       </Dialog>
 
@@ -763,7 +577,7 @@ export default function ClientesPage() {
         message={confirmDialog.message}
         onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}
         onConfirm={confirmDialog.onConfirm}
-        confirmText={confirmDialog.title === 'Reativar cliente' ? 'Reativar' : 'Desativar'}
+        confirmText={confirmDialog.title === 'Iniciar uma nova venda?' ? 'Descartar e iniciar' : confirmDialog.title === 'Reativar cliente' ? 'Reativar' : 'Desativar'}
         cancelText="Cancelar"
         severity={confirmDialog.title === 'Reativar cliente' ? 'success' : 'warning'}
         loading={atualizarMutation.isPending || deletarMutation.isPending}

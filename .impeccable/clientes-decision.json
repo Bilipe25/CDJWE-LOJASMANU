@@ -1,0 +1,71 @@
+{
+  "title": "Clientes — lista e ficha de atendimento",
+  "question": "Escolha como consultar clientes e endereços. As opções mantêm a linguagem do PDV aprovado e usam dados fictícios. Pode pedir ajustes no campo abaixo; escolher aprova a composição.",
+  "options": [
+    {
+      "id": "detalhe-na-linha",
+      "label": "A · Detalhes na linha",
+      "kicker": "PROPOSTA A",
+      "thesis": "O cliente selecionado expande contato, endereços e histórico na própria lista.",
+      "viewport": "Busca e lista compactas com uma linha expandida.",
+      "risk": "A expansão desloca os clientes que aparecem abaixo.",
+      "comp": ".impeccable/mocks/decision/clientes-a.png",
+      "palette": [
+        "#0369a1",
+        "#f8fafc",
+        "#ffffff",
+        "#0f172a"
+      ],
+      "materials": [
+        "MUI",
+        "superfícies claras",
+        "divisores leves"
+      ]
+    },
+    {
+      "id": "ficha-lateral",
+      "label": "B · Ficha lateral",
+      "thesis": "A ficha reúne contato, endereços e histórico ao lado da lista.",
+      "viewport": "Lista à esquerda, ficha à direita e nova venda contextual.",
+      "risk": "A largura da lista diminui enquanto a ficha está aberta.",
+      "comp": ".impeccable/mocks/decision/clientes-b-v2.png",
+      "palette": [
+        "#0369a1",
+        "#f8fafc",
+        "#ffffff",
+        "#0f172a"
+      ],
+      "materials": [
+        "MUI",
+        "superfícies claras",
+        "divisores leves"
+      ]
+    },
+    {
+      "id": "ficha-janela",
+      "label": "C · Ficha em janela",
+      "thesis": "A lista usa toda a largura; uma janela concentra a consulta do cliente.",
+      "viewport": "Tabela de contatos e diálogo de ficha com endereços e histórico.",
+      "risk": "A janela interrompe a leitura da lista até fechar.",
+      "comp": ".impeccable/mocks/decision/clientes-c.png",
+      "palette": [
+        "#0369a1",
+        "#f8fafc",
+        "#ffffff",
+        "#0f172a"
+      ],
+      "materials": [
+        "MUI",
+        "superfícies claras",
+        "divisores leves"
+      ]
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "canon": false,
+  "buildPath": {
+    "value": "comp",
+    "toggle": true
+  }
+}

@@ -30,6 +30,7 @@ export default function StatusBadge({
     type,
     label,
     mapping = defaultMapping,
+    sx,
     ...props
 }: StatusBadgeProps) {
     const normalizeStatus = status?.toString().toUpperCase() || '';
@@ -46,13 +47,14 @@ export default function StatusBadge({
     return (
         <Chip
             label={displayLabel}
-            color={displayColor as any}
+            color={displayColor}
             size="small"
+            variant="outlined"
+            {...props}
             sx={{
                 fontWeight: 600,
-                ...props.sx
+                ...sx
             }}
-            {...props}
         />
     );
 }

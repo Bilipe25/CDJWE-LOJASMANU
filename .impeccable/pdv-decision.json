@@ -1,0 +1,71 @@
+{
+  "title": "PDV Lojas Manu — escolha a composição",
+  "question": "Compare o espaço do carrinho, os dados da venda e o total. Escolher uma opção aprova a composição do PDV; o código do sistema ainda não foi alterado. Os dados nas imagens são fictícios.",
+  "options": [
+    {
+      "id": "carrinho-amplo",
+      "label": "A · Carrinho amplo",
+      "kicker": "PROPOSTA A",
+      "thesis": "O carrinho ocupa a área principal; cliente e pagamento ficam numa faixa compacta.",
+      "palette": [
+        "#0369a1",
+        "#f8fafc",
+        "#ffffff",
+        "#0f172a"
+      ],
+      "materials": [
+        "MUI",
+        "superfícies claras",
+        "divisores leves"
+      ],
+      "viewport": "Busca no topo, itens largos e resumo financeiro persistente no rodapé.",
+      "risk": "Editar muitos dados do cliente pede abrir os detalhes.",
+      "comp": ".impeccable/mocks/decision/pdv-a.png"
+    },
+    {
+      "id": "atendimento-guiado",
+      "label": "B · Atendimento guiado",
+      "thesis": "Os dados da venda seguem etapas; carrinho e total continuam visíveis.",
+      "palette": [
+        "#0369a1",
+        "#f8fafc",
+        "#ffffff",
+        "#0f172a"
+      ],
+      "materials": [
+        "MUI",
+        "superfícies claras",
+        "divisores leves"
+      ],
+      "viewport": "Cliente, itens e conferência em sequência, com resumo ao lado.",
+      "risk": "Etapas podem acrescentar cliques para operadores experientes.",
+      "comp": ".impeccable/mocks/decision/pdv-b-v2.png"
+    },
+    {
+      "id": "duas-areas",
+      "label": "C · Duas áreas",
+      "thesis": "Itens e dados da venda aparecem juntos; o total tem uma área fixa.",
+      "palette": [
+        "#0369a1",
+        "#f8fafc",
+        "#ffffff",
+        "#0f172a"
+      ],
+      "materials": [
+        "MUI",
+        "superfícies claras",
+        "divisores leves"
+      ],
+      "viewport": "Carrinho à esquerda, cliente e pagamento à direita e ação persistente.",
+      "risk": "Em computadores compactos, a navegação precisa recolher para caber.",
+      "comp": ".impeccable/mocks/decision/pdv-c.png"
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "canon": false,
+  "buildPath": {
+    "value": "comp",
+    "toggle": true
+  }
+}

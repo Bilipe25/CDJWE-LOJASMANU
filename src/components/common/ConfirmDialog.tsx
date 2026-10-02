@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
 import {
   Dialog,
@@ -36,6 +36,7 @@ export default function ConfirmDialog({
   severity = 'warning',
   loading = false,
 }: ConfirmDialogProps) {
+  const titleId = useId();
   const bloqueio = useRef(false);
   const [processando, setProcessando] = useState(false);
   const ocupado = loading || processando;
@@ -73,6 +74,7 @@ export default function ConfirmDialog({
   return (
     <Dialog
       open={open}
+      aria-labelledby={titleId}
       onClose={ocupado ? undefined : onClose}
       maxWidth="sm"
       fullWidth
@@ -82,7 +84,7 @@ export default function ConfirmDialog({
         },
       }}
     >
-      <DialogTitle>
+      <DialogTitle id={titleId}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {getIcon()}
           <Box>

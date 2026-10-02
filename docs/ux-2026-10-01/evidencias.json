@@ -1,0 +1,24 @@
+{
+  "data": "2026-10-01",
+  "base": "07c4894",
+  "ambiente": "Next.js local com simulador Supabase e dados ficticios; rascunho reidratado de sessao anterior",
+  "pdv": {
+    "itens": 1,
+    "notebook": {"width":1366,"height":768,"finalizarTop":849.75,"finalizarBottom":900},
+    "compacto": {"width":1024,"height":768,"finalizarTop":1488.1500244140625,"finalizarBottom":1538.4000244140625,"painelItens":{"top":136,"left":304,"width":688,"height":614.4000244140625},"painelResumo":{"top":774.4000244140625,"left":304,"width":688,"height":916.5}}
+  },
+  "clientes": {
+    "valorComprasDOM":{"texto":"R$ 0,00","cor":"rgb(16, 185, 129)","fonte":"14px","fundoEfetivo":"rgb(255, 255, 255)"},
+    "estreito":{"width":390,"height":844,"linhaRole":"row","linhaTabindex":null,"visualizarVisivel":false,"acoesVisiveis":["Historico de Pedidos","Editar","Desativar cliente"]},
+    "headingsNaRegiaoPrincipalDesktop":[]
+  },
+  "pedidos": {
+    "limparFiltrosTeclado":{"antes":"Pendente","depoisDelete":"Pendente","depoisEnter":"Pendente","controleRecebeFoco":true},
+    "estreitoColunas":["Numero","Cliente","Total","Status","Acoes"]
+  },
+  "contrasteCalculado":{"verdeSobreBranco":2.537,"verdeSobreF8FAFC":2.424,"ambarSobreBranco":2.148},
+  "pdfArquivosOrigemBytes":{"pdfmake.js":2852243,"vfs_fonts.js":830090,"nota":"Tamanho dos arquivos instalados, nao transferencia ou bundle final"},
+  "detector":[],
+  "mutacoesComerciaisNestaRevisao":0,
+  "limites":["Sem medicao de performance de producao","Sem leitor de tela ou zoom 200%","Sem listas extensas ou todos os estados de erro","Posicoes do PDV dependem do estado"]
+}

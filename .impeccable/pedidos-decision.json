@@ -1,0 +1,71 @@
+{
+  "title": "Pedidos — organização e consulta",
+  "question": "Escolha como consultar pedidos mantendo a linguagem do PDV aprovado. Os dados são fictícios. Pode pedir ajustes no campo abaixo; escolher aprova a composição, sem alterar as regras de status.",
+  "options": [
+    {
+      "id": "por-situacao",
+      "label": "A · Por situação",
+      "kicker": "PROPOSTA A",
+      "thesis": "Os pedidos ficam agrupados por situação para visualizar o andamento.",
+      "viewport": "Quatro colunas de cartões, busca no topo e abertura individual.",
+      "risk": "Menos colunas de dados visíveis; pedidos não mudam de status por arrastar.",
+      "comp": ".impeccable/mocks/decision/pedidos-a.png",
+      "palette": [
+        "#0369a1",
+        "#f8fafc",
+        "#ffffff",
+        "#0f172a"
+      ],
+      "materials": [
+        "MUI",
+        "superfícies claras",
+        "divisores leves"
+      ]
+    },
+    {
+      "id": "lista-detalhe",
+      "label": "B · Lista e pedido aberto",
+      "thesis": "Selecionar um pedido abre seus detalhes junto da lista.",
+      "viewport": "Lista compacta à esquerda e pedido completo à direita.",
+      "risk": "A lista fica mais estreita enquanto os detalhes estão abertos.",
+      "comp": ".impeccable/mocks/decision/pedidos-b-v2.png",
+      "palette": [
+        "#0369a1",
+        "#f8fafc",
+        "#ffffff",
+        "#0f172a"
+      ],
+      "materials": [
+        "MUI",
+        "superfícies claras",
+        "divisores leves"
+      ]
+    },
+    {
+      "id": "tabela-janela",
+      "label": "C · Tabela e janela",
+      "thesis": "Uma tabela ampla mantém o padrão conhecido; detalhes abrem numa janela.",
+      "viewport": "Busca e filtros compactos, tabela com dados e diálogo de consulta.",
+      "risk": "A janela cobre a lista durante a consulta.",
+      "comp": ".impeccable/mocks/decision/pedidos-c.png",
+      "palette": [
+        "#0369a1",
+        "#f8fafc",
+        "#ffffff",
+        "#0f172a"
+      ],
+      "materials": [
+        "MUI",
+        "superfícies claras",
+        "divisores leves"
+      ]
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "canon": false,
+  "buildPath": {
+    "value": "comp",
+    "toggle": true
+  }
+}

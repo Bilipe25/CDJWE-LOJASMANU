@@ -36,13 +36,12 @@ import {
   Person,
 } from '@mui/icons-material';
 import { usePathname, useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { useConfiguracoes } from '@/hooks/useConfiguracoes';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const drawerWidth = 280;
+const drawerWidth = 240;
 
 interface MenuItem {
   title: string;
@@ -112,8 +111,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Store />
           </Avatar>
         )}
-        <Box>
-          <Typography variant="h6" fontWeight="bold" noWrap>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography variant="h6" fontWeight="bold" noWrap title={nomeEmpresa}>
             {nomeEmpresa}
           </Typography>
           <Typography variant="caption" sx={{ opacity: 0.9 }}>
@@ -131,6 +130,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           return (
             <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
+                aria-current={isActive ? 'page' : undefined}
                 onClick={() => handleNavigate(item.path)}
                 sx={{
                   borderRadius: 2,
@@ -360,13 +360,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           maxWidth: '100%',
         }}
       >
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
+        <Box sx={{ minWidth: 0 }}>
           {children}
-        </motion.div>
+        </Box>
       </Box>
     </Box>
   );

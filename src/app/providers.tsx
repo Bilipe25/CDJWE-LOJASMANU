@@ -29,22 +29,22 @@ const theme = createTheme(
         contrastText: '#ffffff',
       },
       success: {
-        main: '#10b981', // Emerald 500
+        main: '#047857',
         light: '#34d399',
         dark: '#059669',
       },
       error: {
-        main: '#ef4444', // Red 500
+        main: '#b91c1c',
         light: '#f87171',
         dark: '#dc2626',
       },
       warning: {
-        main: '#f59e0b', // Amber 500
+        main: '#92400e',
         light: '#fbbf24',
         dark: '#d97706',
       },
       info: {
-        main: '#3b82f6', // Blue 500
+        main: '#1d4ed8',
         light: '#60a5fa',
         dark: '#2563eb',
       },
@@ -135,6 +135,7 @@ const theme = createTheme(
       '0 25px 50px -12px rgb(0 0 0 / 0.25)',
     ],
     components: {
+      MuiInputBase: { styleOverrides: { input: { '&::placeholder': { color: '#475569', opacity: 1 } } } },
       MuiIconButton: { styleOverrides: { root: { minWidth: 44, minHeight: 44 } } },
       MuiButton: {
         styleOverrides: {
@@ -149,8 +150,7 @@ const theme = createTheme(
           },
           contained: {
             '&:hover': {
-              transform: 'translateY(-1px)',
-              transition: 'all 0.2s ease',
+              transition: 'background-color 0.2s ease',
             },
           },
         },
