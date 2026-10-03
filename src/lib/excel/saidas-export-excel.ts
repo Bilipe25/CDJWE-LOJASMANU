@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import type { DadosEmpresaDocumento } from '@/lib/utils/documentos';
 import type { SaidaDocumento, ColunaSaida } from '@/lib/pdf/financeiro-pdf';
-import { centavos } from '@/lib/schemas/financeiro';
+import { centavosMovimento as centavos } from '@/lib/schemas/financeiro';
 import { formatDateBR } from '@/lib/utils/dateUtils';
 export function exportarSaidasParaExcel(saidas: SaidaDocumento[], colunas: ColunaSaida[], empresa: DadosEmpresaDocumento, criterios: string[] = []) {
   const selecionadas = colunas.filter(c => c.selecionada);

@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 import { executarRPC } from './rpc';
 import { buscarTodosFiltrados } from '@/lib/utils/documentos';
-import { centavos, ratearCentavos } from '@/lib/schemas/financeiro';
+import { centavosMovimento as centavos, ratearCentavos } from '@/lib/schemas/financeiro';
 type Banco = SupabaseClient<Database>;
 type Pedido = Database['public']['Views']['vw_pedidos_completos']['Row'];
 type Item = Database['public']['Views']['vw_itens_pedido_completos']['Row'];
@@ -55,7 +55,7 @@ export async function consultarPeriodoFinanceiro(banco: Banco, dataInicio: strin
     dia.total_pedidos++; dia.centavos += total;
     if (!itens.length) { semItens += total; categorias.set('Sem itens detalhados', (categorias.get('Sem itens detalhados') ?? 0) + total); }
     else {
-      const valores = ratearCentavos(total, itens.map(i => centavos(i.valor_total)));
+      const valores = ratearCentavos(Math.abs(total), itens.map(i => Math.abs(centavos(i.valor_total)))).map(v => total < 0 ? -v : v);
       itens.forEach((item, indice) => {
         const quantidade = Number(item.quantidade ?? 0);
         if (!Number.isFinite(quantidade) || quantidade < 0) throw new Error('Quantidade inválida no relatório.');

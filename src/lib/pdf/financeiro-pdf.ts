@@ -2,7 +2,7 @@ import type { Content, TableCell, TDocumentDefinitions } from 'pdfmake/interface
 import type { DadosEmpresaDocumento, PedidoExportacao } from '@/lib/utils/documentos';
 import type { PeriodoFinanceiro, AnualFinanceiro } from '@/server/financeiro';
 import { formatDateBR } from '@/lib/utils/dateUtils';
-import { centavos, dataCivilValida } from '@/lib/schemas/financeiro';
+import { centavosMovimento as centavos, dataCivilValida } from '@/lib/schemas/financeiro';
 
 const moeda = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 export const mesesFinanceiros = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -20,6 +20,15 @@ function documento(titulo: string, empresa: DadosEmpresaDocumento, criterios: st
     footer: (pagina, total) => ({ columns: [{ text: `Gerado em ${gerado}`, color: '#475569' }, { text: `${pagina} / ${total}`, alignment: 'right', color: '#475569' }], margin: [32, 12, 32, 0], fontSize: 8 }),
     content: [{ text: empresa.nome_empresa, bold: true, fontSize: 16 }, { text: [empresa.razao_social, empresa.cnpj && `CNPJ ${empresa.cnpj}`, empresa.telefone].filter(Boolean).join(' • '), color: '#475569', margin: [0, 4, 0, 0] }, { text: empresa.endereco || '', color: '#475569', margin: [0, 3, 0, 18] }, { text: titulo, bold: true, fontSize: 14 }, { text: criterios.join('\n'), color: '#475569', margin: [0, 6, 0, 10] }, ...content, { text: 'Documento de controle interno. Não substitui documento fiscal.', fontSize: 8, color: '#475569', margin: [0, 18, 0, 0] }],
   };
+}
+function documentoRelatorio(titulo: string, empresa: DadosEmpresaDocumento, criterios: string[], conteudo: Content[], landscape = false) {
+  const doc = documento(titulo, empresa, criterios, conteudo, landscape);
+  const content = doc.content as Content[];
+  content[0] = { text: empresa.nome_empresa, bold: true, color: '#1976d2', fontSize: 14 };
+  content[3] = { text: titulo, bold: true, color: '#1976d2', fontSize: 16, alignment: 'center', margin: [0, 0, 0, 5] };
+  content[4] = { text: criterios.join('\n'), alignment: 'center', color: '#475569', margin: [0, 0, 0, 20] };
+  content.splice(3, 0, { canvas: [{ type: 'line', x1: 0, y1: 0, x2: landscape ? 777 : 531, y2: 0, lineWidth: 2, lineColor: '#1976d2' }], margin: [0, 0, 0, 15] });
+  return doc;
 }
 export function criarDefinicaoSaida(saida: SaidaDocumento, empresa: DadosEmpresaDocumento) {
   if (!saida.data || !dataCivilValida(saida.data) || saida.numero === null || !saida.status) throw new Error('A saída não tem dados válidos para impressão. Atualize a consulta.');
@@ -45,7 +54,7 @@ export function criarDefinicaoListaSaidas(saidas: SaidaDocumento[], colunas: Col
   ], selecionadas.length > 5);
 }
 export function criarDefinicaoPeriodo(dados: PeriodoFinanceiro, empresa: DadosEmpresaDocumento) {
-  return documento('Relatório de vendas', empresa, [`Período: ${formatDateBR(dados.dataInicio)} a ${formatDateBR(dados.dataFim)}`, 'Somente vendas finalizadas. Valores líquidos, com desconto geral rateado proporcionalmente entre os itens.'], [
+  return documentoRelatorio('RELATÓRIO DE VENDAS POR PERÍODO', empresa, [`Período: ${formatDateBR(dados.dataInicio)} a ${formatDateBR(dados.dataFim)}`, 'Somente vendas finalizadas. Valores líquidos, com desconto geral rateado proporcionalmente entre os itens.'], [
     { text: `Vendas: ${moeda(dados.resumo.totalVendas)} · Pedidos: ${dados.resumo.totalPedidos} · Unidades: ${dados.resumo.totalUnidades} · Ticket médio: ${moeda(dados.resumo.ticketMedio)}`, bold: true },
     tabela(['Data', 'Pedidos', 'Unidades', 'Valor líquido'], dados.dias.map(d => [formatDateBR(d.data), d.total_pedidos, d.total_itens, moeda(d.valor_total)]), undefined, [1, 2, 3]),
     { text: 'Produtos — todos os resultados, por valor líquido', bold: true },
@@ -54,23 +63,21 @@ export function criarDefinicaoPeriodo(dados: PeriodoFinanceiro, empresa: DadosEm
   ]);
 }
 export function criarDefinicaoAnual(dados: AnualFinanceiro, empresa: DadosEmpresaDocumento) {
-  if (!dados.linhas.length) return documento(`Relatório financeiro — ${dados.ano}`, empresa, ['Vendas e saídas finalizadas.'], [
-    { text: 'Não há vendas ou despesas finalizadas neste ano.', margin: [0, 12, 0, 12] },
-    { text: `Vendas: ${moeda(dados.vendas)} · Despesas: ${moeda(dados.despesas)} · Saldo: ${moeda(dados.saldo)}`, bold: true },
-  ]);
-  return documento(`Relatório financeiro — ${dados.ano}`, empresa, ['Vendas e saídas finalizadas. Saldo = vendas − despesas.'], [
-    { text: `Vendas: ${moeda(dados.vendas)} · Despesas: ${moeda(dados.despesas)} · Saldo: ${moeda(dados.saldo)}`, bold: true, fontSize: 11 },
-    ...[0, 6].flatMap(inicio => [
-      { text: inicio === 0 ? 'Primeiro semestre' : 'Segundo semestre', bold: true, margin: [0, 16, 0, 2] } as Content,
-      tabela(['Natureza / pagamento', ...mesesFinanceiros.slice(inicio, inicio + 6), 'Semestre'], dados.linhas.map(l => {
-        const valores = l.valores.slice(inicio, inicio + 6);
-        return [`${l.natureza} / ${l.pagamento}`, ...valores.map(moeda), moeda(valores.reduce((s, v) => s + centavos(v), 0) / 100)];
-      }), [135, '*', '*', '*', '*', '*', '*', 80], [1, 2, 3, 4, 5, 6, 7]),
-    ]),
-    { text: 'Totais por natureza e pagamento', bold: true },
-    tabela(['Natureza', 'Pagamento', 'Total do ano'], dados.linhas.map(l => [l.natureza, l.pagamento, moeda(l.total)]), ['auto', '*', 'auto'], [2]),
-    { text: 'Resumo mensal', bold: true },
-    tabela(['Mês', 'Vendas', 'Despesas', 'Saldo'], dados.meses.map(m => [mesesFinanceiros[m.mes - 1], moeda(m.vendas), moeda(m.despesas), moeda(m.saldo)]), undefined, [1, 2, 3]),
+  const celula = (v: number, despesa = false, forte = false): TableCell => ({ text: v === 0 ? '—' : moeda(v).replace(/\u00a0/g, ' '), alignment: 'right', fontSize: 6.5, color: despesa ? '#c62828' : '#0f172a', bold: despesa || forte, fillColor: despesa ? '#ffebee' : forte ? '#e0e0e0' : '#ffffff' });
+  const tabelaMensal: Content = { table: { headerRows: 1, dontBreakRows: true, widths: [105, ...Array(12).fill('*')], body: [
+    [cabecalho('TRANSAÇÕES'), ...mesesFinanceiros.map(m => cabecalho(m.toUpperCase(), true))],
+    ...dados.linhas.map(l => [{ text: l.natureza + ' / ' + l.pagamento, bold: true, fontSize: 7, fillColor: l.natureza === 'Despesa' ? '#ffebee' : '#ffffff', color: l.natureza === 'Despesa' ? '#c62828' : '#0f172a' }, ...l.valores.map(v => celula(v, l.natureza === 'Despesa'))]),
+    [{ text: 'TOTAL VENDAS', bold: true, fillColor: '#e0e0e0' }, ...dados.meses.map(m => celula(m.vendas, false, true))],
+    [{ text: 'SAÍDAS FINANCEIRAS', bold: true, fillColor: '#ffebee', color: '#c62828' }, ...dados.meses.map(m => celula(m.despesas, true, true))],
+    [{ text: 'SALDO', bold: true, fillColor: '#e0e0e0' }, ...dados.meses.map(m => celula(m.saldo, false, true))],
+  ] }, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => '#cccccc', vLineColor: () => '#cccccc', paddingLeft: () => 3, paddingRight: () => 3, paddingTop: () => 3, paddingBottom: () => 3 }, margin: [0, 5, 0, 15] };
+  return documentoRelatorio('RELATÓRIO MENSAL DE VENDAS', empresa, ['ANO: ' + dados.ano, 'Vendas e saídas finalizadas. Saldo = vendas − despesas.'], [
+    ...(!dados.linhas.length ? [{ text: 'Não há vendas ou despesas finalizadas neste ano.', margin: [0, 12, 0, 12] } as Content] : [tabelaMensal]),
+    { text: 'TOTAL GERAL DAS TRANSAÇÕES', color: '#1976d2', bold: true, fontSize: 11, margin: [0, 10, 0, 10] },
+    ...dados.linhas.map(l => ({ text: l.natureza + ' / ' + l.pagamento + ': ' + moeda(l.total), color: l.natureza === 'Despesa' ? '#c62828' : '#0f172a', fontSize: 9, margin: [0, 2, 0, 2] } as Content)),
+    { text: 'TOTAL VENDAS: ' + moeda(dados.vendas), color: '#1976d2', bold: true, fontSize: 11, margin: [0, 8, 0, 2] },
+    { text: 'SAÍDAS FINANCEIRAS: ' + moeda(dados.despesas), color: '#c62828', bold: true, fontSize: 11 },
+    { text: 'SALDO: ' + moeda(dados.saldo), bold: true, fontSize: 11, margin: [0, 3, 0, 0] },
   ], true);
 }
 export async function gerarDocumentoFinanceiro(definicao: TDocumentDefinitions, nome: string, acao: 'print' | 'download') {

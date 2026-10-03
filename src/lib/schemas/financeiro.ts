@@ -19,8 +19,14 @@ export function deslocarDataCivil(data: string, dias: number) {
   return valor.toISOString().slice(0, 10);
 }
 export function centavos(valor: number | null | undefined) {
+  const resultado = centavosMovimento(valor);
+  if (resultado < 0) throw new Error('Valor financeiro inválido. Confira os registros da consulta.');
+  return resultado;
+}
+// Movimentos históricos conservam o sinal; cadastros novos continuam não negativos.
+export function centavosMovimento(valor: number | null | undefined) {
   const resultado = Math.round(Number(valor ?? 0) * 100);
-  if (!Number.isSafeInteger(resultado) || resultado < 0) throw new Error('Valor financeiro inválido. Confira os registros da consulta.');
+  if (!Number.isSafeInteger(resultado)) throw new Error('Valor financeiro inválido. Confira os registros da consulta.');
   return resultado;
 }
 // Rateio em centavos com maior resto; desempate estável pela ordem dos itens.

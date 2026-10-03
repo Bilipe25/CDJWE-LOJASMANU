@@ -156,3 +156,25 @@ test('PDF anual e documentos vazios têm linhas completas; saída não exige ite
   assert.ok(JSON.stringify(individual.content).includes('Não confirma pagamento'));
   assert.ok(JSON.stringify(individual.content).includes(empresa.endereco));
 });
+test('movimentos negativos legados não bloqueiam indicadores, anual ou exportações', async () => {
+  // Importação antiga: não usa a API de criação, que continua exigindo valor positivo.
+  const id = crypto.randomUUID();
+  await banco.pg.query("INSERT INTO pedidos(id,numero,data,tipo_atendimento_id,forma_pagamento_id,status,subtotal,total) VALUES($1,99999,'2023-10-01',$2,$3,'FINALIZADO',-25.50,-25.50)", [id, saida, pix]);
+  const stats = await pedidos.saidasEstatisticas({ dataInicio: '2023-01-01', dataFim: '2023-12-31' });
+  assert.equal(stats.total, 1); assert.equal(stats.valorFinalizado, -25.5);
+  const anual = await relatorios.relatorioAnual({ ano: 2023 });
+  assert.equal(anual.despesas, -25.5); assert.equal(anual.saldo, 25.5); assert.equal(anual.linhas[0].valores[9], -25.5);
+  const registro = (await pedidos.list({ tipoAtendimento: 'SAIDA', dataInicio: '2023-01-01', dataFim: '2023-12-31' })).pedidos[0];
+  const empresa = {nome_empresa: 'Empresa fictícia', endereco: 'Endereço de teste'};
+  assert.ok(JSON.stringify(pdf.criarDefinicaoSaida(registro, empresa)).includes('25,50'));
+  assert.ok(JSON.stringify(pdf.criarDefinicaoListaSaidas([registro], [{id:'valor',label:'Valor',selecionada:true}], empresa)).includes('-'));
+  const XLSX = require('xlsx'), escrever = XLSX.writeFile; let workbook;
+  XLSX.writeFile = wb => {workbook = wb;};
+  try {
+    carregar('src/lib/excel/saidas-export-excel.ts').exportarSaidasParaExcel([registro], [{id:'valor',label:'Valor',selecionada:true}], empresa);
+    assert.equal(workbook.Sheets['Saídas Financeiras'].A2.v, -25.5);
+  } finally {XLSX.writeFile = escrever;}
+  assert.throws(() => carregar('src/lib/schemas/financeiro.ts').centavos(-25.5), /inválido/);
+  assert.throws(() => carregar('src/lib/schemas/financeiro.ts').centavosMovimento(NaN), /inválido/);
+  await assert.rejects(novaDespesa({ total: -25.5, subtotal: -25.5 }));
+});
