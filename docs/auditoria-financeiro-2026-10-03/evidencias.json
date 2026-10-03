@@ -1,0 +1,62 @@
+{
+  "anual": {
+    "sqlPIX": {
+      "forma_pagamento_nome": "PIX",
+      "mes": 10,
+      "total_vendas": 90,
+      "total_despesas": 30
+    },
+    "valorLinhaPIXNaTela": 90,
+    "totalSaidasAindaPreservado": 50,
+    "despesaDinheiro": 20,
+    "estiloDeDespesaPorNome": false
+  },
+  "periodoProdutos": {
+    "valorPedidos": 90,
+    "valorProdutos": 100,
+    "itensDoIndicador": 1,
+    "unidadesVendidas": 5
+  },
+  "periodoInvertido": {
+    "rejeitadoPelaAPI": false,
+    "registros": 0
+  },
+  "edicaoStatus": {
+    "escolhido": "FINALIZADO",
+    "enviado": "PENDENTE",
+    "gravado": "PENDENTE"
+  },
+  "limpezaDeCampos": {
+    "destinatarioPermaneceu": true,
+    "pagamentoPermaneceu": true
+  },
+  "idempotencia": {
+    "mesmaChaveCriaUma": true,
+    "novasChavesCriamDuas": true
+  },
+  "handlerCriacao": {
+    "chamadasConcorrentes": 2,
+    "despesasCriadas": 2,
+    "semDestinatarioAposFalha": true
+  },
+  "protecoes": {
+    "exclusaoOperadorNegada": true,
+    "edicaoFinalizadaNegada": true
+  },
+  "estatisticasTruncadas": {
+    "contagemTotal": 1005,
+    "linhasUsadasPelaTela": 1000,
+    "somaVisivel": 1000,
+    "somaCompleta": 1005
+  },
+  "exportacaoSaidas": {
+    "consultaTotal": 1005,
+    "registrosDoArquivo": 10,
+    "escopoInformadoPelaTela": false
+  },
+  "csv": {
+    "colunasCabecalho": 6,
+    "separadoresNaLinhaNaoEscapada": 7,
+    "nomeIncluiVirgulaEAspas": true
+  }
+}

@@ -5,6 +5,8 @@ import { executarRPC } from '@/server/rpc';
 import { totaisPedido } from '@/lib/utils/valores-pedido';
 import type { Database } from '@/types/supabase';
 import { router, protectedProcedure, adminProcedure } from '@/lib/trpc/server';
+import { consultarEstatisticasSaidas } from '@/server/financeiro';
+import { dataFinanceiraSchema } from '@/lib/schemas/financeiro';
 
 const itemPedidoSchema = z.object({
   produto_id: z.string().uuid(),
@@ -21,7 +23,7 @@ const filtrosSchema = z.object({
   limit: z.number().int().min(1).max(10000).default(50), offset: z.number().int().min(0).default(0),
   search: z.string().trim().max(200).optional(),
   status: z.enum(['PENDENTE','CONFIRMADO','CANCELADO','FINALIZADO']).optional().or(z.literal('')).transform(v => v || undefined),
-  dataInicio: z.string().optional().transform(v => v || undefined), dataFim: z.string().optional().transform(v => v || undefined),
+  dataInicio: dataFinanceiraSchema.or(z.literal('')).optional().transform(v => v || undefined), dataFim: dataFinanceiraSchema.or(z.literal('')).optional().transform(v => v || undefined),
   tipoAtendimento: z.string().optional().transform(v => v || undefined),
   formaPagamentoId: z.string().uuid().optional(), clienteId: z.string().uuid().optional(),
   ordenarPor: z.enum(['data','numero','total']).optional(),
@@ -32,6 +34,7 @@ const erroPeriodo = { message: 'A data final deve ser igual ou posterior à data
 const identidadeSchema = z.object({ id: z.string().uuid(), versao: z.number().int().positive() });
 
 export const pedidosRouter = router({
+  saidasEstatisticas: protectedProcedure.input(filtrosSchema.omit({ limit: true, offset: true, ordenarPor: true, direcao: true }).refine(periodoValido, erroPeriodo)).query(({ ctx, input }) => consultarEstatisticasSaidas(ctx.supabase, input)),
   // Listar pedidos
   list: protectedProcedure
     .input(filtrosSchema.refine(periodoValido, erroPeriodo))
@@ -120,7 +123,7 @@ export const pedidosRouter = router({
   // A numeração é atribuída somente na gravação transacional.
   create: protectedProcedure.input(z.object({
     chave_requisicao: z.string().uuid(),
-    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    data: dataFinanceiraSchema,
     cliente_id: z.string().uuid().nullable().optional(), endereco_id: z.string().uuid().nullable().optional(),
     tipo_atendimento_id: z.string().uuid(), forma_pagamento_id: z.string().uuid().nullable().optional(),
     telefone_contato: z.string().max(20).nullable().optional(), desconto_valor: z.number().finite().min(0).default(0),
@@ -140,7 +143,7 @@ export const pedidosRouter = router({
     tipo_atendimento_id: z.string().uuid().optional(), forma_pagamento_id: z.string().uuid().nullable().optional(),
     telefone_contato: z.string().max(20).nullable().optional(), desconto_valor: z.number().finite().min(0).optional(),
     total: z.number().finite().min(0).optional(), subtotal: z.number().finite().min(0).optional(),
-    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), descricao: z.string().optional(), observacao: z.string().nullable().optional(),
+    data: dataFinanceiraSchema.optional(), descricao: z.string().optional(), observacao: z.string().nullable().optional(),
     status: z.enum(['PENDENTE','CONFIRMADO']).optional(), itens: z.array(itemPedidoSchema).optional(),
   })).mutation(async ({ ctx, input }) => {
     const { id, versao, ...dados } = input;
