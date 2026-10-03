@@ -2,6 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 import { executarRPC } from './rpc';
 import { buscarTodosFiltrados } from '@/lib/utils/documentos';
+import { centavosMovimento } from '@/lib/schemas/financeiro';
+import { datasDashboard, intervalosDashboard, variacaoDashboard, type PeriodoDashboard } from '@/lib/schemas/dashboard';
+import { consultarPeriodoFinanceiro, listarFinanceiroCompleto } from './financeiro';
 
 type Pedido = Database['public']['Views']['vw_pedidos_completos']['Row'];
 type Item = Database['public']['Views']['vw_itens_pedido_completos']['Row'];
@@ -23,6 +26,48 @@ const listar = async (supabase: Banco, filtros: Filtros, offset: number, limit: 
   await executarRPC(supabase, 'pdv_listar_pedidos', { p_filtros: filtros, p_offset: offset, p_limite: limit }) as { pedidos: Pedido[]; total: number };
 const resumirPedidos = (pedidos: Pedido[]) => pedidos.map(p => ({ id: p.id!, numero: p.numero, cliente_nome: p.cliente_nome, data: p.data, status: p.status, total: p.total, tipo_atendimento_nome: p.tipo_atendimento_nome }));
 const soma = (registros: Pedido[]) => registros.reduce((total, p) => total + Math.round(Number(p.total ?? 0) * 100), 0) / 100;
+
+export async function consultarDesempenhoDashboard(supabase: Banco, periodo: PeriodoDashboard = 'mes', agora = new Date()) {
+  const intervalos = intervalosDashboard(periodo, agora);
+  // Apenas pedidos: o resumo e o gráfico não dependem da consulta dos itens.
+  const vendas = await listarFinanceiroCompleto(supabase, {
+    status: 'FINALIZADO', tipoAtendimento: 'ENTRADA',
+    dataInicio: intervalos.anterior.dataInicio, dataFim: intervalos.hoje,
+  });
+  const resumir = (inicio: string, fim: string) => {
+    const registros = vendas.filter(p => p.data && p.data >= inicio && p.data <= fim);
+    const totalCentavos = registros.reduce((total, p) => total + centavosMovimento(p.total), 0);
+    if (!Number.isSafeInteger(totalCentavos)) throw new Error('Total financeiro inválido. Confira os registros da consulta.');
+    return { totalVendas: totalCentavos / 100, totalPedidos: registros.length,
+      ticketMedio: registros.length ? Math.round(totalCentavos / registros.length) / 100 : 0 };
+  };
+  const atual = resumir(intervalos.atual.dataInicio, intervalos.atual.dataFim);
+  const anterior = resumir(intervalos.anterior.dataInicio, intervalos.anterior.dataFim);
+  const porDia = new Map<string, number>();
+  for (const venda of vendas) {
+    if (!venda.data) throw new Error('Venda sem data. Confira os registros da consulta.');
+    const valor = (porDia.get(venda.data) ?? 0) + centavosMovimento(venda.total);
+    if (!Number.isSafeInteger(valor)) throw new Error('Total financeiro inválido. Confira os registros da consulta.');
+    porDia.set(venda.data, valor);
+  }
+  const datasAnteriores = datasDashboard(intervalos.anterior.dataInicio, intervalos.anterior.dataFim);
+  return { periodo, dataReferencia: intervalos.hoje, intervaloAtual: intervalos.atual, intervaloAnterior: intervalos.anterior,
+    atual, anterior, vendasHoje: (porDia.get(intervalos.hoje) ?? 0) / 100,
+    variacoes: { vendas: variacaoDashboard(atual.totalVendas, anterior.totalVendas),
+      pedidos: variacaoDashboard(atual.totalPedidos, anterior.totalPedidos),
+      ticket: variacaoDashboard(atual.ticketMedio, anterior.ticketMedio) },
+    serie: datasDashboard(intervalos.atual.dataInicio, intervalos.atual.dataFim).map((data, indice) => {
+      const dataAnterior = datasAnteriores[indice] ?? null;
+      return { data, dataAnterior, atual: (porDia.get(data) ?? 0) / 100,
+        anterior: dataAnterior ? (porDia.get(dataAnterior) ?? 0) / 100 : null };
+    }),
+  };
+}
+
+export async function consultarProdutosDashboardPeriodo(supabase: Banco, dataInicio: string, dataFim: string) {
+  const dados = await consultarPeriodoFinanceiro(supabase, dataInicio, dataFim);
+  return { dataInicio, dataFim, topProdutos: dados.produtos.slice(0, 5), valorSemItens: dados.resumo.valorSemItens };
+}
 
 export async function consultarVendasDashboard(supabase: Banco, agora = new Date()) {
   const { hoje, inicioMes, dias } = referenciaDashboard(agora);

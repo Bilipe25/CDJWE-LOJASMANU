@@ -44,6 +44,38 @@ async function main() {
       const criado=await banco.supabase.rpc('pdv_salvar_cliente',{ p_dados:{nome,ativo,telefone:'00000000000'} }); if(criado.error)throw new Error(criado.error.message);
     }
   }
+  if (process.env.PDV_DASHBOARD_FIXTURE === '1') {
+    // Demonstração isolada da evolução do dashboard; nunca carregada em produção.
+    const { carregar } = require('./carregar.cjs');
+    const { intervalosDashboard } = carregar('src/lib/schemas/dashboard.ts');
+    const { deslocarDataCivil } = carregar('src/lib/schemas/financeiro.ts');
+    const referencia = intervalosDashboard('mes');
+    await banco.pg.exec("ALTER TABLE configuracoes_empresa ADD COLUMN logo_url text; UPDATE configuracoes_empresa SET nome_empresa='Lojas Manu · demonstração',nome_sistema='PDV Lojas Manu',logo_url='/icon-192x192.png'; DELETE FROM itens_pedido; DELETE FROM pedidos;");
+    const produtos = [
+      ['Sofá 3 lugares',2000,3],['Guarda-roupa 6 portas',2400,2],['Cama box casal',1200,3],['Mesa com 4 cadeiras',1200,2],['Painel para TV',825,2],
+    ];
+    let indice = 0;
+    for (const [nome,valor,quantidade] of produtos) {
+      const produtoId = crypto.randomUUID();
+      await banco.pg.query('INSERT INTO produtos(id,nome,codigo,unidade,valor_base) VALUES($1,$2,$3,$4,$5)',[produtoId,nome,'DEMO-'+indice,'UN',valor]);
+      for (let n=0;n<quantidade;n++) {
+        const clienteId=crypto.randomUUID();
+        const clienteNome=['Ana Oliveira','João Santos','Carla Lima','Pedro Souza','Maria Costa','Beatriz Silva'][indice%6]+' · demonstração';
+        await banco.pg.query('INSERT INTO clientes(id,nome) VALUES($1,$2)',[clienteId,clienteNome]);
+        const data=deslocarDataCivil(referencia.hoje,-Math.min(indice%3,Number(referencia.hoje.slice(8))-1));
+        const pedidoId=crypto.randomUUID();
+        await banco.pg.query("INSERT INTO pedidos(id,numero,data,status,total,subtotal,cliente_id,tipo_atendimento_id,forma_pagamento_id) VALUES($1,nextval('numero_pedido'),$2,'FINALIZADO',$3,$3,$4,$5,$6)",[pedidoId,data,valor,clienteId,banco.atendimento,'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee']);
+        await banco.pg.query('INSERT INTO itens_pedido(pedido_id,produto_id,quantidade,valor_unitario,valor_total) VALUES($1,$2,1,$3,$3)',[pedidoId,produtoId,valor]);
+        indice++;
+      }
+    }
+    for(let n=0;n<10;n++) {
+      await banco.pg.query("INSERT INTO pedidos(numero,data,status,total,subtotal,tipo_atendimento_id) VALUES(nextval('numero_pedido'),$1,'FINALIZADO',1640,1640,$2)",[referencia.anterior.dataInicio,banco.atendimento]);
+    }
+    for(let n=0;n<18;n++) {
+      await banco.pg.query("INSERT INTO pedidos(numero,data,status,total,subtotal,tipo_atendimento_id,cliente_id) VALUES(nextval('numero_pedido'),$1,'PENDENTE',$2,$2,$3,$4)",[deslocarDataCivil(referencia.hoje,-(18-n)),990+n*100,banco.atendimento,cliente.data.id]);
+    }
+  }
   const user={id:banco.usuario,email,aud:'authenticated',role:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:new Date().toISOString()};
   const token=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url')+'.'+Buffer.from(JSON.stringify({sub:user.id,email,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated',aud:'authenticated'})).toString('base64url')+'.assinatura-somente-local';
   const session=()=>({access_token:token,refresh_token:'refresh-local',token_type:'bearer',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600,user});

@@ -1,0 +1,6 @@
+Edit the attached desktop dashboard approval mockup for Lojas Manu. Preserve its entire layout, dimensions, sidebar, existing logo image, white cards, typography, numbers, chart and all other content. Make ONLY these corrections in a single careful pass:
+1) Top-right date must read exactly "sábado, 03 de outubro de 2026". October 3 2026 is Saturday. Preserve the connection indicator.
+2) In the lower-right product ranking, all five light bar tracks must have equal width; blue fills must be proportional to the listed sales amount. Relative filled lengths: Sofá 3 lugares (R$6.000) 100%; Guarda-roupa 6 portas (R$4.800) 80%; Cama box casal (R$3.600) 60%; Mesa com 4 cadeiras (R$2.400) 40%; Painel para TV (R$1.650) 27.5%. Longest first, clearly decreasing. Keep names, furniture icons, prices and quantities.
+3) Brand subtitle below "Lojas Manu" must say exactly "PDV Lojas Manu" instead of "PDV de teste".
+4) Keep blue UI fills flat #0369a1 instead of gradients, and retain only hairline borders without decorative shadows.
+Everything else stays fixed. This remains an approval mockup with the visible "Prévia visual · dados demonstrativos" notice; do not remove it. Do not invent new metrics, UI elements or alter numerical content.

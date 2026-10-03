@@ -19,6 +19,8 @@ O maior atrito confirmado está em montar e finalizar a venda no PDV.
 
 ## Operating Context
 
+Loja de móveis. O dashboard serve ao dono/gerente e operadores, com o mesmo painel de vendas e operação. Comparações usam histórico real; sem metas cadastradas nesta etapa.
+
 O fluxo existente permite selecionar produto, quantidade, preço, desconto e cor;
 associar cliente/endereço; informar tipo de atendimento, pagamento e observação;
 conferir, salvar e imprimir pedidos. Clientes e pedidos possuem busca, filtros,
@@ -52,6 +54,6 @@ Capturas locais não representam dados ou operações de produção.
 
 ## Open Decisions
 
-Tipo de mercadoria/serviço, volume típico de itens por pedido, funções específicas
+Volume típico de itens por pedido, funções específicas
 de cada operador, necessidades especiais de acessibilidade e metas quantitativas
 de tempo ainda não foram informados. Não inventar esses fatos.
